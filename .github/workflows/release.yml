@@ -63,7 +63,10 @@ jobs:
           node -e "
             const fs = require('fs');
             const p = JSON.parse(fs.readFileSync('pkg/$name/package.json', 'utf8'));
-            p.version = '${ver}'.replace(/^v/, '');
+            // Manual runs can be labelled anything ('dev'), which is not valid semver —
+            // only overwrite the version when the tag actually looks like one.
+            const v = '${ver}'.replace(/^v/, '');
+            if (/^\d+\.\d+\.\d+/.test(v)) p.version = v;
             p.private = false;
             p.scripts = { start: 'node server/index.js' };
             delete p.devDependencies;
@@ -108,13 +111,18 @@ jobs:
           mkdir -p /tmp/verify && unzip -q "$name.zip" -d /tmp/verify
           cd "/tmp/verify/$name"
           npm ci --omit=dev --silent
+          echo "runtime deps: $(du -sh node_modules | cut -f1)"
           npm start > run.log 2>&1 &
+          pid=$!
           for i in $(seq 1 40); do
             curl -fsS http://127.0.0.1:8080/health > /dev/null 2>&1 && break
             sleep 0.5
           done
           curl -fsS http://127.0.0.1:8080/health || { echo "::error::packaged bundle does not start"; cat run.log; exit 1; }
-          curl -fsS -o /dev/null -w 'GET / -> %{http_code}\n' http://127.0.0.1:8080/
+          code=$(curl -s -o /tmp/page.html -w '%{http_code}' http://127.0.0.1:8080/)
+          [ "$code" = "200" ] || { echo "::error::packaged bundle serves / as $code"; cat run.log; exit 1; }
+          grep -q 'assets/' /tmp/page.html || { echo "::error::packaged bundle serves a page with no game in it"; exit 1; }
+          kill "$pid" 2>/dev/null || true
           echo "✅ packaged bundle boots and serves the game"
 
       - uses: actions/upload-artifact@v4

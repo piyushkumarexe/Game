@@ -143,6 +143,35 @@ they run the same physics as you and can lose:
 
 ---
 
+## Continuous integration
+
+GitHub Actions builds and verifies the game on every push.
+
+**`.github/workflows/ci.yml` — Build & Test** (push, PR, or manual)
+
+* builds the client on Node 20 and 22,
+* asserts `dist/` exists and that every asset `index.html` references is really on disk,
+* runs the headless level/character/FX build test and 5 full match simulations,
+* boots the actual server, checks static serving and the SPA fallback, then **plays
+  against it** and fails the build if prediction drifts (`p50 ≥ 0.02 m` means the client
+  and server sims have diverged — the bug class that makes multiplayer feel like rubber),
+* posts a bundle size table to the run summary and uploads the playable `dist/` as an
+  artifact you can download from the run page.
+
+**`.github/workflows/release.yml` — Release** (on a `v*` tag, or manual)
+
+Packages a self-contained zip — `dist/` + `server/` + `shared/` and nothing else. It drops
+three.js and the build tooling from the shipped manifest (three is already inside the
+bundle) and regenerates the lockfile, so a self-host install is **4.4 MB instead of ~70 MB**.
+CI then unzips it, installs it clean and boots it before publishing, so a release can never
+be a bundle that doesn't run.
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+Anyone can then download the zip and run `npm ci --omit=dev && npm start`.
+
 ## Tuning
 
 Almost all feel lives in `shared/constants.js` — run speed, jump height, gravity, dive power,
