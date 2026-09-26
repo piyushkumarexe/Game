@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0d1020" />
+<meta name="description" content="Tumble Royale — a 3D multiplayer party battle royale you can play in your browser on phone or PC." />
+<title>Tumble Royale</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎪</text></svg>" />
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <!-- ============================ IN-GAME HUD ============================ -->
+  <div id="hud" class="hidden">
+    <div id="top-bar">
+      <div id="round-chip"><span id="round-num">ROUND 1</span><span id="round-name">Sky Gauntlet</span></div>
+      <div id="qualify-box">
+        <div id="qualify-label">QUALIFIED</div>
+        <div id="qualify-count"><b id="q-have">0</b><span>/</span><span id="q-need">5</span></div>
+        <div id="qualify-bar"><i></i></div>
+      </div>
+      <div id="alive-box">
+        <div class="mini-label">PLAYERS</div>
+        <div id="alive-count">8</div>
+      </div>
+    </div>
+
+    <div id="standings"></div>
+
+    <div id="center-msg"></div>
+    <div id="sub-msg"></div>
+
+    <div id="toasts"></div>
+    <div id="spectate-note" class="hidden">👀 Spectating — you're in the <b>next</b> match</div>
+
+    <div id="hint">
+      <span><b>WASD</b> move</span><span><b>SPACE</b> jump</span><span><b>SHIFT</b> dive</span><span><b>MOUSE</b> look</span>
+    </div>
+
+    <div id="stats"><span id="fps">60</span> fps · <span id="ping">0</span> ms</div>
+
+    <div id="touch-controls" style="display:none">
+      <div id="stick"><div id="knob"></div></div>
+      <div id="tbtns">
+        <button id="btn-dive" class="tbtn dive">DIVE</button>
+        <button id="btn-jump" class="tbtn jump">JUMP</button>
+      </div>
+    </div>
+
+    <button id="emote-btn" title="Celebrate">🎉</button>
+  </div>
+
+  <!-- ============================ RESULTS ============================ -->
+  <div id="results" class="overlay hidden">
+    <div class="panel">
+      <h2 id="res-title">ROUND COMPLETE</h2>
+      <div id="res-cols">
+        <div><h3 class="good">QUALIFIED</h3><ul id="res-q"></ul></div>
+        <div><h3 class="bad">ELIMINATED</h3><ul id="res-o"></ul></div>
+      </div>
+      <div id="res-next">Next round in <b>5</b></div>
+    </div>
+  </div>
+
+  <div id="winner" class="overlay hidden">
+    <div class="panel win">
+      <div class="crown">👑</div>
+      <h2 id="win-name">WINNER</h2>
+      <p id="win-sub">Takes the crown!</p>
+      <div id="win-next">Back to the lobby in <b>9</b></div>
+    </div>
+  </div>
+
+  <!-- ============================ MAIN MENU ============================ -->
+  <div id="menu">
+    <div id="menu-bg"></div>
+    <div id="menu-card">
+      <div id="logo">
+        <span class="l1">TUMBLE</span>
+        <span class="l2">ROYALE</span>
+      </div>
+      <p id="tagline">Stumble, dive and bodycheck your way to the crown.<br/>Up to 24 players. Phone or PC. No download.</p>
+
+      <label class="field">
+        <span>YOUR NAME</span>
+        <input id="name-input" maxlength="14" placeholder="Bean" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <div class="field">
+        <span>YOUR COLOUR</span>
+        <div id="colors"></div>
+      </div>
+
+      <button id="play-btn">PLAY</button>
+      <button id="invite-btn">🔗 COPY INVITE LINK</button>
+
+      <div id="menu-foot">
+        <div class="ctrl-row"><b>PC</b> WASD · SPACE jump · SHIFT dive · mouse to look</div>
+        <div class="ctrl-row"><b>Phone</b> left stick to move · right side to look · tap JUMP / DIVE</div>
+        <div id="conn-state">connecting…</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading"><div class="spinner"></div><span>Building the arena…</span></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "tumble-royale",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tumble Royale \u2014 a 3D multiplayer party battle royale with an authoritative server, client prediction and bots.",
+  "scripts": {
+    "start": "vite build && node server/index.js",
+    "server": "node server/index.js",
+    "dev": "node tools/dev.js",
+    "build": "vite build",
+    "test:sim": "node tools/smoke.js",
+    "test:client": "node tools/client-smoke.js",
+    "test:predict": "node tools/predict-test.js"
+  },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "express": "^4.21.2",
+    "three": "^0.186.1",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0",
+    "vite": "^7.1.14"
+  }
+}
