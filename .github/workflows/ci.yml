@@ -1,0 +1,172 @@
+name: Build & Test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes the in-flight run pointless — cancel it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Builds the playable client and runs everything that doesn't need a live server.
+  build:
+    name: Build (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build client
+        run: npm run build
+
+      - name: Check build output
+        run: |
+          set -euo pipefail
+          test -f dist/index.html || { echo "::error::dist/index.html missing — the build produced nothing"; exit 1; }
+          js=$(find dist/assets -name '*.js' | wc -l)
+          css=$(find dist/assets -name '*.css' | wc -l)
+          [ "$js" -ge 2 ] || { echo "::error::expected the app and three.js chunks, found $js js file(s)"; exit 1; }
+          [ "$css" -ge 1 ] || { echo "::error::no stylesheet emitted"; exit 1; }
+          # Every asset the HTML references must actually exist on disk.
+          grep -o 'assets/[A-Za-z0-9._-]*' dist/index.html | sort -u | while read -r a; do
+            test -f "dist/$a" || { echo "::error::index.html references missing asset $a"; exit 1; }
+            echo "  ok  $a"
+          done
+
+      - name: Level, character and FX build test
+        run: npm run test:client
+
+      - name: Full match simulation (all three rounds)
+        run: npm run test:sim
+        env:
+          RUNS: '5'
+
+      - name: Bundle size report
+        if: always()
+        run: |
+          {
+            echo "### Bundle — Node ${{ matrix.node }}"
+            echo ""
+            echo "| file | raw | gzipped |"
+            echo "|---|---:|---:|"
+            for f in dist/index.html $(find dist/assets -type f | sort); do
+              raw=$(stat -c%s "$f")
+              gz=$(gzip -c9 "$f" | wc -c)
+              printf '| `%s` | %s kB | %s kB |\n' \
+                "${f#dist/}" \
+                "$(awk "BEGIN{printf \"%.1f\", $raw/1000}")" \
+                "$(awk "BEGIN{printf \"%.1f\", $gz/1000}")"
+            done
+            total=$(find dist -type f -exec stat -c%s {} + | awk '{s+=$1} END{printf "%.1f", s/1000}')
+            echo ""
+            echo "**Total ${total} kB**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The built game, downloadable from the run page. Unzip it next to server/ and
+      # shared/, then `npm ci --omit=dev && npm run server` to host it.
+      - name: Upload playable build
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tumble-royale-client
+          path: dist
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── Boots the real server and plays against it, measuring prediction drift. This is
+  #    the test that catches sim divergence between shared/ on the server and in the browser.
+  netcode:
+    name: Netcode (live server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build client
+        run: npm run build
+
+      - name: Start server
+        run: |
+          node server/index.js > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health > /dev/null 2>&1; then
+              echo "server up after ${i} attempt(s): $(curl -s http://127.0.0.1:8080/health)"
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "::error::server never became healthy"
+          cat server.log
+          exit 1
+
+      - name: Serves the built client
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/page.html -w '%{http_code}' http://127.0.0.1:8080/)
+          [ "$code" = "200" ] || { echo "::error::GET / returned $code"; exit 1; }
+          grep -q 'assets/' /tmp/page.html || { echo "::error::served page has no bundled assets"; exit 1; }
+          # SPA fallback: an unknown path must still serve the app, not 404.
+          deep=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/some/deep/link)
+          [ "$deep" = "200" ] || { echo "::error::SPA fallback returned $deep"; exit 1; }
+          echo "static + SPA fallback ok"
+
+      - name: Client prediction accuracy
+        run: npm run test:predict
+        env:
+          SECS: '90'
+          MIN_SAMPLES: '600' # fail if the run never actually got to play
+          P50_MAX: '0.02' # the determinism gate — a matching sim scores exactly 0
+          P95_MAX: '0.5' # slack for genuine unpredictable player-vs-player contact
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat server.pid)" 2>/dev/null || true
+
+      - name: Server log
+        if: always()
+        run: |
+          {
+            echo "### Server log"
+            echo ""
+            echo '```'
+            tail -50 server.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: server.log
+          retention-days: 7

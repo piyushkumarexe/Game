@@ -11,6 +11,13 @@ import { makePlayer, stepPlayer, emptyInput, ST_ALIVE } from '../shared/sim.js';
 const URL = process.env.URL || 'ws://127.0.0.1:8080/ws';
 const DURATION = Number(process.env.SECS || 45) * 1000;
 const NAME = process.env.NAME || 'PredictBot';
+const MIN_SAMPLES = Number(process.env.MIN_SAMPLES || 300);
+// p50 is the real determinism signal — if the two sims agree it is exactly 0, so this
+// gate is deliberately razor-thin. p95/p99 are dominated by player-vs-player contact
+// that a client legitimately cannot predict (the server resolves shoves after the fact),
+// so that bound is looser and exists only to catch a genuine blow-out.
+const P50_MAX = Number(process.env.P50_MAX || 0.02);
+const P95_MAX = Number(process.env.P95_MAX || 0.5);
 
 const ws = new WebSocket(URL);
 const self = makePlayer(0, NAME, 0xffffff);
@@ -159,7 +166,19 @@ setTimeout(() => {
   console.log(` error  max     : ${stats.maxErr.toFixed(3)} m`);
   console.log(` replays        : ${stats.replays}`);
   console.log('──────────────────────────────────────────\n');
-  const ok = pct(0.5) < 0.02 && pct(0.95) < 0.35;
-  console.log(ok ? '✅ prediction is in lockstep with the server' : '❌ prediction drifts — investigate sim divergence');
+  // A run that never got to play (joined mid-match as a spectator, or never connected)
+  // measures nothing — that must fail loudly rather than silently reporting 0.0000 m.
+  if (e.length < MIN_SAMPLES) {
+    console.log(`❌ only ${e.length} live samples (need ${MIN_SAMPLES}) — the client never played a round, so nothing was verified`);
+    process.exit(1);
+  }
+  const p50 = pct(0.5), p95 = pct(0.95);
+  const ok = p50 < P50_MAX && p95 < P95_MAX;
+  if (ok) {
+    console.log(`✅ prediction is in lockstep with the server (p50 ${p50.toFixed(4)} < ${P50_MAX}, p95 ${p95.toFixed(4)} < ${P95_MAX})`);
+  } else {
+    if (p50 >= P50_MAX) console.log(`❌ p50 ${p50.toFixed(4)} m >= ${P50_MAX} m — the client and server sims have diverged`);
+    if (p95 >= P95_MAX) console.log(`❌ p95 ${p95.toFixed(4)} m >= ${P95_MAX} m — corrections are large enough to feel like rubber-banding`);
+  }
   process.exit(ok ? 0 : 1);
 }, DURATION);

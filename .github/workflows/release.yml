@@ -1,0 +1,143 @@
+name: Release
+
+# Packages a self-contained, runnable copy of the game.
+#   git tag v1.0.0 && git push origin v1.0.0
+# ...or just hit "Run workflow" on the Actions tab for a throwaway build.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label for this build'
+        required: false
+        default: 'dev'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package game
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify before shipping
+        run: |
+          npm run test:client
+          npm run test:sim
+
+      - name: Build client
+        run: npm run build
+
+      - name: Assemble bundle
+        id: bundle
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ver="${{ inputs.version }}"
+          fi
+          name="tumble-royale-${ver}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+          mkdir -p "pkg/$name"
+          cp -r dist server shared "pkg/$name/"
+          cp package.json README.md "pkg/$name/"
+
+          # The shipped bundle only serves a pre-built dist/, so it needs neither the
+          # build tooling nor three.js (already inside the bundle). Dropping them takes
+          # the self-host install from ~70 MB to ~2 MB.
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('pkg/$name/package.json', 'utf8'));
+            p.version = '${ver}'.replace(/^v/, '');
+            p.private = false;
+            p.scripts = { start: 'node server/index.js' };
+            delete p.devDependencies;
+            const keep = ['express', 'ws', 'compression'];
+            p.dependencies = Object.fromEntries(
+              Object.entries(p.dependencies).filter(([k]) => keep.includes(k))
+            );
+            fs.writeFileSync('pkg/$name/package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+
+          # Regenerate the lock so it matches the trimmed manifest — otherwise `npm ci`
+          # refuses to run.
+          (cd "pkg/$name" && npm install --package-lock-only --silent)
+
+          cat > "pkg/$name/HOW-TO-RUN.txt" <<'EOF'
+          Tumble Royale — self-hosted server
+          ==================================
+
+          Needs Node.js 20 or newer. Nothing else.
+
+            npm ci --omit=dev
+            npm start
+
+          Then open http://localhost:8080 and share that address with friends on the
+          same network. To let people outside your network in, expose port 8080 (a
+          tunnel like `npx localtunnel --port 8080` or `cloudflared tunnel` is easiest)
+          and send them the public URL.
+
+          Set PORT to use a different port:   PORT=3000 npm start
+          EOF
+
+          cd pkg && zip -qr "../$name.zip" "$name"
+          cd ..
+          echo "--- bundle contents ---"
+          unzip -l "$name.zip" | tail -5
+          ls -lh "$name.zip"
+
+      - name: Smoke-test the packaged bundle
+        run: |
+          set -euo pipefail
+          name="${{ steps.bundle.outputs.name }}"
+          mkdir -p /tmp/verify && unzip -q "$name.zip" -d /tmp/verify
+          cd "/tmp/verify/$name"
+          npm ci --omit=dev --silent
+          npm start > run.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8080/health > /dev/null 2>&1 && break
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:8080/health || { echo "::error::packaged bundle does not start"; cat run.log; exit 1; }
+          curl -fsS -o /dev/null -w 'GET / -> %{http_code}\n' http://127.0.0.1:8080/
+          echo "✅ packaged bundle boots and serves the game"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.bundle.outputs.name }}
+          path: ${{ steps.bundle.outputs.name }}.zip
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.bundle.outputs.name }}.zip
+          generate_release_notes: true
+          body: |
+            ## 🎪 Tumble Royale ${{ steps.bundle.outputs.version }}
+
+            Download the zip below, then:
+
+            ```bash
+            npm ci --omit=dev
+            npm start
+            ```
+
+            Open <http://localhost:8080> and share the address. Up to 24 players,
+            phone and PC together, bots fill any empty slots.

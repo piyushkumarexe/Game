@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Tumble Royale \u2014 a 3D multiplayer party battle royale with an authoritative server, client prediction and bots.",
+  "description": "Tumble Royale — a 3D multiplayer party battle royale with an authoritative server, client prediction and bots.",
   "scripts": {
     "start": "vite build && node server/index.js",
     "server": "node server/index.js",
@@ -20,7 +20,6 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "playwright-core": "^1.63.0",
     "vite": "^7.1.14"
   }
 }
