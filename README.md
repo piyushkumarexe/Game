@@ -54,12 +54,13 @@ Direct-IP internet games require the host to forward UDP `24817`. A production r
 
 ### Mobile presentation
 
-- Locked landscape layout
+- Strict landscape launch on Android and iOS, with an expanding widescreen viewport
 - Dual virtual sticks for movement/driving and camera control
-- Touch actions for interaction, sprint, jump, gears and both winches
+- Context-sensitive touch actions for interaction, sprint, jump, gears and both winches
 - Mission, crew, speed, gear, fuel and RV-integrity HUD
-- OpenGL compatibility renderer and reduced mobile terrain density
-- Original procedural low-poly props and terrain shader
+- OpenGL compatibility renderer, MSAA-safe mobile settings and reduced mobile terrain density
+- Original textured glTF models for the RV, cockpit, first-person hands, crew, trees, rocks, signs and supply crates
+- Painted terrain/model textures and a live 3D campsite home screen
 - Original generated app/key artwork, with no remote runtime assets
 
 ## Controls
@@ -100,7 +101,8 @@ For two local peers, start one instance with **HOST CREW**, then join `127.0.0.1
 `.github/workflows/ci.yml`:
 
 1. imports the project and validates every GDScript;
-2. exports a debug-signed Android APK;
-3. exports an unsigned, build-ready iOS Xcode project archive.
+2. launches the actual expedition in a windowed OpenGL session, verifies its local player/current camera/RV/3D mesh count and saves a world-only render proof;
+3. exports a debug-signed Android APK and verifies its manifest is locked to landscape;
+4. exports an unsigned, build-ready iOS Xcode project archive.
 
 CI intentionally uses Godot's project-only iOS export so no Apple credentials are stored in the repository. Open the artifact in Xcode and select your Apple Developer team; a certificate and provisioning profile are required before installation on a physical iPhone or TestFlight submission.

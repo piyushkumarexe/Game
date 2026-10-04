@@ -184,6 +184,11 @@ func _run_expedition_smoke_test() -> void:
 	Net.start_solo()
 	_start_expedition()
 	await get_tree().create_timer(3.0).timeout
+	# Capture the 3D viewport without CanvasLayer UI. The resulting proof cannot
+	# pass merely because HUD elements rendered over an empty world.
+	if active_hud and is_instance_valid(active_hud):
+		active_hud.visible = false
+	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var failures: Array[String] = []
 	if not active_world or not is_instance_valid(active_world):

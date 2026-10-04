@@ -117,6 +117,13 @@ jobs:
             echo "::error file=export_presets.cfg,title=Godot Android full log::$detail"
           fi
           exit $status
+      - name: Verify Android landscape lock
+        run: |
+          analyzer=$(find "$ANDROID_HOME" -type f -name apkanalyzer -perm -u+x | head -1)
+          test -n "$analyzer"
+          "$analyzer" manifest print build/android/DustboundExpeditions.apk > android-manifest.xml
+          grep -q 'android:screenOrientation="landscape"' android-manifest.xml
+          echo 'Android manifest verified: the game activity is locked to landscape.' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload Android game
         uses: actions/upload-artifact@v7.0.1
         with:
