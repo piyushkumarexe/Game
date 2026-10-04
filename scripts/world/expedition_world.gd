@@ -68,7 +68,9 @@ func _build_bootstrap_view() -> void:
 	safety_floor.name = "CampSafetyFloor"
 	# A compact, hidden-under-terrain solid pad guarantees a valid starting
 	# surface even when a mobile GPU needs extra frames to finish terrain setup.
-	safety_floor.position = Vector3(0.0, ROUTE[0].y - 0.5, ROUTE[0].z)
+	# Keep the fallback a full metre below the sculpted terrain. Near-coplanar
+	# duplicate colliders were pinning CharacterBody3D in place on phones.
+	safety_floor.position = Vector3(0.0, ROUTE[0].y - 1.4, ROUTE[0].z)
 	var floor_mesh := MeshInstance3D.new()
 	var plane := BoxMesh.new()
 	plane.size = Vector3(26.0, 0.8, 26.0)

@@ -243,15 +243,16 @@ func _run_expedition_smoke_test() -> void:
 				var move_center := move_stick.get_global_rect().get_center()
 				var move_point := move_center + Vector2(0.0, -68.0)
 				var position_before_move := local_player.global_position
-				_inject_screen_touch(8, move_point, true)
-				await get_tree().process_frame
+				# Input.parse_input_event batches held touches in CI, so invoke the same
+				# router entry points directly for a deterministic sustained-stick test.
+				active_hud.input_router._begin_touch(8, move_point)
 				var routed_move := GameSession.mobile_move
 				if routed_move.length() < 0.5:
 					failures.append("left stick touch was not routed (value=%s)" % routed_move)
 				await get_tree().create_timer(0.45).timeout
 				var travelled := local_player.global_position.distance_to(position_before_move)
 				var movement_velocity := local_player.velocity
-				_inject_screen_touch(8, move_point, false)
+				active_hud.input_router._end_touch(8)
 				await get_tree().process_frame
 				if travelled < 0.8:
 					failures.append("left touch stick did not move player (distance=%.3f input=%s velocity=%s)" % [travelled, routed_move, movement_velocity])
