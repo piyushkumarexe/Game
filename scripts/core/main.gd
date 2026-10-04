@@ -448,9 +448,10 @@ func _run_expedition_smoke_test() -> void:
 			doorway_camera.near = 0.05
 			active_world.add_child(doorway_camera)
 			var doorway_target := smoke_rv.global_transform * Vector3(1.02, 0.72, 0.98)
-			# A perpendicular side view exposes the full tread centreline and cabin
-			# portal. The old rear-quarter proof let the open panel hide the gate.
-			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.15, 1.30, 0.98)
+			# A shallow front-side angle exposes all three tread depths and the cabin
+			# portal while keeping the rear-hinged open panel out of the sightline.
+			# The old rear-quarter proof let that panel hide the gate entirely.
+			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.00, 1.35, -0.35)
 			doorway_camera.look_at(doorway_target, smoke_rv.global_transform.basis.y.normalized())
 			# The gameplay character can stand directly on this sightline after the
 			# movement test. Hide only its visual while documenting the physical entry.

@@ -637,13 +637,15 @@ func _build_doorway_sightline() -> void:
 	var warm_oak := Color("765039")
 	var cabinet_oak := Color("493328")
 	var window_glass := Color("1b3033")
-	PrimitiveFactory.box(body_shell, "DoorwayInteriorWoodPanel", Vector3(-1.205, 0.91, 0.98),
+	# The generated far-wall liner's inner face is x=-1.165, so every dressing
+	# surface sits just toward the aisle from it rather than z-fighting behind it.
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorWoodPanel", Vector3(-1.130, 0.91, 0.98),
 		Vector3(0.045, 1.66, 0.94), warm_oak)
-	PrimitiveFactory.box(body_shell, "DoorwayInteriorWindow", Vector3(-1.177, 1.28, 0.98),
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorWindow", Vector3(-1.097, 1.28, 0.98),
 		Vector3(0.018, 0.48, 0.62), window_glass)
-	PrimitiveFactory.box(body_shell, "DoorwayInteriorLowerCabinet", Vector3(-1.165, 0.38, 0.98),
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorLowerCabinet", Vector3(-1.065, 0.38, 0.98),
 		Vector3(0.10, 0.44, 0.78), cabinet_oak)
-	PrimitiveFactory.box(body_shell, "DoorwayInteriorCabinetHandle", Vector3(-1.106, 0.47, 0.98),
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorCabinetHandle", Vector3(-1.006, 0.47, 0.98),
 		Vector3(0.025, 0.035, 0.22), Color("b8b1a0"))
 
 func toggle_entry_door() -> void:

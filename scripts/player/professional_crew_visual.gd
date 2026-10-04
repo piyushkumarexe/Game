@@ -103,7 +103,7 @@ func _build_head_accessories() -> void:
 	accessory_root.name = "AnimatedHeadAccessories"
 	motion_root.add_child(accessory_root)
 	var charcoal := _material(Color("20262b"), 0.82)
-	var lens := _material(Color("10191e"), 0.12, 0.24)
+	var lens := _material(Color("070b0d"), 0.34, 0.02)
 
 	# A low rounded crown reads as a real expedition/baseball cap. The former
 	# flat cylinder looked like an oversized top hat in the phone close-up.
@@ -166,12 +166,13 @@ func _play_clip(requested: String, speed: float, blend := 0.14) -> void:
 func _copy_animation_pose() -> void:
 	if not animation_skeleton:
 		return
-	# The source's generic `Idle_No` clip looks sharply at the ground. That made
-	# the cap/scalp cover the face in normal third-person gameplay. Preserve the
-	# authored body motion but keep the head at its neutral rest orientation.
-	var source_head_index := animation_skeleton.find_bone("Head")
-	if source_head_index >= 0:
-		animation_skeleton.set_bone_pose_rotation(source_head_index, Quaternion.IDENTITY)
+	# The source's generic `Idle_No` clip looks sharply at the ground through both
+	# neck and head tracks. Preserve the authored body motion but neutralize those
+	# two joints so the face, cap and glasses present forward in normal gameplay.
+	for neutral_bone_name in ["Neck", "Head"]:
+		var neutral_bone_index := animation_skeleton.find_bone(neutral_bone_name)
+		if neutral_bone_index >= 0:
+			animation_skeleton.set_bone_pose_rotation(neutral_bone_index, Quaternion.IDENTITY)
 	for target: Skeleton3D in skeletons:
 		for source_index in animation_skeleton.get_bone_count():
 			var target_index := target.find_bone(animation_skeleton.get_bone_name(source_index))
