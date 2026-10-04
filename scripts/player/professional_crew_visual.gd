@@ -71,14 +71,14 @@ func _build_expedition_accessories() -> void:
 	var trim := _material(Color("e1c9a4"), 0.70)
 
 	var crown := CylinderMesh.new()
-	crown.top_radius = 0.170
-	crown.bottom_radius = 0.205
+	crown.top_radius = 0.125
+	crown.bottom_radius = 0.150
 	crown.height = 0.105
 	crown.radial_segments = 24
 	_mesh(motion_root, "ExpeditionCapCrown", crown, Vector3(0.0, 1.815, 0.002), charcoal)
 	var brim := BoxMesh.new()
-	brim.size = Vector3(0.34, 0.030, 0.19)
-	var brim_instance := _mesh(motion_root, "ExpeditionCapBrim", brim, Vector3(0.0, 1.770, 0.138), charcoal)
+	brim.size = Vector3(0.27, 0.026, 0.16)
+	var brim_instance := _mesh(motion_root, "ExpeditionCapBrim", brim, Vector3(0.0, 1.770, 0.120), charcoal)
 	brim_instance.rotation.x = -0.08
 
 	# Compact, correctly spaced lenses sit over the authored normal-spaced eyes.
@@ -94,18 +94,16 @@ func _build_expedition_accessories() -> void:
 
 	# Lightweight padded vest panels layer over the authored Ranger body while
 	# preserving its belts, boots, gloves, normals and skinning.
+	# Narrow padded lapels leave the authored Ranger torso, straps and waist gear
+	# visible. Earlier full chest plates read as two boxes rather than clothing.
 	for side in [-1.0, 1.0]:
 		var panel := BoxMesh.new()
-		panel.size = Vector3(0.17, 0.34, 0.045)
-		_mesh(motion_root, "PaddedVestPanel", panel,
-			Vector3(side * 0.10, 1.255, 0.165), vest)
-		for row in range(2):
-			var seam := BoxMesh.new()
-			seam.size = Vector3(0.145, 0.008, 0.008)
-			_mesh(motion_root, "VestQuiltSeam", seam,
-				Vector3(side * 0.10, 1.185 + row * 0.135, 0.191), trim)
+		panel.size = Vector3(0.055, 0.30, 0.026)
+		var panel_instance := _mesh(motion_root, "PaddedVestPanel", panel,
+			Vector3(side * 0.125, 1.265, 0.178), vest)
+		panel_instance.rotation.z = side * -0.10
 	var zipper := BoxMesh.new()
-	zipper.size = Vector3(0.012, 0.36, 0.010)
+	zipper.size = Vector3(0.010, 0.32, 0.008)
 	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.255, 0.193), trim)
 
 func _aim_bone(skeleton: Skeleton3D, bone_name: String, child_name: String,
