@@ -128,7 +128,7 @@ jobs:
           echo "orientation: $orientation"
           cat android-manifest-error.txt
           # ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE is the integer value 0.
-          echo "$orientation" | grep -Eq '\(type 0x10\)0x0([[:space:]]|$)'
+          echo "$orientation" | grep -Eq '(\(type 0x10\)0x0|=0)([[:space:]]|$)'
           status=$?
           if [ "$dump_status" -ne 0 ] || [ "$status" -ne 0 ]; then
             detail="aapt2 status=$dump_status; orientation=$orientation; error=$(tr '\n' '|' < android-manifest-error.txt)"
