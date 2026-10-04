@@ -44,6 +44,7 @@ jobs:
           wheel = json.load(open('assets/third_party/gmc_motorhome/wheel.gltf', encoding='utf-8'))
           head = json.load(open('assets/third_party/quaternius_crew/crew_head.gltf', encoding='utf-8'))
           outfit = json.load(open('assets/third_party/quaternius_crew/ranger_outfit.gltf', encoding='utf-8'))
+          assert __import__('os').path.getsize('assets/third_party/quaternius_crew/animations.glb') >= 8_000_000
           motorhome_triangles = sum(motorhome['accessors'][primitive['indices']]['count'] // 3
                                     for mesh in motorhome['meshes'] for primitive in mesh['primitives'])
           wheel_triangles = wheel['accessors'][wheel['meshes'][0]['primitives'][0]['indices']]['count'] // 3
@@ -56,7 +57,8 @@ jobs:
           assert head['accessors'][head['meshes'][2]['primitives'][0]['indices']]['count'] // 3 >= 3000
           for notice in ('assets/third_party/gmc_motorhome/ATTRIBUTION.md',
                          'assets/third_party/quaternius_crew/base-license.txt',
-                         'assets/third_party/quaternius_crew/outfits-license.txt'):
+                         'assets/third_party/quaternius_crew/outfits-license.txt',
+                         'assets/third_party/quaternius_crew/animations-license.txt'):
               assert open(notice, encoding='utf-8').read().strip(), notice
           controller = open('scripts/vehicles/rv_controller.gd', encoding='utf-8').read()
           for required in ('RearForward%s', 'RearAft%s', 'wheel.wheel_radius = 0.43',
@@ -85,7 +87,8 @@ jobs:
             test -s build/validation/expedition-render.png \
               && test -s build/validation/rv-cockpit-render.png \
               && test -s build/validation/rv-doorway-render.png \
-              && test -s build/validation/character-face-render.png
+              && test -s build/validation/character-face-render.png \
+              && test -s build/validation/character-body-render.png
             status=$?
           fi
           {
@@ -94,9 +97,9 @@ jobs:
             tail -120 render-smoke.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          bone_proof=$(grep 'CREW_BONE_PROOF' render-smoke.log | tail -1 || true)
-          if [ -n "$bone_proof" ]; then
-            echo "::notice title=Imported crew bone pose::$bone_proof"
+          crew_proof=$(grep 'CREW_ANIMATION_PROOF' render-smoke.log | tail -1 || true)
+          if [ -n "$crew_proof" ]; then
+            echo "::notice title=Authored crew animation::$crew_proof"
           fi
           if [ "$status" -ne 0 ]; then
             detail=$(tail -100 render-smoke.log | tr '\n' '|' | cut -c 1-7000)
@@ -122,20 +125,21 @@ jobs:
               part=$((part + 1))
             done
           done
-      - name: Emit character face preview
+      - name: Emit character previews
         if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
         run: |
-          source=build/validation/character-face-render.png
-          label=character-face-render
-          convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
-          encoded=$(base64 -w0 "/tmp/${label}.jpg")
-          part=0
-          while [ -n "$encoded" ]; do
-            piece=${encoded:0:3500}
-            encoded=${encoded:3500}
-            printf -v part_label '%03d' "$part"
-            echo "::notice title=${label}_BASE64_${part_label}::${piece}"
-            part=$((part + 1))
+          for source in build/validation/character-face-render.png build/validation/character-body-render.png; do
+            label=$(basename "$source" .png)
+            convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
+            encoded=$(base64 -w0 "/tmp/${label}.jpg")
+            part=0
+            while [ -n "$encoded" ]; do
+              piece=${encoded:0:3500}
+              encoded=${encoded:3500}
+              printf -v part_label '%03d' "$part"
+              echo "::notice title=${label}_BASE64_${part_label}::${piece}"
+              part=$((part + 1))
+            done
           done
       - name: Upload 3D render proof
         uses: actions/upload-artifact@v7.0.1

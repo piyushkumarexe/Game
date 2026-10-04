@@ -98,7 +98,11 @@ def main() -> None:
     prepare_outfit(source, target)
     for texture in (source / "textures").glob("*.png"):
         shutil.copy2(texture, textures / texture.name)
-    print(f"Prepared Quaternius crew in {target}")
+    for animation_asset in ("animations.glb", "animations.json", "animations-license.txt", "animations-readme.txt"):
+        source_asset = source / animation_asset
+        if source_asset.exists():
+            shutil.copy2(source_asset, target / animation_asset)
+    print(f"Prepared Quaternius crew and authored animations in {target}")
 
 
 if __name__ == "__main__":

@@ -273,21 +273,26 @@ func _run_expedition_smoke_test() -> void:
 				if local_player.body_rig:
 					if local_player.body_rig.skeletons.size() < 2:
 						failures.append("professional head/outfit skeletons did not import")
+					elif not local_player.body_rig.animation_skeleton or not local_player.body_rig.animation_player:
+						failures.append("authored Quaternius animation rig did not import")
+					elif local_player.body_rig.current_clip != "Walk_Carry_Loop":
+						failures.append("moving crew did not play an authored locomotion clip (%s)" % local_player.body_rig.current_clip)
 					else:
+						var source_skeleton := local_player.body_rig.animation_skeleton
 						var proof_skeleton := local_player.body_rig.skeletons[0]
-						var upperarm_index := proof_skeleton.find_bone("upperarm_l")
-						var lowerarm_index := proof_skeleton.find_bone("lowerarm_l")
-						if upperarm_index < 0 or lowerarm_index < 0:
-							failures.append("professional named arm bones missing")
+						var source_thigh := source_skeleton.find_bone("thigh_l")
+						var target_thigh := proof_skeleton.find_bone("thigh_l")
+						if source_thigh < 0 or target_thigh < 0:
+							failures.append("professional named locomotion bones missing")
 						else:
-							var upper_pose := proof_skeleton.get_bone_global_pose(upperarm_index).origin
-							var lower_pose := proof_skeleton.get_bone_global_pose(lowerarm_index).origin
-							var rest_upper := proof_skeleton.get_bone_global_rest(upperarm_index).origin
-							var rest_lower := proof_skeleton.get_bone_global_rest(lowerarm_index).origin
-							print("CREW_BONE_PROOF rest=%s pose=%s" % [rest_lower - rest_upper, lower_pose - upper_pose])
-					for accessory in ["ExpeditionCapCrown", "SunglassLens", "PaddedVestPanel"]:
+							var source_rotation := source_skeleton.get_bone_pose_rotation(source_thigh)
+							var target_rotation := proof_skeleton.get_bone_pose_rotation(target_thigh)
+							if source_rotation.angle_to(target_rotation) > 0.02:
+								failures.append("authored locomotion pose was not copied to outfit rig")
+						print("CREW_ANIMATION_PROOF clip=%s skeletons=%d" % [local_player.body_rig.current_clip, local_player.body_rig.skeletons.size()])
+					for accessory in ["ExpeditionCapCrown", "SunglassLens", "QuaterniusRangerOutfit"]:
 						if not local_player.body_rig.find_child(accessory, true, false):
-							failures.append("professional crew styling missing: %s" % accessory)
+							failures.append("professional crew component missing: %s" % accessory)
 				if local_player.body_visual and Vector2(movement_velocity.x, movement_velocity.z).length() > 0.5:
 					var visual_forward := local_player.body_visual.global_transform.basis.z.normalized()
 					var travel_forward := Vector3(movement_velocity.x, 0.0, movement_velocity.z).normalized()
@@ -341,6 +346,13 @@ func _run_expedition_smoke_test() -> void:
 				if active_hud:
 					active_hud.visible = false
 				await _save_staged_render(character_camera, "res://build/validation/character-face-render.png")
+				# A second full-body frame catches detached boots, folded limbs, sliding
+				# silhouettes and accessory offsets that a face crop cannot reveal.
+				var body_target := local_player.body_visual.global_position + Vector3.UP * 0.92
+				character_camera.fov = 44.0
+				character_camera.global_position = body_target + character_front * 3.05 + Vector3.UP * 0.06
+				character_camera.look_at(body_target, Vector3.UP)
+				await _save_staged_render(character_camera, "res://build/validation/character-body-render.png")
 				if active_hud:
 					active_hud.visible = true
 				character_camera.queue_free()
@@ -392,12 +404,26 @@ func _run_expedition_smoke_test() -> void:
 		if not smoke_rv.entry_door_pivot or absf(smoke_rv.entry_door_pivot.rotation.y) < 1.30:
 			failures.append("functional RV entry door did not open on its hinge")
 		if active_world:
-			var doorway_probe := smoke_rv.global_transform * Vector3(1.30, 0.85, 0.98)
-			var cabin_probe := smoke_rv.global_transform * Vector3(0.0, 0.85, 0.20)
-			if active_world.constrain_player_position(doorway_probe + Vector3.RIGHT * 0.4, doorway_probe).distance_to(doorway_probe) > 0.05:
+			var doorway_probe := smoke_rv.global_transform * Vector3(1.30, 0.06, 0.98)
+			var cabin_probe := smoke_rv.global_transform * Vector3(0.0, 0.06, 0.20)
+			var low_approach := smoke_rv.global_transform * Vector3(1.96, -0.86, 0.98)
+			low_approach.y = active_world.terrain_height(low_approach.x, low_approach.z) + 0.03
+			if active_world.constrain_player_position(low_approach, low_approach).distance_to(low_approach) > 0.05:
+				failures.append("open RV doorway rejects a terrain-level stair approach")
+			if active_world.constrain_player_position(doorway_probe, doorway_probe).distance_to(doorway_probe) > 0.05:
 				failures.append("open RV door does not provide a physical cabin path")
 			if active_world.constrain_player_position(cabin_probe, cabin_probe).distance_to(cabin_probe) > 0.05:
 				failures.append("connected RV living interior rejects an upright player")
+			var previous_step_height := -INF
+			for step_x in [2.02, 1.72, 1.43, 1.18, 0.85]:
+				var step_probe := smoke_rv.global_transform * Vector3(step_x, -0.86, 0.98)
+				var step_height := active_world.player_floor_height(step_probe)
+				var local_step_height := (smoke_rv.global_transform.affine_inverse() * Vector3(step_probe.x, step_height, step_probe.z)).y
+				if local_step_height + 0.03 < previous_step_height:
+					failures.append("RV entry floor descends while walking inward at x=%.2f" % step_x)
+				previous_step_height = local_step_height
+			if previous_step_height < 0.02:
+				failures.append("RV stair path never reaches connected cabin floor")
 			# Side-on acceptance frame must visibly show the open panel, all three
 			# steps, unobstructed threshold and connected modeled living space.
 			var doorway_camera := Camera3D.new()
@@ -408,7 +434,15 @@ func _run_expedition_smoke_test() -> void:
 			var doorway_target := smoke_rv.global_transform * Vector3(1.05, 0.88, 0.98)
 			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.10, 1.55, 2.90)
 			doorway_camera.look_at(doorway_target, smoke_rv.global_transform.basis.y.normalized())
+			# Place the tested player beyond the threshold for this proof—not merely
+			# beside an open decorative panel—then restore normal gameplay state.
+			var traversal_player := GameSession.local_player as ExpeditionPlayer
+			var traversal_restore := traversal_player.global_transform
+			traversal_player.global_position = smoke_rv.global_transform * Vector3(0.82, 0.06, 0.98)
+			traversal_player.body_visual.visible = true
 			await _save_staged_render(doorway_camera, "res://build/validation/rv-doorway-render.png")
+			traversal_player.global_transform = traversal_restore
+			traversal_player.safe_position = traversal_restore.origin
 			doorway_camera.queue_free()
 			GameSession.local_player.camera.make_current()
 		smoke_rv.set_entry_door_open(false)

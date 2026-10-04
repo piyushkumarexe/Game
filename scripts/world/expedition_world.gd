@@ -37,9 +37,11 @@ const HERO_ROCK_SCENES: Array[PackedScene] = [
 const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
 const CAMPFIRE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/campfire-stones.glb")
 const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
-const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
-const TERRAIN_DETAIL: Texture2D = preload("res://assets/textures/terrain_detail.png")
-const ROAD_TEXTURE: Texture2D = preload("res://assets/textures/road_gravel.png")
+const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/forest_ground_albedo.jpg")
+const TERRAIN_DETAIL: Texture2D = preload("res://assets/textures/forest_ground_albedo.jpg")
+const TERRAIN_NORMAL: Texture2D = preload("res://assets/textures/forest_ground_normal.png")
+const ROAD_TEXTURE: Texture2D = preload("res://assets/textures/trail_ground_albedo.jpg")
+const ROAD_NORMAL: Texture2D = preload("res://assets/textures/trail_ground_normal.png")
 
 const ROUTE: Array[Vector3] = [
 	Vector3(0, 2.2, 85), Vector3(-8, 2.0, 55), Vector3(14, 1.2, 24),
@@ -57,6 +59,11 @@ var bridge_planks: Array[Node3D] = []
 var random := RandomNumberGenerator.new()
 var bootstrap_camera: Camera3D
 var player_blockers: Array[Dictionary] = []
+var world_environment: WorldEnvironment
+var environment: Environment
+var sun: DirectionalLight3D
+var terrain_material: StandardMaterial3D
+var road_material: StandardMaterial3D
 
 func _ready() -> void:
 	name = "RedmesaValley"
@@ -66,6 +73,9 @@ func _ready() -> void:
 	# generation. If a device stalls while building terrain, it still renders a
 	# real scene instead of the clear color behind the HUD.
 	_build_environment()
+	_apply_quality_profile()
+	if not GameSession.settings_changed.is_connected(_apply_quality_profile):
+		GameSession.settings_changed.connect(_apply_quality_profile)
 	_build_bootstrap_view()
 	players_root = Node3D.new()
 	players_root.name = "Players"
@@ -216,8 +226,11 @@ func _push_player_outside_rv(candidate: Vector3) -> Vector3:
 	# The RV now has a hollow compound collider and connected cabin. Preserve the
 	# overhang guard at terrain level, but allow an upright player already inside
 	# and allow passage through the passenger aperture only while its door is open.
-	var inside_cabin := absf(local.x) < 1.10 and local.z > -3.20 and local.z < 3.04 and local.y > 0.05 and local.y < 2.05
-	var in_doorway := local.x > 1.04 and local.z > 0.40 and local.z < 1.56 and local.y > 0.02 and local.y < 1.92
+	var inside_cabin := absf(local.x) < 1.12 and local.z > -3.20 and local.z < 3.04 and local.y > -0.04 and local.y < 2.05
+	# The candidate still has terrain-level Y on the first frame approaching the
+	# stairs. Gate only on the horizontal aperture here; player_floor_height()
+	# raises the feet over all three treads and onto the connected cabin floor.
+	var in_doorway := local.x > 1.02 and local.z > 0.38 and local.z < 1.58
 	if inside_cabin or (in_doorway and rv.entry_door_open):
 		return candidate
 	var distance_to_side := half_width - absf(local.x)
@@ -229,6 +242,35 @@ func _push_player_outside_rv(candidate: Vector3) -> Vector3:
 	var corrected := rv.global_transform * local
 	corrected.y = candidate.y
 	return corrected
+
+func player_floor_height(world_position: Vector3) -> float:
+	var ground := terrain_height(world_position.x, world_position.z) + 0.03
+	if not rv or not is_instance_valid(rv):
+		return ground
+	var local := rv.global_transform.affine_inverse() * world_position
+	# A player already in the coach remains on its floor even if the door closes.
+	if absf(local.x) <= 1.12 and local.z > -3.20 and local.z < 3.04:
+		var cabin_world := rv.global_transform * Vector3(local.x, 0.06, local.z)
+		return maxf(ground, cabin_world.y)
+	if not rv.entry_door_open:
+		return ground
+	# Keep the authored three-tread staircase traversable with deterministic foot
+	# heights. This mirrors the visible tread tops and avoids relying on mobile
+	# CharacterBody step-up behavior while the RV is parked on uneven terrain.
+	if local.z > 0.38 and local.z < 1.58:
+		var local_floor := -INF
+		if local.x > 1.78 and local.x < 2.34:
+			local_floor = -0.54
+		elif local.x > 1.54 and local.x <= 1.84:
+			local_floor = -0.32
+		elif local.x > 1.28 and local.x <= 1.60:
+			local_floor = -0.10
+		elif local.x > 1.02 and local.x <= 1.34:
+			local_floor = 0.06
+		if local_floor > -INF:
+			var tread_world := rv.global_transform * Vector3(local.x, local_floor, local.z)
+			return maxf(ground, tread_world.y)
+	return ground
 
 func _push_player_outside(current: Vector3, candidate: Vector3, center: Vector2, radius: float) -> Vector3:
 	var offset := Vector2(candidate.x, candidate.z) - center
@@ -274,8 +316,8 @@ func terrain_height(x: float, z: float) -> float:
 	return lerpf(result, ROUTE[0].y, camp_blend)
 
 func _build_environment() -> void:
-	var world_environment := WorldEnvironment.new()
-	var environment := Environment.new()
+	world_environment = WorldEnvironment.new()
+	environment = Environment.new()
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_material := ProceduralSkyMaterial.new()
@@ -302,13 +344,47 @@ func _build_environment() -> void:
 	environment.fog_sky_affect = 0.34
 	world_environment.environment = environment
 	add_child(world_environment)
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
+	sun.name = "HighFidelitySun"
 	sun.rotation_degrees = Vector3(-55.0, -34.0, 0.0)
 	sun.light_color = Color("fff0cf")
 	sun.light_energy = 0.96
 	sun.shadow_enabled = GameSession.graphics_quality > 0
 	sun.directional_shadow_max_distance = 72.0 if GameSession.graphics_quality == 1 else 120.0
+	sun.shadow_blur = 0.7
 	add_child(sun)
+
+func _apply_quality_profile() -> void:
+	var quality := clampi(GameSession.graphics_quality, 0, 2)
+	var viewport := get_viewport()
+	viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][quality]
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 2 else Viewport.SCREEN_SPACE_AA_DISABLED
+	viewport.use_debanding = quality == 2
+	if environment:
+		environment.glow_enabled = quality == 2
+		environment.ambient_light_energy = [0.72, 0.56, 0.46][quality]
+		environment.fog_density = [0.0014, 0.0009, 0.00055][quality]
+		environment.fog_sky_affect = [0.38, 0.28, 0.18][quality]
+		environment.adjustment_enabled = quality == 2
+		environment.adjustment_brightness = 1.02
+		environment.adjustment_contrast = 1.10
+		environment.adjustment_saturation = 1.06
+	if sun:
+		sun.shadow_enabled = quality > 0
+		sun.light_energy = [0.92, 1.08, 1.22][quality]
+		sun.directional_shadow_max_distance = [48.0, 82.0, 135.0][quality]
+		sun.shadow_blur = [1.2, 0.85, 0.55][quality]
+	if terrain_material:
+		terrain_material.normal_enabled = quality > 0
+		terrain_material.normal_scale = 0.62 if quality == 2 else 0.38
+	if road_material:
+		road_material.normal_enabled = quality > 0
+		road_material.normal_scale = 0.78 if quality == 2 else 0.45
+	# Imported hero scenery gains contact shadows immediately when HIGH is chosen;
+	# density still follows the saved preset on the next expedition load.
+	if props_root and quality == 2:
+		for geometry: Node in props_root.find_children("*", "GeometryInstance3D", true, false):
+			(geometry as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 func _build_terrain() -> void:
 	var terrain_sizes := [Vector2i(64, 88), Vector2i(78, 108), Vector2i(96, 132)]
@@ -321,6 +397,7 @@ func _build_terrain() -> void:
 	var z_max := 112.0
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
+	var tangents := PackedFloat32Array()
 	var colors := PackedColorArray()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
@@ -334,14 +411,16 @@ func _build_terrain() -> void:
 			var normal := Vector3(terrain_height(x - sample, z) - terrain_height(x + sample, z), sample * 2.0,
 				terrain_height(x, z - sample) - terrain_height(x, z + sample)).normalized()
 			normals.append(normal)
+			var tangent := (Vector3.RIGHT - normal * normal.dot(Vector3.RIGHT)).normalized()
+			tangents.append_array(PackedFloat32Array([tangent.x, tangent.y, tangent.z, -1.0]))
 			var route_distance := float(_nearest_route_data(Vector2(x, z)).x)
-			var terrain_tint := Color("769758")
+			var terrain_tint := Color("d4dec4")
 			if route_distance < 6.5:
-				terrain_tint = Color("b58b5d")
+				terrain_tint = Color("d9c5a6")
 			elif normal.y < 0.70:
-				terrain_tint = Color("796a58")
+				terrain_tint = Color("b9afa0")
 			elif y > 18.0:
-				terrain_tint = Color("668252")
+				terrain_tint = Color("c4d2b8")
 			var color_noise := (sin(x * 0.071 + z * 0.043) + cos(x * 0.037 - z * 0.061)) * 0.5
 			terrain_tint = terrain_tint.lightened(color_noise * 0.055) if color_noise > 0.0 else terrain_tint.darkened(-color_noise * 0.045)
 			colors.append(terrain_tint)
@@ -355,6 +434,7 @@ func _build_terrain() -> void:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TANGENT] = tangents
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
@@ -366,11 +446,14 @@ func _build_terrain() -> void:
 	# StandardMaterial3D is deliberately used here instead of a custom shader.
 	# It is reliable on Android's OpenGL fallback and still gets variation from
 	# baked vertex colors, so scenery can never appear to float over a void.
-	var terrain_material := StandardMaterial3D.new()
+	terrain_material = StandardMaterial3D.new()
 	terrain_material.albedo_texture = TERRAIN_DETAIL
-	terrain_material.albedo_color = Color.WHITE
+	terrain_material.albedo_color = Color(1.18, 1.16, 1.10, 1.0)
 	terrain_material.vertex_color_use_as_albedo = true
-	terrain_material.roughness = 0.97
+	terrain_material.roughness = 0.90
+	terrain_material.normal_enabled = GameSession.graphics_quality > 0
+	terrain_material.normal_texture = TERRAIN_NORMAL
+	terrain_material.normal_scale = 0.62 if GameSession.graphics_quality == 2 else 0.38
 	terrain_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	terrain_material.texture_repeat = true
 	# Two-sided rendering plus explicit occlusion bypass fixes whole-terrain
@@ -384,10 +467,13 @@ func _build_terrain() -> void:
 
 func _build_road() -> void:
 	var road_mesh := ImmediateMesh.new()
-	var road_material := StandardMaterial3D.new()
+	road_material = StandardMaterial3D.new()
 	road_material.albedo_texture = ROAD_TEXTURE
-	road_material.albedo_color = Color("f1d4a5")
-	road_material.roughness = 1.0
+	road_material.albedo_color = Color("e8dbc9")
+	road_material.roughness = 0.92
+	road_material.normal_enabled = GameSession.graphics_quality > 0
+	road_material.normal_texture = ROAD_NORMAL
+	road_material.normal_scale = 0.78 if GameSession.graphics_quality == 2 else 0.45
 	road_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	for segment in ROUTE.size() - 1:
@@ -398,7 +484,10 @@ func _build_road() -> void:
 		var forward := (b - a).normalized()
 		var right := forward.cross(Vector3.UP).normalized() * 3.7
 		var tile_length := a.distance_to(b) / 5.5
+		var road_normal := right.normalized().cross(forward).normalized()
 		road_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, road_material)
+		road_mesh.surface_set_normal(road_normal)
+		road_mesh.surface_set_tangent(Plane(right.normalized(), -1.0))
 		road_mesh.surface_set_uv(Vector2(0, 0)); road_mesh.surface_add_vertex(a - right)
 		road_mesh.surface_set_uv(Vector2(1, 0)); road_mesh.surface_add_vertex(a + right)
 		road_mesh.surface_set_uv(Vector2(0, tile_length)); road_mesh.surface_add_vertex(b - right)

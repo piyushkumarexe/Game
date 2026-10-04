@@ -161,6 +161,8 @@ func _move_on_foot(delta: float) -> void:
 	_apply_mobile_and_gamepad_look(delta, false)
 
 func _terrain_floor(x: float, z: float) -> float:
+	if Net.world and Net.world.has_method("player_floor_height"):
+		return float(Net.world.player_floor_height(Vector3(x, global_position.y, z)))
 	if Net.world and Net.world.has_method("terrain_height"):
 		return float(Net.world.terrain_height(x, z)) + 0.03
 	return safe_position.y

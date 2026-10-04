@@ -1,16 +1,21 @@
 class_name ProfessionalCrewVisual
 extends Node3D
-## Quaternius' professional CC0 skinned humanoid, composed with a Ranger outfit.
-## The original named skeleton is driven directly so directional travel never
-## becomes the static sideways slide that the rejected placeholder displayed.
+## Quaternius' CC0 skinned crew, driven by its authored animation library.
+## The outfit and retained head use identical named skeletons; each frame copies
+## the official source pose instead of guessing rotations on importer-rolled axes.
 
 const HEAD_SCENE: PackedScene = preload("res://assets/third_party/quaternius_crew/crew_head.gltf")
 const OUTFIT_SCENE: PackedScene = preload("res://assets/third_party/quaternius_crew/ranger_outfit.gltf")
+const ANIMATION_SCENE: PackedScene = preload("res://assets/third_party/quaternius_crew/animations.glb")
 
 var motion_root: Node3D
+var animation_rig: Node3D
+var animation_skeleton: Skeleton3D
+var animation_player: AnimationPlayer
 var skeletons: Array[Skeleton3D] = []
-var phase := 0.0
-var current_state := "Idle"
+var accessory_root: Node3D
+var current_state := ""
+var current_clip := ""
 
 func _ready() -> void:
 	_build_character()
@@ -18,33 +23,62 @@ func _ready() -> void:
 func _build_character() -> void:
 	motion_root = Node3D.new()
 	motion_root.name = "ProfessionalCharacterMotionRoot"
-	# A slightly broader chest/depth gives the requested stout road-trip silhouette
-	# without distorting facial placement or shortening the authored skeleton.
-	motion_root.scale = Vector3(1.10, 0.99, 1.14)
+	# A restrained broadening creates the stout expedition silhouette without
+	# warping the skeleton, face, hands or leg length.
+	motion_root.scale = Vector3(1.06, 1.0, 1.08)
 	add_child(motion_root)
+
+	animation_rig = ANIMATION_SCENE.instantiate() as Node3D
+	animation_rig.name = "QuaterniusAuthoredAnimationRig"
+	motion_root.add_child(animation_rig)
+	animation_skeleton = _find_skeleton(animation_rig)
+	animation_player = _find_animation_player(animation_rig)
+	# The animation file includes a neutral preview mannequin. Only its skeleton
+	# is used; the textured Ranger outfit and retained professional head render.
+	for candidate: Node in animation_rig.find_children("*", "GeometryInstance3D", true, false):
+		(candidate as GeometryInstance3D).visible = false
 
 	var outfit := OUTFIT_SCENE.instantiate() as Node3D
 	outfit.name = "QuaterniusRangerOutfit"
 	motion_root.add_child(outfit)
+	_collect_target_skeletons(outfit)
+
 	var head := HEAD_SCENE.instantiate() as Node3D
 	head.name = "QuaterniusProfessionalHead"
-	# Enlarge around the authored 1.70 m head centre, not around the character's
-	# feet. This keeps the facial anatomy/eye spacing intact while producing the
-	# friendly, stout road-trip silhouette rather than a tiny superhero head.
-	head.scale = Vector3.ONE * 1.22
-	head.position.y = -0.37
+	# Scale around the authored 1.70 m face centre instead of the character feet.
+	head.scale = Vector3.ONE * 1.12
+	head.position.y = -0.205
 	motion_root.add_child(head)
-	_collect_skeletons(outfit)
-	_collect_skeletons(head)
-	_build_expedition_accessories()
-	# Lower the A-pose immediately rather than exposing one T/A-pose frame.
-	_apply_pose(0.0, 0.0, 0.0, 1.0)
+	_collect_target_skeletons(head)
 
-func _collect_skeletons(node: Node) -> void:
+	_build_head_accessories()
+	_configure_animation_loops()
+	_play_clip("Idle_No_Loop", 1.0, 0.0)
+	_copy_animation_pose()
+
+func _find_skeleton(node: Node) -> Skeleton3D:
+	if node is Skeleton3D:
+		return node as Skeleton3D
+	for child: Node in node.get_children():
+		var found := _find_skeleton(child)
+		if found:
+			return found
+	return null
+
+func _find_animation_player(node: Node) -> AnimationPlayer:
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	for child: Node in node.get_children():
+		var found := _find_animation_player(child)
+		if found:
+			return found
+	return null
+
+func _collect_target_skeletons(node: Node) -> void:
 	if node is Skeleton3D:
 		skeletons.append(node as Skeleton3D)
-	for child in node.get_children():
-		_collect_skeletons(child)
+	for child: Node in node.get_children():
+		_collect_target_skeletons(child)
 
 func _material(color: Color, roughness := 0.76, metallic := 0.0) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
@@ -54,132 +88,91 @@ func _material(color: Color, roughness := 0.76, metallic := 0.0) -> StandardMate
 	return material
 
 func _mesh(parent: Node3D, mesh_name: String, mesh: PrimitiveMesh, mesh_position: Vector3,
-		material: Material, mesh_scale := Vector3.ONE) -> MeshInstance3D:
+		material: Material) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.name = mesh_name
 	instance.mesh = mesh
 	instance.position = mesh_position
-	instance.scale = mesh_scale
 	instance.material_override = material
 	parent.add_child(instance)
 	return instance
 
-func _build_expedition_accessories() -> void:
-	var charcoal := _material(Color("20262b"), 0.88)
-	var lens := _material(Color("111b21"), 0.16, 0.18)
-	var vest := _material(Color("a84b2e"), 0.84)
-	var trim := _material(Color("e1c9a4"), 0.70)
+func _build_head_accessories() -> void:
+	# Accessories follow the animated Head bone as one assembly. The previous
+	# world-space boxes separated from the face during jumps and looked broken.
+	accessory_root = Node3D.new()
+	accessory_root.name = "AnimatedHeadAccessories"
+	motion_root.add_child(accessory_root)
+	var charcoal := _material(Color("20262b"), 0.82)
+	var lens := _material(Color("10191e"), 0.12, 0.24)
 
 	var crown := CylinderMesh.new()
 	crown.top_radius = 0.125
 	crown.bottom_radius = 0.150
 	crown.height = 0.105
-	crown.radial_segments = 24
-	_mesh(motion_root, "ExpeditionCapCrown", crown, Vector3(0.0, 1.815, 0.002), charcoal)
+	crown.radial_segments = 32
+	_mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.185, 0.0), charcoal)
 	var brim := BoxMesh.new()
-	brim.size = Vector3(0.27, 0.026, 0.16)
-	var brim_instance := _mesh(motion_root, "ExpeditionCapBrim", brim, Vector3(0.0, 1.770, 0.120), charcoal)
+	brim.size = Vector3(0.27, 0.022, 0.155)
+	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.140, 0.112), charcoal)
 	brim_instance.rotation.x = -0.08
 
-	# Compact, correctly spaced lenses sit over the authored normal-spaced eyes.
 	for side in [-1.0, 1.0]:
 		var lens_mesh := BoxMesh.new()
-		lens_mesh.size = Vector3(0.092, 0.055, 0.014)
-		var lens_instance := _mesh(motion_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.052, 1.694, 0.166), lens)
+		lens_mesh.size = Vector3(0.088, 0.050, 0.012)
+		var lens_instance := _mesh(accessory_root, "SunglassLens", lens_mesh,
+			Vector3(side * 0.050, 0.057, 0.161), lens)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
-	bridge.size = Vector3(0.026, 0.010, 0.016)
-	_mesh(motion_root, "SunglassBridge", bridge, Vector3(0.0, 1.695, 0.168), charcoal)
+	bridge.size = Vector3(0.024, 0.009, 0.014)
+	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.058, 0.164), charcoal)
 
-	# Lightweight padded vest panels layer over the authored Ranger body while
-	# preserving its belts, boots, gloves, normals and skinning.
-	# Narrow padded lapels leave the authored Ranger torso, straps and waist gear
-	# visible. Earlier full chest plates read as two boxes rather than clothing.
-	for side in [-1.0, 1.0]:
-		var panel := BoxMesh.new()
-		panel.size = Vector3(0.055, 0.30, 0.026)
-		var panel_instance := _mesh(motion_root, "PaddedVestPanel", panel,
-			Vector3(side * 0.125, 1.265, 0.178), vest)
-		panel_instance.rotation.z = side * -0.10
-	var zipper := BoxMesh.new()
-	zipper.size = Vector3(0.010, 0.32, 0.008)
-	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.255, 0.193), trim)
-
-func _aim_bone(skeleton: Skeleton3D, bone_name: String, child_name: String,
-		desired_direction: Vector3, weight: float) -> void:
-	var bone_index := skeleton.find_bone(bone_name)
-	var child_index := skeleton.find_bone(child_name)
-	if bone_index < 0 or child_index < 0:
+func _configure_animation_loops() -> void:
+	if not animation_player:
 		return
-	var bone_pose := skeleton.get_bone_global_pose(bone_index)
-	var child_pose := skeleton.get_bone_global_pose(child_index)
-	var current_direction := (child_pose.origin - bone_pose.origin).normalized()
-	if current_direction.length_squared() < 0.5:
+	for clip_name in ["Idle_No_Loop", "Walk_Carry_Loop", "NinjaJump_Idle_Loop"]:
+		if animation_player.has_animation(clip_name):
+			animation_player.get_animation(clip_name).loop_mode = Animation.LOOP_LINEAR
+
+func _play_clip(clip_name: String, speed: float, blend := 0.14) -> void:
+	if not animation_player or not animation_player.has_animation(clip_name):
 		return
-	# Global aiming is independent of importer-specific bone roll. Local-axis
-	# rotation left this UE-style rig in a T-pose even though its names imported.
-	var correction := Quaternion(current_direction, desired_direction.normalized())
-	var current_rotation := bone_pose.basis.get_rotation_quaternion()
-	var target_rotation := correction * current_rotation
-	bone_pose.basis = Basis(current_rotation.slerp(target_rotation, clampf(weight, 0.0, 1.0)))
-	skeleton.set_bone_global_pose(bone_index, bone_pose)
-
-func _apply_pose(stride: float, arm_swing: float, crouch: float, weight: float) -> void:
-	# Aim upper arms in skeleton space so they hang naturally regardless of source
-	# bone roll, then retain authored elbow, knee, spine and head articulation.
-	for skeleton in skeletons:
-		_aim_bone(skeleton, "upperarm_l", "lowerarm_l",
-			Vector3(0.12, -0.98, -arm_swing * 0.62), weight)
-		_aim_bone(skeleton, "upperarm_r", "lowerarm_r",
-			Vector3(-0.12, -0.98, arm_swing * 0.62), weight)
-		# The imported rig's rolled local axes also make conventional thigh/calf
-		# rotations fold boots up through the torso. Skeleton-space targets produce
-		# a true opposing gait and a planted landing crouch.
-		_aim_bone(skeleton, "thigh_l", "calf_l",
-			Vector3(0.0, -1.0 + crouch * 0.10, -stride * 0.82), weight)
-		_aim_bone(skeleton, "thigh_r", "calf_r",
-			Vector3(0.0, -1.0 + crouch * 0.10, stride * 0.82), weight)
-		_aim_bone(skeleton, "calf_l", "foot_l",
-			Vector3(0.0, -1.0, maxf(0.0, stride) * 0.42 + crouch * 0.20), weight)
-		_aim_bone(skeleton, "calf_r", "foot_r",
-			Vector3(0.0, -1.0, maxf(0.0, -stride) * 0.42 + crouch * 0.20), weight)
-
-func set_locomotion(state: String, horizontal_speed: float, vertical_speed: float, delta: float) -> void:
-	current_state = state
-	var stride := 0.0
-	var arm_swing := 0.0
-	var crouch := 0.0
-	var bob := 0.0
-	var lean := 0.0
-	if state == "Walk":
-		phase += delta * maxf(5.2, horizontal_speed * 1.45)
-		stride = sin(phase) * 0.56
-		arm_swing = stride * 0.78
-		bob = absf(sin(phase)) * 0.030
-		lean = 0.035
-	elif state == "Run":
-		phase += delta * maxf(8.0, horizontal_speed * 1.65)
-		stride = sin(phase) * 0.82
-		arm_swing = stride * 0.90
-		bob = absf(sin(phase)) * 0.065
-		lean = 0.105
-	elif state in ["Jump", "Jump_Idle"]:
-		stride = -0.28 if vertical_speed > 0.0 else 0.18
-		arm_swing = -0.62
-		crouch = 0.16
-		bob = 0.025
-		lean = -0.025
-	elif state == "Jump_Land":
-		crouch = 0.38
-		arm_swing = 0.15
-		bob = -0.085
-		lean = 0.13
+	if current_clip != clip_name:
+		current_clip = clip_name
+		animation_player.play(clip_name, blend, speed)
+		animation_player.advance(0.0)
 	else:
-		phase += delta * 1.35
-		arm_swing = sin(phase * 0.55) * 0.025
-		bob = sin(phase) * 0.008
-	var blend := minf(1.0, delta * (15.0 if state.begins_with("Jump") else 10.0))
-	_apply_pose(stride, arm_swing, crouch, blend)
-	motion_root.position.y = lerpf(motion_root.position.y, bob, minf(1.0, delta * 13.0))
-	motion_root.rotation.x = lerp_angle(motion_root.rotation.x, lean, minf(1.0, delta * 9.0))
+		animation_player.speed_scale = speed
+
+func _copy_animation_pose() -> void:
+	if not animation_skeleton:
+		return
+	for target: Skeleton3D in skeletons:
+		for source_index in animation_skeleton.get_bone_count():
+			var target_index := target.find_bone(animation_skeleton.get_bone_name(source_index))
+			if target_index < 0:
+				continue
+			target.set_bone_pose_position(target_index, animation_skeleton.get_bone_pose_position(source_index))
+			target.set_bone_pose_rotation(target_index, animation_skeleton.get_bone_pose_rotation(source_index))
+			target.set_bone_pose_scale(target_index, animation_skeleton.get_bone_pose_scale(source_index))
+	if accessory_root:
+		var head_index := animation_skeleton.find_bone("Head")
+		if head_index >= 0:
+			accessory_root.transform = animation_skeleton.get_bone_global_pose(head_index)
+
+func set_locomotion(state: String, horizontal_speed: float, _vertical_speed: float, _delta: float) -> void:
+	current_state = state
+	match state:
+		"Walk":
+			_play_clip("Walk_Carry_Loop", clampf(horizontal_speed / 4.4, 0.75, 1.25))
+		"Run":
+			_play_clip("Walk_Carry_Loop", clampf(horizontal_speed / 4.4, 1.35, 1.85), 0.10)
+		"Jump":
+			_play_clip("NinjaJump_Start", 1.0, 0.08)
+		"Jump_Idle":
+			_play_clip("NinjaJump_Idle_Loop", 1.0, 0.08)
+		"Jump_Land":
+			_play_clip("NinjaJump_Land", 1.0, 0.06)
+		_:
+			_play_clip("Idle_No_Loop", 1.0)
+	_copy_animation_pose()
