@@ -67,6 +67,7 @@ func _physics_process(delta: float) -> void:
 		return
 	safe_spawn_seconds = maxf(0.0, safe_spawn_seconds - delta)
 	_stabilize_motion()
+	_apply_grounded_stability(delta)
 	_simulate_driver(delta)
 	_simulate_winch(front_winch, _front_hook_position(), delta)
 	_simulate_winch(rear_winch, _rear_hook_position(), delta)
@@ -213,19 +214,35 @@ func damage(value: float, source := "IMPACT") -> void:
 	if health <= 0.0:
 		GameSession.run_finished.emit(false)
 
+func _apply_grounded_stability(_delta: float) -> void:
+	var contact_count := 0
+	for child: Node in get_children():
+		if child is VehicleWheel3D and (child as VehicleWheel3D).is_in_contact():
+			contact_count += 1
+	if contact_count < 2:
+		return
+	# A tall camper needs anti-roll resistance, not teleporting orientation.
+	# Gentle torque keeps weight transfer and bumps while preventing the violent
+	# snap/launch behaviour seen with the old high-centre suspension setup.
+	var up := global_transform.basis.orthonormalized().y
+	var correction_axis := up.cross(Vector3.UP)
+	apply_torque(correction_axis * mass * 3.2 - angular_velocity * mass * 0.42)
+
 func _simulate_driver(delta: float) -> void:
 	var horizontal_speed := Vector2(linear_velocity.x, linear_velocity.z).length()
 	var steering_limit := lerpf(MAX_STEER, 0.20, clampf(horizontal_speed / MAX_SAFE_SPEED, 0.0, 1.0))
 	steering = move_toward(steering, steer_input * steering_limit, delta * 1.8)
 	var parked := driver_peer_id == 0
+	var drive_throttle := maxf(throttle_input, 0.0)
 	if parked or not engine_running or fuel <= 0.0 or health <= 0.0 or gear == 1:
 		engine_force = 0.0
 	else:
 		var health_factor := lerpf(0.42, 1.0, health / 100.0)
 		var speed_factor := clampf((MAX_SAFE_SPEED - linear_velocity.length()) / 8.0, 0.0, 1.0)
-		engine_force = throttle_input * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor
-		fuel = maxf(0.0, fuel - absf(throttle_input) * delta * 0.16)
-	brake = 95.0 if parked else (82.0 if handbrake_input else (24.0 if absf(throttle_input) < 0.05 else 0.0))
+		engine_force = drive_throttle * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor
+		fuel = maxf(0.0, fuel - drive_throttle * delta * 0.16)
+	var service_brake := throttle_input < -0.10
+	brake = 95.0 if parked else (82.0 if handbrake_input else (42.0 if service_brake else (24.0 if drive_throttle < 0.05 else 0.0)))
 	var up_alignment := global_transform.basis.orthonormalized().y.dot(Vector3.UP)
 	upside_down_seconds = upside_down_seconds + delta if up_alignment < -0.35 else 0.0
 	# Recover immediately once the RV leaves the playable basin. Waiting for a
