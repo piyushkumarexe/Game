@@ -119,11 +119,14 @@ jobs:
           exit $status
       - name: Verify Android landscape lock
         run: |
-          analyzer=$(find "$ANDROID_HOME" -type f -name apkanalyzer -perm -u+x | head -1)
-          test -n "$analyzer"
-          "$analyzer" manifest print build/android/DustboundExpeditions.apk > android-manifest.xml
-          grep -q 'android:screenOrientation="landscape"' android-manifest.xml
-          echo 'Android manifest verified: the game activity is locked to landscape.' >> "$GITHUB_STEP_SUMMARY"
+          aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$aapt2"
+          "$aapt2" dump xmltree build/android/DustboundExpeditions.apk --file AndroidManifest.xml > android-manifest.txt
+          orientation=$(grep 'screenOrientation' android-manifest.txt || true)
+          echo "$orientation"
+          # ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE is the integer value 0.
+          echo "$orientation" | grep -Eq '\(type 0x10\)0x0([[:space:]]|$)'
+          echo 'Android manifest verified: the game activity is locked to landscape (value 0).' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload Android game
         uses: actions/upload-artifact@v7.0.1
         with:
