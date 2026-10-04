@@ -266,7 +266,8 @@ func _build_player() -> void:
 		var prop := body_visual.find_child(hidden_prop, true, false)
 		if prop is Node3D:
 			(prop as Node3D).visible = false
-	body_animation = body_visual.find_child("*", "AnimationPlayer", true, false) as AnimationPlayer
+	var animation_players := body_visual.find_children("*", "AnimationPlayer", true, false)
+	body_animation = animation_players[0] as AnimationPlayer if not animation_players.is_empty() else null
 	if body_animation:
 		for looping_clip in ["Idle", "Walk", "Run", "Jump_Idle"]:
 			if body_animation.has_animation(looping_clip):
