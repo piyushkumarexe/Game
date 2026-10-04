@@ -117,16 +117,33 @@ func _set_bone(skeleton: Skeleton3D, bone_name: String, target: Quaternion, weig
 	var current := skeleton.get_bone_pose_rotation(index)
 	skeleton.set_bone_pose_rotation(index, current.slerp(target, clampf(weight, 0.0, 1.0)))
 
+func _aim_bone(skeleton: Skeleton3D, bone_name: String, child_name: String,
+		desired_direction: Vector3, weight: float) -> void:
+	var bone_index := skeleton.find_bone(bone_name)
+	var child_index := skeleton.find_bone(child_name)
+	if bone_index < 0 or child_index < 0:
+		return
+	var bone_pose := skeleton.get_bone_global_pose(bone_index)
+	var child_pose := skeleton.get_bone_global_pose(child_index)
+	var current_direction := (child_pose.origin - bone_pose.origin).normalized()
+	if current_direction.length_squared() < 0.5:
+		return
+	# Global aiming is independent of importer-specific bone roll. Local-axis
+	# rotation left this UE-style rig in a T-pose even though its names imported.
+	var correction := Quaternion(current_direction, desired_direction.normalized())
+	var current_rotation := bone_pose.basis.get_rotation_quaternion()
+	var target_rotation := correction * current_rotation
+	bone_pose.basis = Basis(current_rotation.slerp(target_rotation, clampf(weight, 0.0, 1.0)))
+	skeleton.set_bone_global_pose(bone_index, bone_pose)
+
 func _apply_pose(stride: float, arm_swing: float, crouch: float, weight: float) -> void:
-	# Local Z lowers the authored A-pose arms; local X supplies opposing natural
-	# gait swing. Knees flex on every planted half-cycle instead of remaining rigid.
+	# Aim upper arms in skeleton space so they hang naturally regardless of source
+	# bone roll, then retain authored elbow, knee, spine and head articulation.
 	for skeleton in skeletons:
-		# Lower first, then swing the hanging arm around local X. Reversing this
-		# multiplication order twisted the imported arms outward into a T-pose.
-		_set_bone(skeleton, "upperarm_l",
-			Quaternion(Vector3.RIGHT, -arm_swing) * Quaternion(Vector3.FORWARD, 1.50), weight)
-		_set_bone(skeleton, "upperarm_r",
-			Quaternion(Vector3.RIGHT, arm_swing) * Quaternion(Vector3.FORWARD, -1.50), weight)
+		_aim_bone(skeleton, "upperarm_l", "lowerarm_l",
+			Vector3(0.12, -0.98, -arm_swing * 0.62), weight)
+		_aim_bone(skeleton, "upperarm_r", "lowerarm_r",
+			Vector3(-0.12, -0.98, arm_swing * 0.62), weight)
 		_set_bone(skeleton, "lowerarm_l", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
 		_set_bone(skeleton, "lowerarm_r", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
 		_set_bone(skeleton, "thigh_l", Quaternion(Vector3.RIGHT, stride + crouch), weight)
