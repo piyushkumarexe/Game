@@ -53,6 +53,11 @@ func setup(spawn_transform: Transform3D) -> void:
 	collision_mask = 1 | 2 | 4 | 8
 	global_transform = spawn_transform
 	start_transform = spawn_transform
+	# Parked rigid vehicles were settling onto one suspension corner before the
+	# player reached them, leaving the RV tipped over in the opening screenshots.
+	# Keep the unoccupied rig statically parked; physics resumes at the driver seat.
+	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	freeze = true
 	_build_rv()
 	body_entered.connect(_on_body_entered)
 	_setup_engine_audio()
@@ -141,6 +146,9 @@ func _request_driver(requested_peer: int) -> void:
 func _assign_driver(id: int) -> void:
 	driver_peer_id = id
 	engine_running = true
+	freeze = false
+	sleeping = false
+	safe_spawn_seconds = maxf(safe_spawn_seconds, 0.8)
 	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.enter_driver(self)
@@ -162,12 +170,23 @@ func _request_exit(requested_peer: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _release_driver(id: int) -> void:
+	# Park on an upright terrain-aligned pose before placing the player outside.
+	# This prevents a harmless suspension lean from becoming a permanently frozen
+	# overturned camper after EXIT DRIVER SEAT.
+	if Net.world and Net.world.has_method("terrain_height"):
+		var yaw := global_rotation.y
+		var parked_origin := global_position
+		parked_origin.y = float(Net.world.terrain_height(parked_origin.x, parked_origin.z)) + 1.25
+		global_transform = Transform3D(Basis(Vector3.UP, yaw), parked_origin)
 	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.leave_driver(exit_seat_transform())
 	driver_peer_id = 0
 	throttle_input = 0.0
-	brake = 55.0
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	brake = 95.0
+	freeze = true
 
 func set_local_driver_first_person(active: bool) -> void:
 	if body_shell:
@@ -200,6 +219,7 @@ func respawn_at(new_transform: Transform3D) -> void:
 	upside_down_seconds = 0.0
 	health = maxf(health, 55.0)
 	fuel = maxf(fuel, 35.0)
+	freeze = driver_peer_id == 0
 	reset_physics_interpolation()
 
 func damage(value: float, source := "IMPACT") -> void:

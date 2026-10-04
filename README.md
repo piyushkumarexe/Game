@@ -2,7 +2,7 @@
 
 A true 3D, first-/third-person single-player mobile physics adventure built with Godot 4.7.2.
 
-Version 0.7 is a **single-player mobile rendering, performance, physics-camera, and control-customization rebuild** with an original map, physical RV, missions, recovery tools, hazards, viewport-level multi-touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
+Version 0.8 is a **single-player mobile rendering, parked-vehicle stability, environment-art, performance, physics-camera, and control-customization rebuild** with an original map, physical RV, missions, recovery tools, hazards, viewport-level multi-touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
 
 > This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
@@ -67,7 +67,10 @@ The handcrafted route contains:
 - Textured and animated Quaternius CC0 survivor with idle, walk, run and jump locomotion
 - More detailed original camper with framed glazing, mirrors, awning, roof equipment, trim, ladder, spare and mobile chase-camera clearance
 - Lower-profile first-person dashboard and a longer, raised third-person driving chase camera
-- Reduced shadow resolution, quality-scaled scenery/shadows, and throttled vehicle HUD updates for mobile performance
+- Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, and throttled vehicle HUD updates for mobile performance
+- Coherent lit forest/campsite palette replacing cyan trees, pink canvas, and white unlit stones
+- Collision-aware deterministic walking around the RV, tent, fire ring, and camp sign
+- Static parking state that prevents the unoccupied RV from settling or tipping before the player enters it
 - Original generated app/key artwork, with no remote runtime assets
 
 ## Controls
@@ -92,7 +95,7 @@ The handcrafted route contains:
 - GDScript only; no third-party runtime plugins
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
-- Multiplayer/voice implementation retained but disabled in the 0.7 stabilization UI and runtime
+- Multiplayer/voice implementation retained but disabled in the 0.8 stabilization UI and runtime
 
 Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. The animated survivor comes from Quaternius' CC0 Zombie Apocalypse Kit. Provenance is documented under [`assets/third_party`](assets/third_party). The RV, map and game-specific assets remain original.
 
@@ -106,7 +109,7 @@ Install Godot 4.7.2 and open `project.godot`, or run:
 godot --editor --path .
 ```
 
-The 0.7 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
+The 0.8 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
 
 ## GitHub mobile builds
 

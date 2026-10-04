@@ -114,6 +114,8 @@ func _move_on_foot(delta: float) -> void:
 	var next_position := global_position + Vector3(velocity.x, 0.0, velocity.z) * delta
 	next_position.x = clampf(next_position.x, -126.0, 126.0)
 	next_position.z = clampf(next_position.z, -266.0, 108.0)
+	if Net.world and Net.world.has_method("constrain_player_position"):
+		next_position = Net.world.constrain_player_position(global_position, next_position)
 	var floor_height := _terrain_floor(next_position.x, next_position.z)
 	var jump_pressed := Input.is_action_just_pressed("jump") or GameSession.consume_touch_press("jump")
 	if grounded and jump_pressed:
@@ -347,8 +349,8 @@ func _build_player() -> void:
 	cockpit_visual.name = "DriverCockpit"
 	# Keep only a slim dashboard/steering-wheel frame. The previous scale filled
 	# the lower half of a phone screen with a cream rectangle.
-	cockpit_visual.scale = Vector3.ONE * 0.42
-	cockpit_visual.position = Vector3(0.0, -0.33, -0.16)
+	cockpit_visual.scale = Vector3.ONE * 0.34
+	cockpit_visual.position = Vector3(0.0, -0.43, -0.12)
 	cockpit_visual.visible = false
 	camera.add_child(cockpit_visual)
 

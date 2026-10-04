@@ -39,6 +39,7 @@ var last_checkpoint_transform := Transform3D.IDENTITY
 var bridge_planks: Array[Node3D] = []
 var random := RandomNumberGenerator.new()
 var bootstrap_camera: Camera3D
+var player_blockers: Array[Dictionary] = []
 
 func _ready() -> void:
 	name = "RedmesaValley"
@@ -77,6 +78,8 @@ func _build_bootstrap_view() -> void:
 	var plane := BoxMesh.new()
 	plane.size = Vector3(26.0, 0.8, 26.0)
 	floor_mesh.mesh = plane
+	# Collision-only fallback: a visible square pad was reading as broken terrain.
+	floor_mesh.visible = false
 	var floor_material := StandardMaterial3D.new()
 	floor_material.albedo_texture = GROUND_TEXTURE
 	# Large-scale UVs avoid the obvious checkerboard visible in the phone shot.
@@ -113,6 +116,7 @@ func _build_bootstrap_view() -> void:
 	sign.position = ROUTE[0] + Vector3(-7.0, 0.0, -3.0)
 	sign.rotation.y = -0.35
 	add_child(sign)
+	_add_player_blocker(sign.position, 0.65)
 
 	bootstrap_camera = Camera3D.new()
 	bootstrap_camera.name = "BootstrapCamera"
@@ -171,6 +175,30 @@ func place_bridge_plank(index: int) -> void:
 	var plank := PrimitiveFactory.box(self, "BridgePlank%d" % index, center + offset,
 		Vector3(1.75, 0.26, length), Color("8d5b31"), true, Vector3(0.0, yaw, 0.0))
 	bridge_planks.append(plank)
+
+func _add_player_blocker(world_position: Vector3, radius: float) -> void:
+	player_blockers.append({"center": Vector2(world_position.x, world_position.z), "radius": radius})
+
+func constrain_player_position(current: Vector3, candidate: Vector3) -> Vector3:
+	for blocker: Dictionary in player_blockers:
+		var center: Vector2 = blocker["center"]
+		candidate = _push_player_outside(current, candidate, center, float(blocker["radius"]))
+	if rv and is_instance_valid(rv):
+		candidate = _push_player_outside(current, candidate, Vector2(rv.global_position.x, rv.global_position.z), 3.35)
+	return candidate
+
+func _push_player_outside(current: Vector3, candidate: Vector3, center: Vector2, radius: float) -> Vector3:
+	var offset := Vector2(candidate.x, candidate.z) - center
+	if offset.length_squared() >= radius * radius:
+		return candidate
+	if offset.length_squared() < 0.0001:
+		offset = Vector2(current.x, current.z) - center
+	if offset.length_squared() < 0.0001:
+		offset = Vector2.RIGHT
+	offset = offset.normalized() * radius
+	candidate.x = center.x + offset.x
+	candidate.z = center.y + offset.y
+	return candidate
 
 func terrain_height(x: float, z: float) -> float:
 	var broad := sin(x * 0.038) * 2.6 + cos(z * 0.031) * 3.2 + sin((x + z) * 0.065) * 1.3
@@ -264,8 +292,8 @@ func _build_terrain() -> void:
 				terrain_tint = Color("796a58")
 			elif y > 18.0:
 				terrain_tint = Color("668252")
-			elif sin(x * 0.13 + z * 0.09) > 0.42:
-				terrain_tint = Color("88a762")
+			var color_noise := (sin(x * 0.071 + z * 0.043) + cos(x * 0.037 - z * 0.061)) * 0.5
+			terrain_tint = terrain_tint.lightened(color_noise * 0.055) if color_noise > 0.0 else terrain_tint.darkened(-color_noise * 0.045)
 			colors.append(terrain_tint)
 			uvs.append(Vector2(x * 0.035, z * 0.035))
 	for z_index in z_count - 1:
@@ -344,11 +372,18 @@ func _build_landmarks() -> void:
 	tent.rotation.y = 0.32
 	tent.scale = Vector3.ONE * 3.25
 	props_root.add_child(tent)
+	_recolor_imported(tent, {
+		"colorred": PrimitiveFactory.material(Color("a95836"), 0.94),
+		"wood": PrimitiveFactory.material(Color("6f472c"), 0.96)
+	})
+	_add_player_blocker(tent.position, 2.05)
 	var fire_ring := CAMPFIRE_SCENE.instantiate() as Node3D
 	fire_ring.name = "CampfireRing"
 	fire_ring.position = ROUTE[0] + Vector3(-2.5, 0.08, 2.0)
 	fire_ring.scale = Vector3.ONE * 2.3
 	props_root.add_child(fire_ring)
+	_recolor_imported(fire_ring, {"stone": PrimitiveFactory.material(Color("76736a"), 1.0)})
+	_add_player_blocker(fire_ring.position, 0.88)
 	var fire_light := OmniLight3D.new()
 	fire_light.position = fire_ring.position + Vector3.UP * 0.45
 	fire_light.light_color = Color("ffad5a")
@@ -421,6 +456,7 @@ func _build_scenery() -> void:
 		cover.rotation.y = random.randf_range(-PI, PI)
 		cover.scale = Vector3.ONE * random.randf_range(1.25, 2.15)
 		props_root.add_child(cover)
+		_recolor_imported(cover, {"grass": PrimitiveFactory.material(Color("4f7f42"), 0.98)})
 		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	# A deliberate tree line gives the opening area a readable forest silhouette
 	# instead of relying on sparse random placements in the player's first view.
@@ -431,6 +467,7 @@ func _build_scenery() -> void:
 		var x := ROUTE[0].x + cos(angle) * radius
 		var z := ROUTE[0].z + sin(angle) * radius
 		_make_tree(Vector3(x, terrain_height(x, z), z), 0.78 + float(index % 3) * 0.16, false)
+	_build_distant_forest()
 	# Reliable cable anchors along challenge sections.
 	for anchor_position in [Vector3(18, 5, -8), Vector3(46, 6, -32), Vector3(-34, 7, -109), Vector3(-13, 11, -131), Vector3(22, 19, -169), Vector3(-24, 29, -199)]:
 		_make_winch_post(anchor_position)
@@ -438,6 +475,55 @@ func _build_scenery() -> void:
 		var wildlife: TrailWildlife = WildlifeScript.new()
 		add_child(wildlife)
 		wildlife.setup(Vector3(wildlife_position.x, terrain_height(wildlife_position.x, wildlife_position.z) + 0.2, wildlife_position.z))
+
+func _build_distant_forest() -> void:
+	# Batch the background forest into one MultiMesh instead of hundreds of
+	# individual nodes/draw submissions. This adds the density missing from the
+	# phone screenshots while remaining cheaper than the previous sparse trees.
+	var template := PINE_SCENES[1].instantiate() as Node3D
+	var source_mesh_nodes := template.find_children("*", "MeshInstance3D", true, false)
+	var source_mesh_node := source_mesh_nodes[0] as MeshInstance3D if not source_mesh_nodes.is_empty() else null
+	if not source_mesh_node or not source_mesh_node.mesh:
+		template.free()
+		return
+	var forest_mesh := source_mesh_node.mesh.duplicate(true) as Mesh
+	for surface in forest_mesh.get_surface_count():
+		var source := forest_mesh.surface_get_material(surface)
+		var material_name := source.resource_name.to_lower() if source else ""
+		if material_name.contains("leaf"):
+			forest_mesh.surface_set_material(surface, PrimitiveFactory.material(Color("315f3c"), 0.98))
+		elif material_name.contains("wood"):
+			forest_mesh.surface_set_material(surface, PrimitiveFactory.material(Color("60412e"), 0.97))
+	template.free()
+	var forest_count: int = [54, 96, 156][GameSession.graphics_quality]
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = forest_mesh
+	multimesh.instance_count = forest_count
+	var forest := MultiMeshInstance3D.new()
+	forest.name = "BatchedDistantForest"
+	forest.multimesh = multimesh
+	forest.custom_aabb = AABB(Vector3(-132.0, -12.0, -265.0), Vector3(264.0, 78.0, 370.0))
+	forest.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if GameSession.graphics_quality < 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	props_root.add_child(forest)
+	var placed := 0
+	var attempts := 0
+	while placed < forest_count and attempts < forest_count * 10:
+		attempts += 1
+		var x := random.randf_range(-124.0, 124.0)
+		var z := random.randf_range(-258.0, 106.0)
+		var route_distance := float(_nearest_route_data(Vector2(x, z)).x)
+		if route_distance < 16.0 or route_distance > 76.0:
+			continue
+		var scale_factor := random.randf_range(3.0, 5.0)
+		var basis := Basis(Vector3.UP, random.randf_range(-PI, PI)).scaled(Vector3.ONE * scale_factor)
+		multimesh.set_instance_transform(placed, Transform3D(basis, Vector3(x, terrain_height(x, z), z)))
+		placed += 1
+	# The acceptance range normally fills. Hide any unused transforms safely at
+	# the basin floor rather than leaving identity trees at world origin.
+	while placed < forest_count:
+		multimesh.set_instance_transform(placed, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * 0.001), Vector3(0, -30, 0)))
+		placed += 1
 
 func _make_tree(position: Vector3, scale_factor: float, anchor: bool) -> void:
 	var tree := Node3D.new()
@@ -449,6 +535,10 @@ func _make_tree(position: Vector3, scale_factor: float, anchor: bool) -> void:
 	var model := PINE_SCENES[random.randi_range(0, PINE_SCENES.size() - 1)].instantiate() as Node3D
 	model.scale = Vector3.ONE * 3.45
 	tree.add_child(model)
+	_recolor_imported(model, {
+		"leaf": PrimitiveFactory.material(Color("356b42"), 0.98),
+		"wood": PrimitiveFactory.material(Color("67452f"), 0.97)
+	})
 	if GameSession.graphics_quality == 0 and not anchor:
 		_set_shadow_mode(model, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if anchor:
@@ -473,6 +563,11 @@ func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collisio
 	var model := ROCK_SCENES[random.randi_range(0, ROCK_SCENES.size() - 1)].instantiate() as Node3D
 	model.scale = Vector3.ONE * 2.15
 	rock_root.add_child(model)
+	_recolor_imported(model, {
+		"grass": PrimitiveFactory.material(Color("537746"), 0.98),
+		"dirt": PrimitiveFactory.material(Color("776755"), 1.0),
+		"default": PrimitiveFactory.material(Color("80766a"), 1.0)
+	})
 	if GameSession.graphics_quality < 2 and not collision_enabled:
 		_set_shadow_mode(model, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if collision_enabled:
@@ -484,6 +579,22 @@ func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collisio
 		collision.position.y = 0.6
 		body.add_child(collision)
 		rock_root.add_child(body)
+
+func _recolor_imported(root_node: Node, palette: Dictionary) -> void:
+	var mesh_nodes: Array[Node] = root_node.find_children("*", "MeshInstance3D", true, false)
+	if root_node is MeshInstance3D:
+		mesh_nodes.push_front(root_node)
+	for candidate: Node in mesh_nodes:
+		var mesh_instance := candidate as MeshInstance3D
+		if not mesh_instance or not mesh_instance.mesh:
+			continue
+		for surface in mesh_instance.mesh.get_surface_count():
+			var source := mesh_instance.mesh.surface_get_material(surface)
+			var source_name := source.resource_name.to_lower() if source else ""
+			for token: String in palette:
+				if source_name.contains(token):
+					mesh_instance.set_surface_override_material(surface, palette[token])
+					break
 
 func _set_shadow_mode(root_node: Node, mode: int) -> void:
 	if root_node is GeometryInstance3D:

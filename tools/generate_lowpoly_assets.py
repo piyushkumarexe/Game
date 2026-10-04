@@ -46,7 +46,15 @@ def paint_texture(name: str, base: tuple[int, int, int], seed: int, pattern: str
         value = (detail_hash % 15) - 7
         u, v = x / float(size), y / float(size)
         value += int(math.sin(math.tau * (u * 2.0 + v)) * 5 + math.cos(math.tau * (v * 3.0 - u)) * 3)
-        if pattern == "panel":
+        if pattern == "detail":
+            value = int(value * 0.22)
+        elif pattern == "gravel":
+            value = (detail_hash % 17) - 8
+            if detail_hash % 293 < 4:
+                value -= 18
+            elif detail_hash % 211 < 3:
+                value += 12
+        elif pattern == "panel":
             value += int(math.sin(math.tau * u) * 4)
             if detail_hash % 521 < 2:
                 value -= 12
@@ -76,8 +84,8 @@ for args in [
     ("pine_needles.png", (58, 103, 67), 53, "pine", 256),
     ("canyon_stone.png", (142, 102, 74), 67, "rock", 256),
     ("crew_fabric.png", (174, 78, 42), 71, "fabric", 256),
-    ("terrain_detail.png", (224, 226, 205), 89, "rock", 512),
-    ("road_gravel.png", (157, 119, 78), 97, "rock", 512),
+    ("terrain_detail.png", (242, 243, 232), 89, "detail", 512),
+    ("road_gravel.png", (151, 116, 79), 97, "gravel", 512),
 ]:
     paint_texture(*args)
 
@@ -397,8 +405,8 @@ hands.ellipsoid("RightHand", (.67, -.62, -1.37), (.13, .10, .15), "Skin", 14, 8)
 hands.save()
 
 cockpit = Obj("rv_cockpit")
-cockpit.box("Dashboard", (0, -.47, -1.08), (2.25, .38, .58), "DarkMetal")
-cockpit.box("DashTop", (0, -.27, -1.14), (2.28, .10, .70), "RV_Cream")
+cockpit.box("Dashboard", (0, -.52, -1.08), (1.86, .20, .34), "DarkMetal")
+cockpit.box("DashTop", (0, -.40, -1.12), (1.92, .055, .38), "DarkMetal")
 # Windshield pillars are provided by the exterior/chase view; omitting the
 # chunky placeholders keeps the first-person road view open.
 cockpit.torus("SteeringWheel", (.48, -.36, -.74), .34, .045, "Rubber", "z", 14, 6)

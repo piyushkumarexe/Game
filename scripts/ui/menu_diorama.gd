@@ -149,6 +149,10 @@ func _build_scenery() -> void:
 		tree.position = data[0]
 		tree.scale = Vector3.ONE * float(data[1]) * 3.45
 		add_child(tree)
+		_recolor_imported(tree, {
+			"leaf": PrimitiveFactory.material(Color("356b42"), 0.98),
+			"wood": PrimitiveFactory.material(Color("67452f"), 0.97)
+		})
 	for index in 11:
 		var rock := ROCK_SCENE.instantiate() as Node3D
 		var side := -1.0 if index % 2 == 0 else 1.0
@@ -156,16 +160,42 @@ func _build_scenery() -> void:
 		rock.scale = Vector3(0.5 + (index % 3) * 0.22, 0.45 + (index % 2) * 0.18, 0.62) * 2.15
 		rock.rotation.y = index * 0.77
 		add_child(rock)
+		_recolor_imported(rock, {
+			"grass": PrimitiveFactory.material(Color("537746"), 0.98),
+			"dirt": PrimitiveFactory.material(Color("776755"), 1.0),
+			"default": PrimitiveFactory.material(Color("80766a"), 1.0)
+		})
 	var tent := TENT_SCENE.instantiate() as Node3D
 	tent.position = Vector3(-5.3, 0.0, 1.8)
 	tent.rotation.y = 0.42
 	tent.scale = Vector3.ONE * 3.2
 	add_child(tent)
+	_recolor_imported(tent, {
+		"colorred": PrimitiveFactory.material(Color("a95836"), 0.94),
+		"wood": PrimitiveFactory.material(Color("6f472c"), 0.96)
+	})
 	var fire_ring := CAMPFIRE_SCENE.instantiate() as Node3D
 	fire_ring.position = Vector3(-1.8, 0.02, 2.1)
 	fire_ring.scale = Vector3.ONE * 2.3
 	add_child(fire_ring)
+	_recolor_imported(fire_ring, {"stone": PrimitiveFactory.material(Color("76736a"), 1.0)})
 	var sign := SIGN_SCENE.instantiate() as Node3D
 	sign.position = Vector3(-2.7, 0.0, -4.6)
 	sign.rotation.y = 0.42
 	add_child(sign)
+
+func _recolor_imported(root_node: Node, palette: Dictionary) -> void:
+	var mesh_nodes: Array[Node] = root_node.find_children("*", "MeshInstance3D", true, false)
+	if root_node is MeshInstance3D:
+		mesh_nodes.push_front(root_node)
+	for candidate: Node in mesh_nodes:
+		var mesh_instance := candidate as MeshInstance3D
+		if not mesh_instance or not mesh_instance.mesh:
+			continue
+		for surface in mesh_instance.mesh.get_surface_count():
+			var source := mesh_instance.mesh.surface_get_material(surface)
+			var source_name := source.resource_name.to_lower() if source else ""
+			for token: String in palette:
+				if source_name.contains(token):
+					mesh_instance.set_surface_override_material(surface, palette[token])
+					break

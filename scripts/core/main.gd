@@ -309,6 +309,11 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("parked RV drifted %.2f m from spawn" % spawn_drift)
 		if smoke_rv.health < 99.0:
 			failures.append("RV took false spawn damage (%.1f health)" % smoke_rv.health)
+		var parked_up := smoke_rv.global_transform.basis.orthonormalized().y.dot(Vector3.UP)
+		if parked_up < 0.985:
+			failures.append("parked RV tipped before entry (up=%.3f)" % parked_up)
+		if not smoke_rv.freeze:
+			failures.append("unoccupied RV is not in stable parking mode")
 		if GameSession.local_player and is_instance_valid(GameSession.local_player):
 			smoke_rv.interact(GameSession.local_player)
 		if smoke_rv.driver_peer_id != 0:
@@ -331,6 +336,8 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("generated terrain missing")
 		elif not (terrain.material_override is StandardMaterial3D):
 			failures.append("terrain is not using the Android-safe standard material")
+		if not active_world.find_child("BatchedDistantForest", true, false):
+			failures.append("optimized distant forest batch missing")
 
 	# Capture the 3D viewport without CanvasLayer UI. The resulting proof cannot
 	# pass merely because HUD elements rendered over an empty world.

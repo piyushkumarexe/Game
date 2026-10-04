@@ -113,6 +113,7 @@ static func label_3d(parent: Node, text: String, position: Vector3, color := Col
 	label.text = text
 	label.position = position
 	label.font_size = size
+	label.pixel_size = 0.0034
 	label.modulate = color
 	label.outline_modulate = Color("171a25")
 	label.outline_size = 10
