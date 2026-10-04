@@ -82,6 +82,12 @@ jobs:
             tail -100 android-export.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            grep -Ei 'error|failed|missing|invalid|preset' android-export.log | tail -20 | while IFS= read -r line; do
+              line=${line//'%'/'%25'}; line=${line//$'\n'/'%0A'}; line=${line//$'\r'/'%0D'}
+              echo "::error file=export_presets.cfg,title=Godot Android export::$line"
+            done
+          fi
           exit $status
       - name: Upload Android game
         uses: actions/upload-artifact@v7.0.1
@@ -119,6 +125,12 @@ jobs:
             tail -100 ios-export.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            grep -Ei 'error|failed|missing|invalid|preset' ios-export.log | tail -20 | while IFS= read -r line; do
+              line=${line//'%'/'%25'}; line=${line//$'\n'/'%0A'}; line=${line//$'\r'/'%0D'}
+              echo "::error file=export_presets.cfg,title=Godot iOS export::$line"
+            done
+          fi
           exit $status
       - name: Upload iOS project
         uses: actions/upload-artifact@v7.0.1
