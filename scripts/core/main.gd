@@ -215,6 +215,7 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("touch first/third-person button missing")
 			else:
 				_tap_control(view_button, 6)
+				await get_tree().process_frame
 				await get_tree().physics_frame
 				if not local_player.third_person or get_viewport().get_camera_3d() != local_player.third_camera:
 					failures.append("VIEW touch button did not activate third-person camera")
@@ -228,6 +229,7 @@ func _run_expedition_smoke_test() -> void:
 			_inject_screen_touch(7, look_start, true)
 			_inject_screen_drag(7, look_start + Vector2(52.0, 0.0), Vector2(52.0, 0.0))
 			_inject_screen_touch(7, look_start + Vector2(52.0, 0.0), false)
+			await get_tree().process_frame
 			await get_tree().physics_frame
 			if is_equal_approx(local_player.rotation.y, yaw_before_swipe):
 				failures.append("right-side touch drag did not rotate the player controller")
@@ -242,8 +244,10 @@ func _run_expedition_smoke_test() -> void:
 				var move_point := move_center + Vector2(0.0, -68.0)
 				var position_before_move := local_player.global_position
 				_inject_screen_touch(8, move_point, true)
+				await get_tree().process_frame
 				await get_tree().create_timer(0.45).timeout
 				_inject_screen_touch(8, move_point, false)
+				await get_tree().process_frame
 				if local_player.global_position.distance_to(position_before_move) < 0.8:
 					failures.append("left touch stick did not move the player")
 				if not local_player.body_animation:
@@ -253,9 +257,11 @@ func _run_expedition_smoke_test() -> void:
 			if sprint_button:
 				var sprint_center := sprint_button.get_global_rect().get_center()
 				_inject_screen_touch(9, sprint_center, true)
+				await get_tree().process_frame
 				if not GameSession.touch_action("sprint"):
 					failures.append("SPRINT touch button did not hold its action")
 				_inject_screen_touch(9, sprint_center, false)
+				await get_tree().process_frame
 				if GameSession.touch_action("sprint"):
 					failures.append("SPRINT touch action stuck after release")
 			else:
@@ -264,6 +270,7 @@ func _run_expedition_smoke_test() -> void:
 			var jump_button := active_hud.find_child("Touch_jump", true, false) as Button if active_hud else null
 			if jump_button:
 				_tap_control(jump_button, 10)
+				await get_tree().process_frame
 				await get_tree().physics_frame
 				if local_player.velocity.y <= 0.5:
 					failures.append("JUMP touch button did not launch the grounded player")
