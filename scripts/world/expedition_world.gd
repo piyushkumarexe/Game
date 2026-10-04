@@ -358,7 +358,8 @@ func _apply_quality_profile() -> void:
 	var quality := clampi(GameSession.graphics_quality, 0, 2)
 	var viewport := get_viewport()
 	viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][quality]
-	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 2 else Viewport.SCREEN_SPACE_AA_DISABLED
+	var advanced_renderer := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 2 and advanced_renderer else Viewport.SCREEN_SPACE_AA_DISABLED
 	viewport.use_debanding = quality == 2
 	if environment:
 		environment.glow_enabled = quality == 2

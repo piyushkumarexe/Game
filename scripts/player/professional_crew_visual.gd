@@ -127,19 +127,34 @@ func _build_head_accessories() -> void:
 	bridge.size = Vector3(0.024, 0.009, 0.014)
 	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.058, 0.164), charcoal)
 
+func _resolve_clip(requested: String) -> StringName:
+	if not animation_player:
+		return StringName()
+	if animation_player.has_animation(requested):
+		return StringName(requested)
+	# Godot places glTF animations in a named library on some import backends,
+	# producing `library/Clip` even though the source animation name is `Clip`.
+	for available: StringName in animation_player.get_animation_list():
+		var available_name := str(available)
+		if available_name == requested or available_name.ends_with("/" + requested):
+			return available
+	return StringName()
+
 func _configure_animation_loops() -> void:
 	if not animation_player:
 		return
-	for clip_name in ["Idle_No_Loop", "Walk_Carry_Loop", "NinjaJump_Idle_Loop"]:
-		if animation_player.has_animation(clip_name):
-			animation_player.get_animation(clip_name).loop_mode = Animation.LOOP_LINEAR
+	for requested in ["Idle_No_Loop", "Walk_Carry_Loop", "NinjaJump_Idle_Loop"]:
+		var clip := _resolve_clip(requested)
+		if not clip.is_empty():
+			animation_player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 
-func _play_clip(clip_name: String, speed: float, blend := 0.14) -> void:
-	if not animation_player or not animation_player.has_animation(clip_name):
+func _play_clip(requested: String, speed: float, blend := 0.14) -> void:
+	var clip := _resolve_clip(requested)
+	if clip.is_empty():
 		return
-	if current_clip != clip_name:
-		current_clip = clip_name
-		animation_player.play(clip_name, blend, speed)
+	if current_clip != requested:
+		current_clip = requested
+		animation_player.play(clip, blend, speed)
 		animation_player.advance(0.0)
 	else:
 		animation_player.speed_scale = speed
