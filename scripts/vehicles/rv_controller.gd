@@ -223,7 +223,7 @@ func driver_seat_transform() -> Transform3D:
 	# The player camera is 1.62 m above its origin. This places their eyes behind
 	# the modeled right-hand-drive steering wheel with dashboard and A-pillars in
 	# view, while keeping the near plane clear of the seat and roof.
-	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.34, -1.40))
+	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.24, -1.15))
 	return seat
 
 func exit_seat_transform() -> Transform3D:
@@ -278,10 +278,10 @@ func _apply_grounded_stability(_delta: float) -> void:
 		if Net.world and Net.world.has_method("terrain_height"):
 			var ground_height := float(Net.world.terrain_height(wheel.global_position.x, wheel.global_position.z))
 			var clearance := wheel.global_position.y - ground_height
-			var compression := maxf(0.0, 0.68 - clearance)
+			var compression := maxf(0.0, 0.78 - clearance)
 			if compression > 0.0:
-				var spring_force := compression * mass * 20.0 - linear_velocity.y * mass * 4.0
-				spring_force = clampf(spring_force, 0.0, mass * 7.0)
+				var spring_force := compression * mass * 28.0 - linear_velocity.y * mass * 4.8
+				spring_force = clampf(spring_force, 0.0, mass * 9.0)
 				apply_force(Vector3.UP * spring_force, wheel.global_position - global_position)
 				terrain_support_count += 1
 	if maxi(contact_count, terrain_support_count) < 2:
@@ -613,7 +613,7 @@ func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: boo
 	var tire_contact := CollisionShape3D.new()
 	tire_contact.name = "%sTireContact" % wheel_name
 	var tire_shape := CylinderShape3D.new()
-	tire_shape.radius = 0.50
+	tire_shape.radius = 0.56
 	tire_shape.height = 0.34
 	tire_contact.shape = tire_shape
 	tire_contact.position = wheel_position

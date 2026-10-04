@@ -20,7 +20,10 @@ func setup(owner_rv: Node) -> void:
 	refresh_prompt()
 
 func refresh_prompt() -> void:
-	prompt = "ENTER RV" if rv and rv.entry_door_open else "OPEN RV DOOR"
+	if not rv or not rv.entry_door_open:
+		prompt = "OPEN RV DOOR"
+	else:
+		prompt = "ENTER RV" if GameSession.supplies_loaded >= 3 else "CLOSE RV DOOR"
 
 func interact(player: Node) -> void:
 	if not rv:
@@ -29,9 +32,12 @@ func interact(player: Node) -> void:
 		GameSession.toast_requested.emit("DOOR LOCKED", "Stop and exit the driver seat before opening the coach door.")
 		return
 	if rv.entry_door_open:
-		# The second interaction follows the same supply/driver-seat rules as the
-		# main vehicle target; successful entry closes the door automatically.
-		rv.interact(player)
+		if GameSession.supplies_loaded >= 3:
+			# Successful entry follows the normal seat rules and closes the door.
+			rv.interact(player)
+		else:
+			rv.set_entry_door_open(false)
+			GameSession.toast_requested.emit("RV DOOR CLOSED", "Load the camp supplies before entering the driver seat.")
 		return
 	rv.set_entry_door_open(true)
 	GameSession.toast_requested.emit("RV DOOR OPEN", "The clear doorway leads into the modeled living cabin. Tap again to enter.")

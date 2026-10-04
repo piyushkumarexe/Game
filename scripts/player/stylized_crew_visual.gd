@@ -26,6 +26,9 @@ func _build_character() -> void:
 	_ellipsoid(body_root, "Belly", Vector3(0, 0.89, 0.04), Vector3(0.88, 0.62, 0.64), Color("c5aa75"))
 	_ellipsoid(body_root, "VestLeft", Vector3(-0.24, 1.22, 0.47), Vector3(0.40, 0.78, 0.16), Color("a8442d"))
 	_ellipsoid(body_root, "VestRight", Vector3(0.24, 1.22, 0.47), Vector3(0.40, 0.78, 0.16), Color("a8442d"))
+	_ellipsoid(body_root, "VestBack", Vector3(0, 1.21, -0.37), Vector3(0.76, 0.76, 0.16), Color("8f392a"))
+	_box(body_root, "VestShoulderLeft", Vector3(-0.29, 1.52, 0.12), Vector3(0.17, 0.18, 0.66), Color("a8442d"))
+	_box(body_root, "VestShoulderRight", Vector3(0.29, 1.52, 0.12), Vector3(0.17, 0.18, 0.66), Color("a8442d"))
 	_box(body_root, "VestZip", Vector3(0, 1.18, 0.565), Vector3(0.055, 0.70, 0.035), Color("e5d7bd"))
 	for side in [-1.0, 1.0]:
 		_box(body_root, "VestPocket", Vector3(side * 0.24, 1.00, 0.565), Vector3(0.27, 0.18, 0.035), Color("7f3024"))

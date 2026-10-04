@@ -1,6 +1,8 @@
 # Gameplay and presentation audit
 
-This checklist is the release gate for the 0.10 correction line. A green export is necessary but is not proof of visual or physical-device quality. The rejected 0.9 Android screenshots remain the baseline regressions this release must visibly fix.
+This checklist is the release gate for the 0.10 correction line. A green export is necessary but is not proof of visual or physical-device quality. Both the rejected 0.9 capture and the first 0.10 physical capture remain baseline regressions this release must visibly fix.
+
+The first 0.10 phone capture improved the character and made the cockpit readable, but still failed release: rear tires remained mostly buried from side/rear angles, the character could stand beneath the overhangs, full circular chrome wheel rings looked detached, the driver eye was too close to the wheel/dashboard and could turn into a large living-wall slab, the cream body remained washed out, and textured hero foliage was too sparse around camp.
 
 ## RV presentation and physics
 

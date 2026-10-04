@@ -201,8 +201,27 @@ func constrain_player_position(current: Vector3, candidate: Vector3) -> Vector3:
 		var center: Vector2 = blocker["center"]
 		candidate = _push_player_outside(current, candidate, center, float(blocker["radius"]))
 	if rv and is_instance_valid(rv):
-		candidate = _push_player_outside(current, candidate, Vector2(rv.global_position.x, rv.global_position.z), 3.35)
+		candidate = _push_player_outside_rv(candidate)
 	return candidate
+
+func _push_player_outside_rv(candidate: Vector3) -> Vector3:
+	# The old circular 3.35 m blocker ended before the long front/rear overhangs,
+	# allowing the character to stand visibly underneath the bumpers. Use the
+	# vehicle's oriented footprint while keeping the passenger-side doorway near.
+	var local := rv.global_transform.affine_inverse() * candidate
+	var half_width := 1.72
+	var half_length := 4.15
+	if absf(local.x) >= half_width or absf(local.z) >= half_length:
+		return candidate
+	var distance_to_side := half_width - absf(local.x)
+	var distance_to_end := half_length - absf(local.z)
+	if distance_to_side < distance_to_end:
+		local.x = (1.0 if local.x >= 0.0 else -1.0) * half_width
+	else:
+		local.z = (1.0 if local.z >= 0.0 else -1.0) * half_length
+	var corrected := rv.global_transform * local
+	corrected.y = candidate.y
+	return corrected
 
 func _push_player_outside(current: Vector3, candidate: Vector3, center: Vector2, radius: float) -> Vector3:
 	var offset := Vector2(candidate.x, candidate.z) - center
@@ -319,7 +338,7 @@ func _build_terrain() -> void:
 			var color_noise := (sin(x * 0.071 + z * 0.043) + cos(x * 0.037 - z * 0.061)) * 0.5
 			terrain_tint = terrain_tint.lightened(color_noise * 0.055) if color_noise > 0.0 else terrain_tint.darkened(-color_noise * 0.045)
 			colors.append(terrain_tint)
-			uvs.append(Vector2(x * 0.035, z * 0.035))
+			uvs.append(Vector2(x * 0.11, z * 0.11))
 	for z_index in z_count - 1:
 		for x_index in x_count - 1:
 			var current := z_index * x_count + x_index
@@ -504,6 +523,42 @@ func _build_scenery() -> void:
 func _build_high_detail_forest() -> void:
 	# Hero foliage uses textured CC0 meshes close to the road while the cheaper
 	# Kenney/MultiMesh layers retain mobile-friendly mid and far coverage.
+	# Build a deliberate opening grove first; route-wide random distribution left
+	# the physical-phone campsite surrounded by large empty green hills.
+	var camp_hero_count: int = [8, 14, 20][GameSession.graphics_quality]
+	for index in camp_hero_count:
+		var angle := TAU * float(index) / float(camp_hero_count) + sin(float(index) * 1.73) * 0.19
+		var radius := 18.0 + float(index % 4) * 4.3
+		var position := ROUTE[0] + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		if float(_nearest_route_data(Vector2(position.x, position.z)).x) < 8.5:
+			continue
+		position.y = terrain_height(position.x, position.z) + 0.12
+		var tree := HERO_TREE_SCENES[index % HERO_TREE_SCENES.size()].instantiate() as Node3D
+		tree.name = "CampHeroTexturedTree%02d" % index
+		tree.position = position
+		tree.rotation.y = angle * 1.37
+		tree.scale = Vector3.ONE * (0.92 + float(index % 3) * 0.13)
+		props_root.add_child(tree)
+		_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
+		if GameSession.graphics_quality == 0:
+			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var camp_floor_count: int = [20, 38, 62][GameSession.graphics_quality]
+	for index in camp_floor_count:
+		var angle := TAU * float(index) / float(camp_floor_count) + sin(float(index) * 2.31) * 0.24
+		var radius := 9.0 + float(index % 7) * 2.75
+		var position := ROUTE[0] + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		if float(_nearest_route_data(Vector2(position.x, position.z)).x) < 4.8:
+			continue
+		position.y = terrain_height(position.x, position.z) + 0.04
+		var cover := FOREST_FLOOR_SCENES[index % FOREST_FLOOR_SCENES.size()].instantiate() as Node3D
+		cover.name = "CampTexturedForestFloor"
+		cover.position = position
+		cover.rotation.y = angle * -1.61
+		cover.scale = Vector3.ONE * (0.62 + float(index % 4) * 0.14)
+		props_root.add_child(cover)
+		_tint_imported(cover, Color(0.78, 0.88, 0.76, 1.0))
+		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+
 	var hero_tree_count: int = [14, 26, 44][GameSession.graphics_quality]
 	for index in hero_tree_count:
 		var segment := index % (ROUTE.size() - 1)
@@ -523,6 +578,7 @@ func _build_high_detail_forest() -> void:
 		tree.rotation.y = random.randf_range(-PI, PI)
 		tree.scale = Vector3.ONE * random.randf_range(0.88, 1.34)
 		props_root.add_child(tree)
+		_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
 		if GameSession.graphics_quality == 0:
 			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
@@ -544,6 +600,7 @@ func _build_high_detail_forest() -> void:
 		cover.rotation.y = random.randf_range(-PI, PI)
 		cover.scale = Vector3.ONE * random.randf_range(0.58, 1.32)
 		props_root.add_child(cover)
+		_tint_imported(cover, Color(0.78, 0.88, 0.76, 1.0))
 		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
 	var hero_rock_count: int = [8, 16, 26][GameSession.graphics_quality]
@@ -684,6 +741,21 @@ func _recolor_imported(root_node: Node, palette: Dictionary) -> void:
 				if source_name.contains(token):
 					mesh_instance.set_surface_override_material(surface, palette[token])
 					break
+
+func _tint_imported(root_node: Node, tint: Color) -> void:
+	var mesh_nodes: Array[Node] = root_node.find_children("*", "MeshInstance3D", true, false)
+	if root_node is MeshInstance3D:
+		mesh_nodes.push_front(root_node)
+	for candidate: Node in mesh_nodes:
+		var mesh_instance := candidate as MeshInstance3D
+		if not mesh_instance or not mesh_instance.mesh:
+			continue
+		for surface in mesh_instance.mesh.get_surface_count():
+			var source := mesh_instance.mesh.surface_get_material(surface)
+			if source is StandardMaterial3D:
+				var tinted := source.duplicate() as StandardMaterial3D
+				tinted.albedo_color *= tint
+				mesh_instance.set_surface_override_material(surface, tinted)
 
 func _set_shadow_mode(root_node: Node, mode: int) -> void:
 	if root_node is GeometryInstance3D:

@@ -363,7 +363,7 @@ func _run_expedition_smoke_test() -> void:
 			else:
 				smoke_player._apply_camera_mode(true)
 				# Let the full 3.6-ton suspension complete its damped release transient.
-				await get_tree().create_timer(1.50).timeout
+				await get_tree().create_timer(2.20).timeout
 				if get_viewport().get_camera_3d() != smoke_player.third_camera:
 					failures.append("RV chase camera did not become current")
 				if not smoke_rv.body_shell.visible:
@@ -373,8 +373,10 @@ func _run_expedition_smoke_test() -> void:
 						var settled_wheel := settled_child as VehicleWheel3D
 						var wheel_ground := active_world.terrain_height(settled_wheel.global_position.x, settled_wheel.global_position.z)
 						var wheel_clearance := settled_wheel.global_position.y - wheel_ground
-						if wheel_clearance < 0.28:
+						if wheel_clearance < 0.54:
 							failures.append("%s sank below terrain after physics release (clearance %.2f m)" % [settled_wheel.name, wheel_clearance])
+						elif wheel_clearance > 0.95:
+							failures.append("%s is floating above terrain after physics release (clearance %.2f m)" % [settled_wheel.name, wheel_clearance])
 
 	if active_hud and is_instance_valid(active_hud):
 		if not active_hud.find_child("MoveStick", true, false):
@@ -395,6 +397,14 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("terrain is not using the Android-safe standard material")
 		if not active_world.find_child("BatchedDistantForest", true, false):
 			failures.append("optimized distant forest batch missing")
+		if active_world.find_children("CampHeroTexturedTree*", "Node3D", true, false).size() < 6:
+			failures.append("opening campsite still lacks textured hero-tree density")
+		if active_world.rv:
+			var under_bumper := active_world.rv.global_transform * Vector3(0.0, 0.0, 3.85)
+			var blocked_position := active_world.constrain_player_position(under_bumper + Vector3.BACK, under_bumper)
+			var blocked_local := active_world.rv.global_transform.affine_inverse() * blocked_position
+			if absf(blocked_local.x) < 1.70 and absf(blocked_local.z) < 4.10:
+				failures.append("player can still stand underneath an RV overhang")
 
 	# Capture the 3D viewport without CanvasLayer UI. The resulting proof cannot
 	# pass merely because HUD elements rendered over an empty world.
@@ -456,7 +466,7 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("driver-eye first-person camera did not become current")
 			if not cockpit_rv.body_shell.visible:
 				failures.append("first-person incorrectly hid the world-space RV model")
-			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.28, -1.40)
+			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.38, -1.15)
 			if cockpit_player.first_camera.global_position.distance_to(expected_eye) > 0.24:
 				failures.append("driver camera is not located in the modeled cockpit")
 			for cockpit_part in ["CockpitSteeringWheel", "StaticRVInterior", "StaticCockpitFrame", "GearLever"]:

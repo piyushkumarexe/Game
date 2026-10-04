@@ -47,7 +47,12 @@ def paint_texture(name: str, base: tuple[int, int, int], seed: int, pattern: str
         u, v = x / float(size), y / float(size)
         value += int(math.sin(math.tau * (u * 2.0 + v)) * 5 + math.cos(math.tau * (v * 3.0 - u)) * 3)
         if pattern == "detail":
-            value = int(value * 0.22)
+            # Readable moss/soil grain on phone screens instead of an almost
+            # white texture that reduced the terrain to one flat green color.
+            broad = math.sin(math.tau * (u * 5.0 + v * 3.0)) * 11
+            mottling = math.cos(math.tau * (u * 11.0 - v * 7.0)) * 7
+            fleck = -22 if detail_hash % 173 < 5 else (8 if detail_hash % 229 < 4 else 0)
+            value = int(value * 0.65 + broad + mottling + fleck)
         elif pattern == "gravel":
             value = (detail_hash % 17) - 8
             if detail_hash % 293 < 4:
@@ -92,7 +97,7 @@ def paint_texture(name: str, base: tuple[int, int, int], seed: int, pattern: str
 
 
 for args in [
-    ("rv_cream.png", (222, 212, 181), 17, "panel", 1024),
+    ("rv_cream.png", (205, 190, 154), 17, "panel", 1024),
     ("rv_stripe.png", (151, 68, 37), 29, "stripe", 1024),
     ("rv_interior_wood.png", (124, 76, 43), 31, "wood", 512),
     ("rv_upholstery.png", (101, 122, 112), 33, "upholstery", 512),
@@ -321,6 +326,28 @@ class Obj:
                 points = [grid[i][j], grid[ni][j], grid[ni][nj], grid[i][nj]]
                 self._face(points, self._normal_for(points), material)
 
+    def wheel_arch(self, object_name: str, center: tuple[float, float, float], major: float,
+                   minor: float, material: str, segments: int = 18, sides: int = 6) -> None:
+        """Upper half-torus around the X wheel axis, avoiding a fake full ring."""
+        self._start_object(object_name)
+        cx, cy, cz = center
+        grid = []
+        for i in range(segments + 1):
+            a = math.pi * i / segments
+            row = []
+            for j in range(sides):
+                b = math.tau * j / sides
+                radial = major + math.cos(b) * minor
+                row.append((cx + math.sin(b) * minor,
+                            cy + math.sin(a) * radial,
+                            cz + math.cos(a) * radial))
+            grid.append(row)
+        for i in range(segments):
+            for j in range(sides):
+                nj = (j + 1) % sides
+                points = [grid[i][j], grid[i + 1][j], grid[i + 1][nj], grid[i][nj]]
+                self._face(points, self._normal_for(points), material)
+
     def save(self) -> None:
         output = self.lines[:2]
         vertex_lines = [f"v {x:.5f} {y:.5f} {z:.5f}" for x, y, z in self.vertices]
@@ -496,7 +523,7 @@ rv.cylinder("WaterFiller", (-1.39, 0.36, 2.42), 0.10, 0.025, "RV_Accent", 16, "x
 for side in (-1, 1):
     for z in (-2.10, 1.90):
         rv.cylinder("WheelWellShadow", (side * 1.255, -0.58, z), 0.67, 0.035, "Rubber", 24, "x")
-        rv.torus("WheelArchTrim", (side * 1.410, -0.58, z), 0.66, 0.045, "Chrome", "x", 24, 7)
+        rv.wheel_arch("WheelArchTrim", (side * 1.410, -0.58, z), 0.66, 0.040, "Chrome", 20, 7)
         rv.box("MudFlap", (side * 1.26, -0.56, z + 0.62), (0.12, 0.68, 0.34), "Rubber")
 
 # Automotive front/rear equipment and lighting.
@@ -569,9 +596,9 @@ for y in (0.43, 0.54):
 rv.box("GearGate", (0.10, 0.43, -2.19), (0.30, 0.08, 0.40), "DarkMetal")
 rv.cylinder("GearLever", (0.10, 0.64, -2.19), 0.038, 0.42, "Chrome", 12, "y")
 rv.ellipsoid("GearKnob", (0.10, 0.88, -2.19), (0.09, 0.12, 0.09), "Dashboard", 14, 8)
-rv.torus("CockpitSteeringWheel", (0.53, 0.79, -2.22), 0.32, 0.047, "Rubber", "z", 24, 8)
-rv.cylinder("SteeringHub", (0.53, 0.79, -2.22), 0.115, 0.09, "Dashboard", 16, "z")
-rv.box("SteeringSpokeHorizontal", (0.53, 0.79, -2.235), (0.54, 0.065, 0.06), "Dashboard")
+rv.torus("CockpitSteeringWheel", (0.53, 0.79, -2.22), 0.29, 0.043, "Rubber", "z", 24, 8)
+rv.cylinder("SteeringHub", (0.53, 0.79, -2.22), 0.105, 0.09, "Dashboard", 16, "z")
+rv.box("SteeringSpokeHorizontal", (0.53, 0.79, -2.235), (0.48, 0.060, 0.055), "Dashboard")
 rv.box("SteeringSpokeLower", (0.53, 0.63, -2.235), (0.065, 0.30, 0.06), "Dashboard")
 rv.cylinder("SteeringColumn", (0.53, 0.73, -2.48), 0.065, 0.55, "DarkMetal", 12, "z")
 for x in (0.43, 0.64):
@@ -594,8 +621,10 @@ rv.box("RearViewMirror", (0.0, 1.54, -2.94), (0.48, 0.17, 0.07), "Mirror")
 # Warm, navigable living compartment visible through the cab and side windows.
 rv.box("InteriorFloor", (0.0, 0.00, 0.82), (2.34, 0.10, 4.68), "InteriorWood")
 rv.box("InteriorCeiling", (0.0, 2.05, 0.66), (2.34, 0.08, 4.92), "InteriorVinyl")
-rv.box("InteriorWallLeft", (-1.20, 1.01, 0.75), (0.07, 1.96, 4.72), "InteriorWall")
-rv.box("InteriorWallRightFront", (1.20, 1.01, -0.49), (0.07, 1.96, 2.02), "InteriorWall")
+# Living-space liners begin behind the seat backs; extending them alongside the
+# driver eye created the giant cream slab seen when looking left/right in 1P.
+rv.box("InteriorWallLeft", (-1.20, 1.01, 1.03), (0.07, 1.96, 4.16), "InteriorWall")
+rv.box("InteriorWallRightFront", (1.20, 1.01, -0.27), (0.07, 1.96, 1.56), "InteriorWall")
 rv.box("InteriorWallRightRear", (1.20, 1.01, 2.30), (0.07, 1.96, 1.72), "InteriorWall")
 rv.box("InteriorDoorHeader", (1.20, 1.90, 0.98), (0.07, 0.18, 0.88), "InteriorWall")
 rv.box("CabDividerLeft", (-0.92, 1.24, -1.12), (0.48, 1.44, 0.10), "InteriorWood")
@@ -702,7 +731,7 @@ sign.save()
 # glTF importer is used for every target, avoiding platform-specific OBJ/MTL
 # behavior while keeping the generated source geometry easy to inspect.
 MATERIALS = {
-    "RV_Cream": ((0.84, 0.79, 0.65, 1.0), "rv_cream.png", 0.90),
+    "RV_Cream": ((0.70, 0.64, 0.51, 1.0), "rv_cream.png", 0.94),
     "RV_Stripe": ((0.62, 0.25, 0.14, 1.0), "rv_stripe.png", 0.88),
     "Window": ((0.12, 0.24, 0.28, 0.34), None, 0.12),
     "DarkMetal": ((0.15, 0.16, 0.16, 1.0), None, 0.38),
@@ -717,7 +746,7 @@ MATERIALS = {
     "Skin": ((0.78, 0.54, 0.38, 1.0), None, 0.86),
     "Canvas": ((0.69, 0.60, 0.43, 1.0), None, 0.94),
     "Tool": ((0.26, 0.31, 0.32, 1.0), None, 0.28),
-    "RV_Accent": ((0.18, 0.29, 0.29, 1.0), None, 0.72),
+    "RV_Accent": ((0.10, 0.19, 0.19, 1.0), None, 0.78),
     "RV_Gold": ((0.78, 0.52, 0.24, 1.0), None, 0.64),
     "Chrome": ((0.69, 0.72, 0.71, 1.0), "rv_metal.png", 0.20),
     "Mirror": ((0.30, 0.43, 0.46, 1.0), None, 0.08),
@@ -733,8 +762,8 @@ MATERIALS = {
     "InteriorFabric": ((0.39, 0.48, 0.44, 1.0), "rv_upholstery.png", 0.93),
     "InteriorWall": ((0.80, 0.76, 0.65, 1.0), None, 0.94),
     "Dashboard": ((0.12, 0.14, 0.14, 1.0), "rv_vinyl.png", 0.82),
-    "Gauge": ((0.10, 0.28, 0.35, 1.0), None, 0.20),
-    "Screen": ((0.06, 0.34, 0.39, 1.0), None, 0.14),
+    "Gauge": ((0.035, 0.11, 0.14, 1.0), None, 0.24),
+    "Screen": ((0.035, 0.20, 0.22, 1.0), None, 0.18),
     "SeatBelt": ((0.08, 0.08, 0.075, 1.0), None, 0.96),
     "Countertop": ((0.67, 0.62, 0.51, 1.0), None, 0.70),
     "Blanket": ((0.60, 0.25, 0.16, 1.0), None, 0.94),
