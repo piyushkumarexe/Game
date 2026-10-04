@@ -401,7 +401,7 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("rejected procedural slab exterior is still visible")
 		if not static_interior or not static_interior.mesh or static_interior.mesh.get_surface_count() < 8:
 			failures.append("connected modeled RV interior material surfaces missing")
-		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "DriverCockpitSeat", "PassengerCockpitSeat", "DoorwayInteriorWoodPanel", "RoofCargo", "FrontBumper"]:
+		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "DriverCockpitSeat", "PassengerCockpitSeat", "ConnectedEntryAisle", "DoorwayInteriorWoodPanel", "RoofCargo", "FrontBumper"]:
 			if not smoke_rv.body_shell or not smoke_rv.body_shell.find_child(component_name, true, false):
 				failures.append("modeled RV component missing: %s" % component_name)
 		smoke_rv.set_entry_door_open(true)
@@ -440,6 +440,16 @@ func _run_expedition_smoke_test() -> void:
 				previous_path_point = accepted_probe
 			if previous_step_height < 0.02:
 				failures.append("RV stair path never reaches connected cabin floor")
+			# Exercise the phone-friendly USE assist as well as the physical walk.
+			# It must enter the living cabin without prematurely assigning a driver.
+			var assisted_player := GameSession.local_player as ExpeditionPlayer
+			assisted_player.global_position = low_approach
+			smoke_rv.entry_door_interactable.interact(assisted_player)
+			var assisted_local := smoke_rv.global_transform.affine_inverse() * assisted_player.global_position
+			if assisted_local.x > 1.10 or absf(assisted_local.z - 0.98) > 0.08:
+				failures.append("door USE assist did not place player inside cabin (%s)" % assisted_local)
+			if smoke_rv.driver_peer_id != 0 or assisted_player.is_driving:
+				failures.append("door USE assist incorrectly skipped directly to driver seat")
 			# Side-on acceptance frame must visibly show the open panel, all three
 			# steps, unobstructed threshold and connected modeled living space.
 			var doorway_camera := Camera3D.new()
@@ -522,8 +532,12 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("optimized distant forest batch missing")
 		if active_world.find_children("CampHeroTexturedTree*", "Node3D", true, false).size() < 6:
 			failures.append("opening campsite still lacks textured hero-tree density")
-		if GameSession.graphics_quality == 2 and active_world.find_children("RealisticBarkBranches", "MeshInstance3D", true, false).size() < 8:
-			failures.append("HIGH is missing its detailed procedural conifer layer")
+		if GameSession.graphics_quality == 2:
+			if active_world.find_children("RealisticBarkBranches", "MeshInstance3D", true, false).size() < 8:
+				failures.append("HIGH is missing its detailed procedural conifer layer")
+			var cinematic_layer := active_world.find_child("CinematicHighDetailLayer", true, false) as Node3D
+			if not cinematic_layer or not cinematic_layer.visible or cinematic_layer.find_children("*", "GeometryInstance3D", true, false).size() < 45:
+				failures.append("HIGH did not activate its live cinematic scenery layer")
 		if active_world.rv:
 			var under_bumper := active_world.rv.global_transform * Vector3(0.0, 0.0, 3.85)
 			var blocked_position := active_world.constrain_player_position(under_bumper + Vector3.BACK, under_bumper)

@@ -176,6 +176,19 @@ func _recover_on_foot() -> void:
 	reset_physics_interpolation()
 	GameSession.toast_requested.emit("BACK ON THE TRAIL", "Recovered at the last safe footing.")
 
+func place_inside_rv(cabin_transform: Transform3D) -> void:
+	# The doorway remains physically walkable, but USE at the open door is also a
+	# mobile-friendly entry assist. It places the character's feet just past the
+	# threshold instead of incorrectly jumping straight to the driver seat.
+	global_transform = cabin_transform
+	velocity = Vector3.ZERO
+	vertical_velocity = 0.0
+	grounded = true
+	air_time = 0.0
+	landing_time = 0.0
+	safe_position = global_position
+	reset_physics_interpolation()
+
 func _drive_vehicle(delta: float) -> void:
 	global_transform = driven_vehicle.driver_seat_transform()
 	velocity = Vector3.ZERO

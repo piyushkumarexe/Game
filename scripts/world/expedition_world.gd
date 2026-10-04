@@ -72,6 +72,7 @@ var terrain_material: StandardMaterial3D
 var road_material: StandardMaterial3D
 var realistic_bark_material: StandardMaterial3D
 var realistic_pine_material: StandardMaterial3D
+var cinematic_detail_root: Node3D
 
 func _ready() -> void:
 	name = "RedmesaValley"
@@ -95,6 +96,10 @@ func _ready() -> void:
 	_build_road()
 	_build_landmarks()
 	_build_scenery()
+	# Apply again now that quality-dependent scenery roots exist. This makes a
+	# saved HIGH preset—and a live switch to HIGH—materially denser instead of
+	# changing only anti-aliasing and leaving the old sparse forest on screen.
+	_apply_quality_profile()
 	_build_mission_props()
 	_spawn_rv()
 	last_checkpoint_transform = rv.global_transform
@@ -219,7 +224,22 @@ func constrain_player_position(current: Vector3, candidate: Vector3) -> Vector3:
 		var center: Vector2 = blocker["center"]
 		candidate = _push_player_outside(current, candidate, center, float(blocker["radius"]))
 	if rv and is_instance_valid(rv):
+		candidate = _guide_open_doorway(candidate)
 		candidate = _push_player_outside_rv(candidate)
+	return candidate
+
+func _guide_open_doorway(candidate: Vector3) -> Vector3:
+	if not rv.entry_door_open:
+		return candidate
+	var local := rv.global_transform.affine_inverse() * candidate
+	# Touch sticks are imprecise. Within the visible stair width, gently centre
+	# the player's feet between the jambs so the capsule cannot snag an edge.
+	# The correction is capped per physics frame and never pulls a passer-by in.
+	if local.x > 0.72 and local.x < 2.48 and local.z > 0.22 and local.z < 1.74:
+		local.z = move_toward(local.z, 0.98, 0.075)
+		var guided := rv.global_transform * local
+		guided.y = candidate.y
+		return guided
 	return candidate
 
 func _push_player_outside_rv(candidate: Vector3) -> Vector3:
@@ -234,11 +254,13 @@ func _push_player_outside_rv(candidate: Vector3) -> Vector3:
 	# The RV now has a hollow compound collider and connected cabin. Preserve the
 	# overhang guard at terrain level, but allow an upright player already inside
 	# and allow passage through the passenger aperture only while its door is open.
-	var inside_cabin := absf(local.x) < 1.12 and local.z > -3.20 and local.z < 3.04 and local.y > -0.04 and local.y < 2.05
+	var inside_cabin := absf(local.x) < 1.18 and local.z > -3.20 and local.z < 3.04 and local.y > -0.08 and local.y < 2.05
 	# The candidate still has terrain-level Y on the first frame approaching the
 	# stairs. Gate only on the horizontal aperture here; player_floor_height()
 	# raises the feet over all three treads and onto the connected cabin floor.
-	var in_doorway := local.x > 1.02 and local.z > 0.38 and local.z < 1.58
+	# A wider logical aperture plus centring assist gives a thumb-controlled
+	# shoulder-width capsule enough tolerance around the finished visual jambs.
+	var in_doorway := local.x > 0.92 and local.z > 0.28 and local.z < 1.68
 	if inside_cabin or (in_doorway and rv.entry_door_open):
 		return candidate
 	var distance_to_side := half_width - absf(local.x)
@@ -257,7 +279,7 @@ func player_floor_height(world_position: Vector3) -> float:
 		return ground
 	var local := rv.global_transform.affine_inverse() * world_position
 	# A player already in the coach remains on its floor even if the door closes.
-	if absf(local.x) <= 1.12 and local.z > -3.20 and local.z < 3.04:
+	if absf(local.x) <= 1.18 and local.z > -3.20 and local.z < 3.04:
 		var cabin_world := rv.global_transform * Vector3(local.x, 0.06, local.z)
 		return maxf(ground, cabin_world.y)
 	if not rv.entry_door_open:
@@ -265,7 +287,7 @@ func player_floor_height(world_position: Vector3) -> float:
 	# Keep the authored three-tread staircase traversable with deterministic foot
 	# heights. This mirrors the visible tread tops and avoids relying on mobile
 	# CharacterBody step-up behavior while the RV is parked on uneven terrain.
-	if local.z > 0.38 and local.z < 1.58:
+	if local.z > 0.28 and local.z < 1.68:
 		var local_floor := -INF
 		if local.x > 1.78 and local.x < 2.34:
 			local_floor = -0.54
@@ -395,14 +417,20 @@ func _apply_quality_profile() -> void:
 	if road_material:
 		road_material.normal_enabled = quality > 0
 		road_material.normal_scale = 0.78 if quality == 2 else 0.45
-	# Imported hero scenery gains contact shadows immediately when HIGH is chosen;
-	# density still follows the saved preset on the next expedition load.
-	if props_root and quality == 2:
-		for geometry: Node in props_root.find_children("*", "GeometryInstance3D", true, false):
-			(geometry as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	# HIGH is a real scene upgrade, not merely a brighter post-process preset.
+	# Build/toggle a dedicated close-range foliage layer live so selecting HIGH
+	# during an expedition immediately changes density, silhouettes and shadows.
+	if props_root:
+		if quality == 2:
+			_ensure_cinematic_detail_layer()
+			cinematic_detail_root.visible = true
+			for geometry: Node in props_root.find_children("*", "GeometryInstance3D", true, false):
+				(geometry as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		elif cinematic_detail_root:
+			cinematic_detail_root.visible = false
 
 func _build_terrain() -> void:
-	var terrain_sizes := [Vector2i(64, 88), Vector2i(78, 108), Vector2i(96, 132)]
+	var terrain_sizes := [Vector2i(64, 88), Vector2i(88, 120), Vector2i(128, 176)]
 	var terrain_size: Vector2i = terrain_sizes[GameSession.graphics_quality]
 	var x_count := terrain_size.x
 	var z_count := terrain_size.y
@@ -665,6 +693,47 @@ func _make_realistic_pine(position: Vector3, index: int, tree_scale: float) -> N
 		mesh.cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 			if GameSession.graphics_quality == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	return tree
+
+func _ensure_cinematic_detail_layer() -> void:
+	if cinematic_detail_root or not props_root:
+		return
+	cinematic_detail_root = Node3D.new()
+	cinematic_detail_root.name = "CinematicHighDetailLayer"
+	props_root.add_child(cinematic_detail_root)
+	var detail_random := RandomNumberGenerator.new()
+	detail_random.seed = 982451653
+
+	# Extra branch-modelled conifers close the empty opening hills visible in the
+	# phone capture. Their limited 12–42 m ring retains the road sightline while
+	# detailed bark, alpha foliage and contact shadows fill the player's view.
+	for index in 22:
+		var angle := TAU * float(index) / 22.0 + detail_random.randf_range(-0.13, 0.13)
+		var radius := detail_random.randf_range(23.0, 42.0)
+		var position := ROUTE[0] + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		if float(_nearest_route_data(Vector2(position.x, position.z)).x) < 9.5:
+			continue
+		position.y = terrain_height(position.x, position.z) + 0.10
+		var tree := _make_realistic_pine(position, index + 400, detail_random.randf_range(0.132, 0.176))
+		tree.reparent(cinematic_detail_root, true)
+
+	# Dense undergrowth breaks the flat terrain silhouette at human/camera height.
+	# Shadows remain disabled for these small meshes; the high setting spends its
+	# shadow budget on the RV, people and branch-modelled hero trees instead.
+	for index in 120:
+		var angle := detail_random.randf_range(-PI, PI)
+		var radius := detail_random.randf_range(7.0, 38.0)
+		var position := ROUTE[0] + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		if float(_nearest_route_data(Vector2(position.x, position.z)).x) < 4.4:
+			continue
+		position.y = terrain_height(position.x, position.z) + 0.035
+		var cover := FOREST_FLOOR_SCENES[index % FOREST_FLOOR_SCENES.size()].instantiate() as Node3D
+		cover.name = "CinematicForestFloor"
+		cover.position = position
+		cover.rotation.y = detail_random.randf_range(-PI, PI)
+		cover.scale = Vector3.ONE * detail_random.randf_range(0.72, 1.38)
+		cinematic_detail_root.add_child(cover)
+		_tint_imported(cover, Color(0.76, 0.86, 0.72, 1.0))
+		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
 func _build_high_detail_forest() -> void:
 	# HIGH adds MIT EZ-Tree generated branch geometry with alpha-cutout CC0

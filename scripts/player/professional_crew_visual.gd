@@ -112,11 +112,11 @@ func _build_head_accessories() -> void:
 	crown.height = 0.224
 	crown.radial_segments = 32
 	crown.rings = 12
-	var crown_instance := _mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.157, 0.0), charcoal)
+	var crown_instance := _mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.157, 0.022), charcoal)
 	crown_instance.scale.y = 0.44
 	var brim := BoxMesh.new()
 	brim.size = Vector3(0.202, 0.016, 0.108)
-	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.120, 0.094), charcoal)
+	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.120, 0.128), charcoal)
 	brim_instance.rotation.x = -0.10
 
 	# Leave a visible nose bridge between compact lenses instead of one heavy
@@ -125,11 +125,11 @@ func _build_head_accessories() -> void:
 		var lens_mesh := BoxMesh.new()
 		lens_mesh.size = Vector3(0.064, 0.034, 0.009)
 		var lens_instance := _mesh(accessory_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.043, 0.054, 0.148), lens)
+			Vector3(side * 0.043, 0.054, 0.178), lens)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
 	bridge.size = Vector3(0.018, 0.006, 0.010)
-	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.055, 0.151), charcoal)
+	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.055, 0.181), charcoal)
 
 func _resolve_clip(requested: String) -> StringName:
 	if not animation_player:
@@ -181,6 +181,16 @@ func _copy_animation_pose() -> void:
 			target.set_bone_pose_position(target_index, animation_skeleton.get_bone_pose_position(source_index))
 			target.set_bone_pose_rotation(target_index, animation_skeleton.get_bone_pose_rotation(source_index))
 			target.set_bone_pose_scale(target_index, animation_skeleton.get_bone_pose_scale(source_index))
+		# The source idle keeps its gaze several degrees below the horizon even
+		# after its animation tracks are neutralized. A restrained lift presents
+		# the face to the gameplay camera without stretching the neck or changing
+		# the normal-spaced authored eyes.
+		for correction in [["Neck", -0.07], ["Head", -0.10]]:
+			var correction_index := target.find_bone(str(correction[0]))
+			if correction_index >= 0:
+				var copied_rotation := target.get_bone_pose_rotation(correction_index)
+				target.set_bone_pose_rotation(correction_index,
+					Quaternion(Vector3.RIGHT, float(correction[1])) * copied_rotation)
 	if accessory_root:
 		var head_index := animation_skeleton.find_bone("Head")
 		if head_index >= 0:
@@ -189,7 +199,7 @@ func _copy_animation_pose() -> void:
 			# Applying that basis turned the brim and glasses ninety degrees across
 			# the face. Follow the animated head position while the neutral head and
 			# accessories retain the character model's +Z facial orientation.
-			accessory_root.position = head_pose.origin
+			accessory_root.position = head_pose.origin + Vector3(0.0, 0.018, 0.012)
 			accessory_root.rotation = Vector3.ZERO
 			accessory_root.scale = Vector3.ONE
 

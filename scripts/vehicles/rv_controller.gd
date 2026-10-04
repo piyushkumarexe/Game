@@ -231,6 +231,19 @@ func exit_seat_transform() -> Transform3D:
 	# Exit beside the real passenger doorway rather than through the opposite wall.
 	return global_transform * Transform3D(Basis.IDENTITY, Vector3(2.15, 0.02, 0.98))
 
+func cabin_entry_transform() -> Transform3D:
+	# Feet land in the clear centre aisle, facing inward from the passenger door.
+	# This is an accessibility assist, not a substitute for the physical steps.
+	var inward_facing := global_transform.basis * Basis(Vector3.UP, PI * 0.5)
+	return Transform3D(inward_facing.orthonormalized(), global_transform * Vector3(0.82, 0.06, 0.98))
+
+func assist_cabin_entry(player: Node) -> void:
+	if not entry_door_open:
+		return
+	if player and player.has_method("place_inside_rv"):
+		player.place_inside_rv(cabin_entry_transform())
+		GameSession.toast_requested.emit("INSIDE THE RV", "Walk through the connected cabin, or aim at the cockpit and tap USE to drive.")
+
 func repair(value: float) -> void:
 	health = minf(100.0, health + value)
 	_update_damage_visuals()
@@ -625,6 +638,10 @@ func _build_entry_steps_and_frame() -> void:
 	PrimitiveFactory.box(body_shell, "DoorFrameRear", Vector3(1.35, 1.00, 1.50), Vector3(0.10, 1.96, 0.10), metal)
 	PrimitiveFactory.box(body_shell, "DoorFrameHeader", Vector3(1.35, 1.98, 0.98), Vector3(0.10, 0.12, 1.14), metal)
 	PrimitiveFactory.box(body_shell, "EntryThreshold", Vector3(1.40, -0.02, 0.98), Vector3(0.28, 0.10, 1.02), Color("b1a78e"))
+	# A warm horizontal aisle surface makes the route visibly continue past the
+	# threshold; the vertical far wall no longer reads as a slab blocking entry.
+	PrimitiveFactory.box(body_shell, "ConnectedEntryAisle", Vector3(0.18, 0.025, 0.98),
+		Vector3(2.35, 0.045, 0.94), Color("6f4b32"))
 	PrimitiveFactory.box(body_shell, "EntryStepUpper", Vector3(1.57, -0.16, 0.98), Vector3(0.48, 0.12, 1.00), tread)
 	PrimitiveFactory.box(body_shell, "EntryStepMiddle", Vector3(1.78, -0.38, 0.98), Vector3(0.54, 0.12, 0.94), tread)
 	PrimitiveFactory.box(body_shell, "EntryStepLower", Vector3(2.00, -0.60, 0.98), Vector3(0.58, 0.12, 0.88), tread)
@@ -693,7 +710,7 @@ func _update_vehicle_visuals() -> void:
 		gear_visual_root.rotation.x = lerp_angle(gear_visual_root.rotation.x, lever_target.x, 0.22)
 		gear_visual_root.rotation.z = lerp_angle(gear_visual_root.rotation.z, lever_target.y, 0.22)
 	if cabin_light:
-		cabin_light.visible = engine_running
+		cabin_light.visible = engine_running or entry_door_open
 	for lamp in headlamps:
 		lamp.visible = engine_running
 
