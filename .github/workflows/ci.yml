@@ -119,13 +119,23 @@ jobs:
           exit $status
       - name: Verify Android landscape lock
         run: |
+          set +e
           aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
-          test -x "$aapt2"
-          "$aapt2" dump xmltree build/android/DustboundExpeditions.apk --file AndroidManifest.xml > android-manifest.txt
+          "$aapt2" dump xmltree build/android/DustboundExpeditions.apk --file AndroidManifest.xml > android-manifest.txt 2>android-manifest-error.txt
+          dump_status=$?
           orientation=$(grep 'screenOrientation' android-manifest.txt || true)
-          echo "$orientation"
+          echo "aapt2 status: $dump_status"
+          echo "orientation: $orientation"
+          cat android-manifest-error.txt
           # ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE is the integer value 0.
           echo "$orientation" | grep -Eq '\(type 0x10\)0x0([[:space:]]|$)'
+          status=$?
+          if [ "$dump_status" -ne 0 ] || [ "$status" -ne 0 ]; then
+            detail="aapt2 status=$dump_status; orientation=$orientation; error=$(tr '\n' '|' < android-manifest-error.txt)"
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=project.godot,title=Android landscape manifest::$detail"
+            exit 1
+          fi
           echo 'Android manifest verified: the game activity is locked to landscape (value 0).' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload Android game
         uses: actions/upload-artifact@v7.0.1
