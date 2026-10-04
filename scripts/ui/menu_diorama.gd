@@ -112,7 +112,7 @@ func _build_rig() -> void:
 	exterior.position.y = 1.25
 	rig.add_child(exterior)
 	for x in [-1.24, 1.24]:
-		for z in [-2.10, 1.90]:
+		for z in [-2.35, 1.90]:
 			_add_menu_wheel(Vector3(x, 0.63, z))
 
 func _add_menu_wheel(wheel_position: Vector3) -> void:

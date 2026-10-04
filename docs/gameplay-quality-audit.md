@@ -1,16 +1,17 @@
 # Gameplay and presentation audit
 
-This checklist is the release gate for the 0.10 correction line. A green export is necessary but is not proof of visual or physical-device quality. Both the rejected 0.9 capture and the first 0.10 physical capture remain baseline regressions this release must visibly fix.
+This checklist is the release gate for the wholesale RV-replacement line. A green export is necessary but is not proof of visual or physical-device quality. The rejected 0.9 and 0.10 captures remain baseline regressions that the replacement must visibly fix; neither build is a release candidate.
 
-The first 0.10 phone capture improved the character and made the cockpit readable, but still failed release: rear tires remained mostly buried from side/rear angles, the character could stand beneath the overhangs, full circular chrome wheel rings looked detached, the driver eye was too close to the wheel/dashboard and could turn into a large living-wall slab, the cream body remained washed out, and textured hero foliage was too sparse around camp.
+The first 0.10 phone capture improved the character and made the cockpit readable, but still failed release: its generic Class-C truck/box silhouette was fundamentally wrong, the wheels looked floating or buried, the cockpit could be occluded, and the overall vehicle did not approach the supplied *RV There Yet?* presentation. That mesh has now been removed rather than cosmetically patched.
 
 ## RV presentation and physics
 
-- The original Class C RV scene contains a tapered cab, over-cab sleeper, split windshield, mirrors, four suspension-driven tire/rim assemblies, wheel wells, bumpers, grille, working lights, hinged entry door and step, service hatches, roof rack, solar array, vents, air conditioner, awning, cargo, rear spare and ladder.
+- The replacement is an original vintage Class-A expedition motorhome: full-height flat nose, tall panoramic split windshield, open side glazing, squared old-coach shoulders, cut wheel wells, four separated suspension-driven tire/rim assemblies, broad bumper/grille, mirrors, working lights, hinged entry door and step, service hatches, roof cage, solar array, vents, air conditioner, awning, cargo, rear spare and ladder.
+- The removed truck hood, tapered delivery-van cab and over-cab sleeper must not reappear. Source and CI assertions treat those components as regressions.
 - Exterior coach skin, living interior and cockpit frame are separate render batches. Driver-eye view culls only the opaque exterior skin while preserving the actual dashboard, frame, glazing and interior; it does not use a camera-attached overlay.
 - The continuous interior includes dashboard, gauges, navigation screen, movable steering wheel, physical animated gear gate/lever, pedals, driver/passenger seats, belts, cab trim, refrigerator, kitchen, sink, stove, cabinets, dinette, rear bed, storage, map and ceiling fixtures.
-- The passenger entry door is an independently modeled mechanism with a world-space hinge, animated open/close state and physical interaction target.
-- Chassis collision ends above the wheel contact region. Each tire has a solid inner contact core plus a damped per-wheel terrain spring fallback for missed first-frame VehicleWheel rays. CI releases the full 3.6-ton RV into physics and rejects any wheel centre that settles below the terrain-clearance gate.
+- The passenger entry door is an independently modeled mechanism with a world-space hinge, animated open/close state and physical interaction target. The coach uses a seven-piece hollow compound collider with a split passenger wall, so opening the door provides a real path into the connected cabin instead of exposing a solid invisible box.
+- Chassis/floor collision ends above the wheel contact region. Each tire has a solid inner contact core plus a damped per-wheel terrain spring fallback for missed first-frame VehicleWheel rays. CI releases the full 3.6-ton RV into physics and rejects any wheel centre that settles below the terrain-clearance gate.
 - Chase view stays centered behind the full vehicle at a non-overhead angle. Spring-arm collision excludes the occupied RV so it does not collapse into the shell.
 - Exterior, interior and cockpit are independently asserted in CI; chase and driver-eye screenshots are captured separately.
 

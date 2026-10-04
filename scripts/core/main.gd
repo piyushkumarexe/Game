@@ -324,13 +324,18 @@ func _run_expedition_smoke_test() -> void:
 		if not smoke_rv.freeze:
 			failures.append("unoccupied RV is not in stable parking mode")
 		var wheel_count := 0
+		var shell_collision_count := 0
 		for child: Node in smoke_rv.get_children():
 			if child is VehicleWheel3D:
 				wheel_count += 1
 				if not child.find_child("DetailedWheelAssembly", true, false):
 					failures.append("%s lacks its modeled tire/rim assembly" % child.name)
+			elif child is CollisionShape3D and child.name.begins_with("RV"):
+				shell_collision_count += 1
 		if wheel_count != 4:
 			failures.append("detailed RV requires 4 physical wheels, found %d" % wheel_count)
+		if shell_collision_count != 7:
+			failures.append("RV requires a 7-piece hollow shell collider, found %d" % shell_collision_count)
 		var static_exterior := smoke_rv.body_shell.find_child("StaticRVExterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
 		var static_interior := smoke_rv.body_shell.find_child("StaticRVInterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
 		if not static_exterior or not static_exterior.mesh or static_exterior.mesh.get_surface_count() < 18:
@@ -344,6 +349,13 @@ func _run_expedition_smoke_test() -> void:
 		await get_tree().create_timer(0.60).timeout
 		if not smoke_rv.entry_door_pivot or absf(smoke_rv.entry_door_pivot.rotation.y) < 1.30:
 			failures.append("functional RV entry door did not open on its hinge")
+		if active_world:
+			var doorway_probe := smoke_rv.global_transform * Vector3(1.30, 0.85, 0.98)
+			var cabin_probe := smoke_rv.global_transform * Vector3(0.0, 0.85, 0.20)
+			if active_world.constrain_player_position(doorway_probe + Vector3.RIGHT * 0.4, doorway_probe).distance_to(doorway_probe) > 0.05:
+				failures.append("open RV door does not provide a physical cabin path")
+			if active_world.constrain_player_position(cabin_probe, cabin_probe).distance_to(cabin_probe) > 0.05:
+				failures.append("connected RV living interior rejects an upright player")
 		smoke_rv.set_entry_door_open(false)
 		if GameSession.local_player and is_instance_valid(GameSession.local_player):
 			smoke_rv.interact(GameSession.local_player)

@@ -429,68 +429,86 @@ rv.box("FuelTank", (0.52, -0.36, 0.45), (0.64, 0.34, 1.05), "DarkMetal")
 rv.cylinder("ExhaustPipe", (-0.78, -0.44, 2.63), 0.055, 1.10, "LightMetal", 10, "z")
 rv.cylinder("ExhaustTip", (-0.78, -0.44, 3.18), 0.085, 0.14, "DarkMetal", 12, "z")
 
-# Coach shell is assembled as real wall/floor/roof panels instead of one solid
-# decorated box. The right side has a genuine doorway through to the interior.
-rv.box("CoachFloorShell", (0.0, -0.07, 0.40), (2.56, 0.16, 5.45), "RV_Cream")
-rv.box("CoachRoofShell", (0.0, 2.03, 0.40), (2.56, 0.18, 5.45), "RV_Cream")
-rv.box("CoachLeftWall", (-1.22, 0.98, 0.40), (0.12, 2.06, 5.45), "RV_Cream")
-# Door aperture spans z=.54..1.42 and y=-.01..1.83.
-rv.box("CoachRightFrontWall", (1.22, 0.98, -0.895), (0.12, 2.06, 2.86), "RV_Cream")
-rv.box("CoachRightRearWall", (1.22, 0.98, 2.285), (0.12, 2.06, 1.68), "RV_Cream")
-rv.box("CoachRightDoorHeader", (1.22, 1.96, 0.98), (0.12, 0.20, 0.88), "RV_Cream")
-rv.box("CoachRightDoorSill", (1.22, -0.02, 0.98), (0.12, 0.10, 0.88), "RV_Accent")
-rv.profile_prism("CabBody", -3.52, -1.82,
-                 (-1.08, 1.08, -0.08, 1.43),
-                 (-1.27, 1.27, -0.12, 1.63), "RV_Cream")
-rv.profile_prism("CabHood", -3.82, -2.93,
-                 (-0.94, 0.94, 0.03, 0.54),
-                 (-1.12, 1.12, -0.02, 0.67), "RV_Cream")
-rv.profile_prism("OvercabSleeper", -3.34, -1.40,
-                 (-1.05, 1.05, 1.63, 2.23),
-                 (-1.28, 1.28, 1.66, 2.34), "RV_Cream")
-rv.box("CoachRoofEdge", (0.0, 2.17, 0.48), (2.67, 0.18, 5.58), "RV_Cream")
-rv.box("CoachRoofCrown", (0.0, 2.29, 0.50), (2.39, 0.12, 5.36), "RV_Cream")
-rv.box("LowerSkirtLeft", (-1.27, 0.01, 0.48), (0.12, 0.34, 5.38), "RV_Accent")
-rv.box("LowerSkirtRight", (1.27, 0.01, 0.48), (0.12, 0.34, 5.38), "RV_Accent")
-rv.box("RearWallCap", (0.0, 1.00, 3.18), (2.59, 2.28, 0.14), "RV_Cream")
+# Completely rebuilt vintage Class-A shell. The previous truck hood and cab-over
+# sleeper produced the wrong silhouette; the target is an old flat-front coach
+# with panoramic glass, squared shoulders, real window apertures and roof cage.
+body_front, body_rear = -3.34, 3.18
+body_length = body_rear - body_front
+rv.box("CoachFloorShell", (0.0, -0.07, (body_front + body_rear) * 0.5),
+       (2.56, 0.16, body_length), "RV_Cream")
+rv.box("CoachRoofShell", (0.0, 2.06, (body_front + body_rear) * 0.5),
+       (2.52, 0.16, body_length), "RV_Cream")
+# Horizontal shoulder bands form both sides; middle wall pieces are inserted only
+# between the authored windows, leaving actual holes behind every pane.
+rv.box("CoachLowerShoulderLeft", (-1.24, 0.34, -0.08),
+       (0.12, 0.72, body_length), "RV_Cream")
+# Split the passenger-side lower shoulder around the entry aperture; no visual
+# panel or collision-like slab is allowed to cover the walk-through doorway.
+rv.box("CoachLowerShoulderRightFront", (1.24, 0.34, (body_front + 0.48) * 0.5),
+       (0.12, 0.72, 0.48 - body_front), "RV_Cream")
+rv.box("CoachLowerShoulderRightRear", (1.24, 0.34, (1.48 + body_rear) * 0.5),
+       (0.12, 0.72, body_rear - 1.48), "RV_Cream")
+for side in (-1, 1):
+    rv.box("CoachUpperShoulder", (side * 1.24, 1.96, -0.08),
+           (0.12, 0.24, body_length), "RV_Cream")
+left_gaps = [(-2.03, -1.55), (-0.55, -0.39), (0.55, 0.78), (1.82, body_rear)]
+right_gaps = [(-2.03, -1.34), (-0.10, 0.48), (1.48, 1.70), (2.54, body_rear)]
+for side, gaps in ((-1, left_gaps), (1, right_gaps)):
+    for start, finish in gaps:
+        rv.box("CoachWindowBayPillar", (side * 1.24, 1.22, (start + finish) * 0.5),
+               (0.12, 1.08, finish - start), "RV_Cream")
+# Door aperture spans z=.50..1.46 and remains open into the real interior.
+rv.box("CoachRightDoorHeader", (1.24, 1.96, 0.98), (0.12, 0.24, 0.96), "RV_Cream")
+rv.box("CoachRightDoorSill", (1.24, -0.02, 0.98), (0.12, 0.10, 0.96), "RV_Accent")
+# Chamfered roof rails and front brow stop the profile reading as a raw cube.
+rv.cylinder("CoachRoofEdgeLeft", (-1.18, 2.08, -0.08), 0.16, body_length, "RV_Cream", 16, "z")
+rv.cylinder("CoachRoofEdgeRight", (1.18, 2.08, -0.08), 0.16, body_length, "RV_Cream", 16, "z")
+rv.box("CoachRoofCrown", (0.0, 2.22, -0.08), (2.34, 0.12, body_length - 0.12), "RV_Cream")
+rv.profile_prism("FrontRoofBrow", -3.56, -3.02,
+                 (-1.12, 1.12, 1.78, 2.20),
+                 (-1.28, 1.28, 1.74, 2.24), "RV_Cream")
+# Flat-front fascia is built around (not behind) the panoramic windshield.
+rv.box("FrontLowerShell", (0.0, 0.29, -3.48), (2.20, 0.74, 0.16), "RV_Cream")
+rv.box("FrontLeftPillar", (-1.11, 1.19, -3.47), (0.17, 1.24, 0.18), "RV_Cream")
+rv.box("FrontRightPillar", (1.11, 1.19, -3.47), (0.17, 1.24, 0.18), "RV_Cream")
+rv.box("FrontHeader", (0.0, 1.82, -3.46), (2.20, 0.18, 0.18), "RV_Cream")
+rv.box("RearWallCap", (0.0, 1.01, 3.22), (2.59, 2.30, 0.14), "RV_Cream")
+# Lower skirts are cut around both wheel openings instead of passing through tires.
+for side in (-1, 1):
+    for center_z, length in ((-0.15, 2.88), (2.99, 0.38)):
+        rv.box("LowerSkirt", (side * 1.27, 0.00, center_z), (0.12, 0.32, length), "RV_Accent")
 
-# Painted side graphics are layered and segmented, not one crude flat stripe.
+# Long faded graphics match the utilitarian old-road-trip coach proportions.
 for side in (-1, 1):
     x = side * 1.337
-    rv.box("WideCoachStripe", (x, 0.62, 0.48), (0.032, 0.33, 4.84), "RV_Stripe")
-    rv.box("ThinCoachStripe", (x + side * 0.012, 0.39, 0.35), (0.026, 0.075, 5.06), "RV_Gold")
-    rv.box("UpperPinstripe", (x, 1.73, 0.60), (0.028, 0.045, 4.72), "RV_Stripe")
-rv.box("FrontStripe", (0.0, 0.52, -3.535), (1.88, 0.25, 0.045), "RV_Stripe")
-rv.box("RearStripe", (0.0, 0.63, 3.258), (2.28, 0.34, 0.035), "RV_Stripe")
+    rv.box("WideCoachStripe", (x, 0.67, 0.08), (0.032, 0.28, 5.88), "RV_Stripe")
+    rv.box("ThinCoachStripe", (x + side * 0.012, 0.46, 0.04), (0.026, 0.070, 5.96), "RV_Gold")
+    rv.box("UpperPinstripe", (x, 1.73, 0.18), (0.028, 0.045, 5.62), "RV_Stripe")
+rv.box("FrontStripe", (0.0, 0.56, -3.575), (2.02, 0.18, 0.030), "RV_Stripe")
+rv.box("RearStripe", (0.0, 0.67, 3.298), (2.28, 0.28, 0.030), "RV_Stripe")
 
-# Sloped split windshield and proper cab glazing.
-rv.quad("WindshieldLeft", [(-0.98, 0.72, -3.585), (-0.08, 0.72, -3.585),
-                            (-0.08, 1.54, -3.585), (-0.88, 1.54, -3.585)], "Window")
-rv.quad("WindshieldRight", [(0.08, 0.72, -3.585), (0.98, 0.72, -3.585),
-                             (0.88, 1.54, -3.585), (0.08, 1.54, -3.585)], "Window")
-rv.box("WindshieldCenterPillar", (0.0, 1.13, -3.605), (0.10, 0.93, 0.09), "DarkMetal")
-rv.box("WindshieldTopSeal", (0.0, 1.58, -3.605), (1.98, 0.09, 0.08), "DarkMetal")
-rv.box("WindshieldLowerSeal", (0.0, 0.68, -3.605), (2.08, 0.10, 0.08), "DarkMetal")
-rv.box("WindshieldWiperLeft", (-0.46, 0.77, -3.657), (0.72, 0.035, 0.025), "DarkMetal")
-rv.box("WindshieldWiperRight", (0.46, 0.77, -3.657), (0.72, 0.035, 0.025), "DarkMetal")
-rv.box("OvercabFrontWindowFrame", (0.0, 1.84, -3.385), (1.48, 0.43, 0.055), "DarkMetal")
-rv.box("OvercabFrontWindow", (0.0, 1.84, -3.421), (1.32, 0.30, 0.020), "Window")
+# Tall, slightly raked panoramic windshield and real side cab glass.
+rv.quad("WindshieldLeft", [(-1.02, 0.68, -3.575), (-0.07, 0.68, -3.575),
+                            (-0.07, 1.73, -3.455), (-0.98, 1.73, -3.455)], "Window")
+rv.quad("WindshieldRight", [(0.07, 0.68, -3.575), (1.02, 0.68, -3.575),
+                             (0.98, 1.73, -3.455), (0.07, 1.73, -3.455)], "Window")
+rv.box("WindshieldCenterPillar", (0.0, 1.20, -3.525), (0.09, 1.12, 0.10), "DarkMetal")
+rv.box("WindshieldTopSeal", (0.0, 1.76, -3.475), (2.10, 0.08, 0.09), "DarkMetal")
+rv.box("WindshieldLowerSeal", (0.0, 0.64, -3.590), (2.16, 0.10, 0.09), "DarkMetal")
+rv.box("WindshieldWiperLeft", (-0.48, 0.75, -3.630), (0.78, 0.030, 0.025), "DarkMetal")
+rv.box("WindshieldWiperRight", (0.48, 0.75, -3.630), (0.78, 0.030, 0.025), "DarkMetal")
 for side in (-1, 1):
-    rv.box("OvercabSideWindowFrame", (side * 1.266, 1.88, -2.28), (0.052, 0.38, 0.64), "DarkMetal")
-    rv.box("OvercabSideWindow", (side * 1.299, 1.88, -2.28), (0.018, 0.27, 0.52), "Window")
-for side in (-1, 1):
-    rv.quad("CabSideGlass", [(side * 1.292, 0.66, -3.24), (side * 1.292, 0.66, -2.13),
-                              (side * 1.292, 1.53, -2.03), (side * 1.292, 1.53, -3.08)] if side > 0 else
-                             [(side * 1.292, 0.66, -2.13), (side * 1.292, 0.66, -3.24),
-                              (side * 1.292, 1.53, -3.08), (side * 1.292, 1.53, -2.03)], "Window")
-    rv.box("CabWindowLowerTrim", (side * 1.31, 0.63, -2.68), (0.055, 0.09, 1.22), "DarkMetal")
-    rv.box("CabDoorInset", (side * 1.305, 0.27, -2.66), (0.045, 0.56, 1.12), "RV_Accent")
-    rv.box("CabDoorPanel", (side * 1.334, 0.29, -2.66), (0.022, 0.46, 1.02), "RV_Cream")
-    rv.box("CabDoorHandle", (side * 1.365, 0.70, -2.28), (0.035, 0.07, 0.25), "Chrome")
-    rv.box("CabRunningBoard", (side * 1.48, -0.29, -2.54), (0.42, 0.10, 1.46), "DarkMetal")
-    rv.box("MirrorSupport", (side * 1.47, 1.02, -2.88), (0.42, 0.06, 0.06), "DarkMetal")
-    rv.box("MirrorHousing", (side * 1.66, 1.04, -2.88), (0.11, 0.42, 0.30), "DarkMetal")
-    rv.box("MirrorGlass", (side * 1.725, 1.04, -2.88), (0.018, 0.32, 0.21), "Mirror")
+    rv.quad("CabSideGlass", [(side * 1.305, 0.66, -3.25), (side * 1.305, 0.66, -2.06),
+                              (side * 1.305, 1.60, -2.03), (side * 1.305, 1.60, -3.18)] if side > 0 else
+                             [(side * 1.305, 0.66, -2.06), (side * 1.305, 0.66, -3.25),
+                              (side * 1.305, 1.60, -3.18), (side * 1.305, 1.60, -2.03)], "Window")
+    rv.box("CabWindowLowerTrim", (side * 1.325, 0.63, -2.66), (0.055, 0.09, 1.24), "DarkMetal")
+    rv.box("CabDoorInset", (side * 1.305, 0.32, -2.66), (0.045, 0.54, 1.12), "RV_Accent")
+    rv.box("CabDoorPanel", (side * 1.334, 0.33, -2.66), (0.022, 0.44, 1.02), "RV_Cream")
+    rv.box("CabDoorHandle", (side * 1.365, 0.72, -2.22), (0.035, 0.07, 0.23), "Chrome")
+    rv.box("MirrorSupport", (side * 1.48, 1.06, -3.02), (0.42, 0.06, 0.06), "DarkMetal")
+    rv.box("MirrorHousing", (side * 1.68, 1.09, -3.02), (0.12, 0.44, 0.31), "DarkMetal")
+    rv.box("MirrorGlass", (side * 1.745, 1.09, -3.02), (0.018, 0.34, 0.22), "Mirror")
 
 # Coach windows: deep frames, tinted panes and fabric curtains visible inside.
 window_layout = [(-1, -1.05, 0.94), (-1, 0.08, 0.88), (-1, 1.30, 0.98),
@@ -521,22 +539,23 @@ rv.cylinder("WaterFiller", (-1.39, 0.36, 2.42), 0.10, 0.025, "RV_Accent", 16, "x
 
 # Wheel wells and mud guards clearly frame the four physical tire assemblies.
 for side in (-1, 1):
-    for z in (-2.10, 1.90):
+    for z in (-2.35, 1.90):
         rv.cylinder("WheelWellShadow", (side * 1.255, -0.58, z), 0.67, 0.035, "Rubber", 24, "x")
         rv.wheel_arch("WheelArchTrim", (side * 1.410, -0.58, z), 0.66, 0.040, "Chrome", 20, 7)
         rv.box("MudFlap", (side * 1.26, -0.56, z + 0.62), (0.12, 0.68, 0.34), "Rubber")
 
-# Automotive front/rear equipment and lighting.
-rv.box("FrontBumper", (0.0, -0.11, -3.84), (2.35, 0.25, 0.28), "Chrome")
-rv.box("FrontValance", (0.0, 0.19, -3.80), (2.12, 0.33, 0.12), "RV_Accent")
-rv.box("FrontGrille", (0.0, 0.30, -3.875), (0.94, 0.30, 0.035), "DarkMetal")
+# Flat-nose automotive equipment: bumper, broad grille and paired lamps sit
+# directly below the windshield rather than at the end of a fake truck hood.
+rv.box("FrontBumper", (0.0, -0.11, -3.68), (2.35, 0.25, 0.28), "Chrome")
+rv.box("FrontValance", (0.0, 0.19, -3.64), (2.12, 0.33, 0.12), "RV_Accent")
+rv.box("FrontGrille", (0.0, 0.30, -3.725), (0.94, 0.30, 0.035), "DarkMetal")
 for x in (-0.35, -0.12, 0.12, 0.35):
-    rv.box("GrilleSlat", (x, 0.30, -3.899), (0.055, 0.25, 0.018), "Chrome")
+    rv.box("GrilleSlat", (x, 0.30, -3.749), (0.055, 0.25, 0.018), "Chrome")
 for x in (-0.79, 0.79):
-    rv.box("HeadlampHousing", (x, 0.48, -3.78), (0.46, 0.30, 0.09), "DarkMetal")
-    rv.box("HeadlampLens", (x, 0.49, -3.833), (0.34, 0.20, 0.022), "Headlamp")
-    rv.box("FrontIndicator", (x + (0.26 if x > 0 else -0.26), 0.42, -3.82), (0.13, 0.17, 0.025), "Amber")
-rv.box("FrontLicensePlate", (0.0, -0.03, -3.995), (0.62, 0.18, 0.025), "Plate")
+    rv.box("HeadlampHousing", (x, 0.48, -3.66), (0.46, 0.30, 0.09), "DarkMetal")
+    rv.box("HeadlampLens", (x, 0.49, -3.713), (0.34, 0.20, 0.022), "Headlamp")
+    rv.box("FrontIndicator", (x + (0.26 if x > 0 else -0.26), 0.42, -3.70), (0.13, 0.17, 0.025), "Amber")
+rv.box("FrontLicensePlate", (0.0, -0.03, -3.835), (0.62, 0.18, 0.025), "Plate")
 rv.box("RearBumper", (0.0, -0.14, 3.35), (2.50, 0.25, 0.30), "Chrome")
 rv.box("RearLicensePlate", (0.0, 0.10, 3.335), (0.58, 0.20, 0.025), "Plate")
 for x in (-0.92, 0.92):
@@ -623,10 +642,19 @@ rv.box("InteriorFloor", (0.0, 0.00, 0.82), (2.34, 0.10, 4.68), "InteriorWood")
 rv.box("InteriorCeiling", (0.0, 2.05, 0.66), (2.34, 0.08, 4.92), "InteriorVinyl")
 # Living-space liners begin behind the seat backs; extending them alongside the
 # driver eye created the giant cream slab seen when looking left/right in 1P.
-rv.box("InteriorWallLeft", (-1.20, 1.01, 1.03), (0.07, 1.96, 4.16), "InteriorWall")
-rv.box("InteriorWallRightFront", (1.20, 1.01, -0.27), (0.07, 1.96, 1.56), "InteriorWall")
-rv.box("InteriorWallRightRear", (1.20, 1.01, 2.30), (0.07, 1.96, 1.72), "InteriorWall")
-rv.box("InteriorDoorHeader", (1.20, 1.90, 0.98), (0.07, 0.18, 0.88), "InteriorWall")
+# Interior liners repeat the exterior's real window/door apertures. Solid liner
+# slabs previously sat immediately behind the glass and made every window fake.
+for y, height in ((0.38, 0.72), (1.90, 0.26)):
+    rv.box("InteriorWallLeftBand", (-1.20, y, 1.03), (0.07, height, 4.16), "InteriorWall")
+    rv.box("InteriorWallRightFrontBand", (1.20, y, -0.28), (0.07, height, 1.54), "InteriorWall")
+    rv.box("InteriorWallRightRearBand", (1.20, y, 2.31), (0.07, height, 1.70), "InteriorWall")
+for side, gaps in ((-1, [(-1.58, -1.55), (-0.55, -0.39), (0.55, 0.78), (1.82, 3.11)]),
+                   (1, [(-1.58, -1.34), (-0.10, 0.48), (1.48, 1.70), (2.54, 3.11)])):
+    for start, finish in gaps:
+        if finish - start > 0.06:
+            rv.box("InteriorWindowPillar", (side * 1.20, 1.24, (start + finish) * 0.5),
+                   (0.07, 1.02, finish - start), "InteriorWall")
+rv.box("InteriorDoorHeader", (1.20, 1.90, 0.98), (0.07, 0.18, 0.96), "InteriorWall")
 rv.box("CabDividerLeft", (-0.92, 1.24, -1.12), (0.48, 1.44, 0.10), "InteriorWood")
 rv.box("CabDividerRight", (0.92, 1.24, -1.12), (0.48, 1.44, 0.10), "InteriorWood")
 # Kitchen on the left.
@@ -808,7 +836,11 @@ def convert_obj_to_gltf(source: Path) -> None:
                     "FireExtinguisher", "Extinguisher", "Refrigerator", "Fridge",
                     "GearGate",
                 )
-                cockpit_frame_prefixes = ("Windshield", "CabSideGlass", "CabWindowLowerTrim")
+                cockpit_frame_prefixes = (
+                    "Windshield", "CabSideGlass", "CabWindowLowerTrim",
+                    "FrontLeftPillar", "FrontRightPillar", "FrontHeader",
+                    "MirrorSupport", "MirrorHousing", "MirrorGlass",
+                )
                 if authored_name in dynamic_components:
                     object_name = authored_name
                 elif authored_name.startswith(interior_prefixes):

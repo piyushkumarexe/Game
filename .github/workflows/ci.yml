@@ -34,11 +34,21 @@ jobs:
           wheel = json.load(open('assets/models/rv_wheel.gltf', encoding='utf-8'))
           triangles = sum(exterior['accessors'][primitive['indices']]['count'] // 3
                           for mesh in exterior['meshes'] for primitive in mesh['primitives'])
-          assert triangles >= 5500, triangles
-          assert len(exterior['materials']) >= 24, len(exterior['materials'])
+          assert triangles >= 6000, triangles
+          assert len(exterior['materials']) >= 28, len(exterior['materials'])
           assert {'StaticRVExterior', 'StaticRVInterior', 'StaticCockpitFrame', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor', 'RoofCargo'} <= {node.get('name') for node in exterior['nodes']}
           assert any(node.get('name') == 'DetailedWheelAssembly' for node in wheel['nodes'])
-          print(f'RV asset verified: {triangles} triangles, {len(exterior["materials"])} materials')
+          source = open('tools/generate_lowpoly_assets.py', encoding='utf-8').read()
+          for required in ('FrontRoofBrow', 'FrontLowerShell', 'WindshieldLeft',
+                           'CoachWindowBayPillar', 'WheelArchTrim', 'InteriorWindowPillar'):
+              assert required in source, f'missing replacement RV component: {required}'
+          for removed in ('rv.profile_prism("CabBody"', 'rv.profile_prism("CabHood"',
+                          'rv.profile_prism("OvercabSleeper"'):
+              assert removed not in source, f'rejected Class-C component returned: {removed}'
+          controller = open('scripts/vehicles/rv_controller.gd', encoding='utf-8').read()
+          assert controller.count('_add_wheel("') == 4
+          assert controller.count('-2.35), true, false)') == 2
+          print(f'Replacement RV verified: {triangles} triangles, {len(exterior["materials"])} materials')
           PY
       - name: Install Godot 4.7.2
         uses: chickensoft-games/setup-godot@v2.4.3

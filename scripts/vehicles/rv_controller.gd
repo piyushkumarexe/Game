@@ -470,17 +470,26 @@ func _update_damage_visuals() -> void:
 	if body_shell:
 		body_shell.rotation.z = lerpf(0.0, -0.025, 1.0 - health / 100.0)
 
-func _build_rv() -> void:
+func _add_shell_collision(collision_name: String, collision_position: Vector3, size: Vector3) -> void:
 	var collision := CollisionShape3D.new()
-	collision.name = "RVMainCollision"
+	collision.name = collision_name
 	var shape := BoxShape3D.new()
-	# Keep the chassis collider well above the tire contact patch. The previous
-	# box bottom sat below the wheel centres, so the body hit terrain first and
-	# buried all four tires as soon as parking freeze was released.
-	shape.size = Vector3(2.48, 2.48, 6.82)
+	shape.size = size
 	collision.shape = shape
-	collision.position = Vector3(0.0, 1.11, -0.18)
+	collision.position = collision_position
 	add_child(collision)
+
+func _build_rv() -> void:
+	# A compound hollow shell replaces the old solid 2.5 x 6.8 m collision box.
+	# The floor still ends above the tire contact patch, while the split right wall
+	# leaves a genuine passenger-door path into the connected moving interior.
+	_add_shell_collision("RVMainCollision", Vector3(0.0, -0.03, -0.08), Vector3(2.48, 0.16, 6.52))
+	_add_shell_collision("RVRoofCollision", Vector3(0.0, 2.12, -0.08), Vector3(2.48, 0.22, 6.52))
+	_add_shell_collision("RVLeftWallCollision", Vector3(-1.20, 1.08, -0.08), Vector3(0.18, 2.02, 6.52))
+	_add_shell_collision("RVRightFrontWallCollision", Vector3(1.20, 1.08, -1.43), Vector3(0.18, 2.02, 3.82))
+	_add_shell_collision("RVRightRearWallCollision", Vector3(1.20, 1.08, 2.33), Vector3(0.18, 2.02, 1.70))
+	_add_shell_collision("RVFrontWallCollision", Vector3(0.0, 1.08, -3.36), Vector3(2.48, 2.02, 0.18))
+	_add_shell_collision("RVRearWallCollision", Vector3(0.0, 1.08, 3.20), Vector3(2.48, 2.02, 0.18))
 
 	body_shell = Node3D.new()
 	body_shell.name = "ExpeditionRVBody"
@@ -488,9 +497,9 @@ func _build_rv() -> void:
 	var exterior := RV_EXTERIOR_SCENE.instantiate() as Node3D
 	exterior.name = "DustboundExpeditionRV"
 	body_shell.add_child(exterior)
-	# This is one coherent exterior/interior scene: tapered cab, split windshield,
-	# mirrors, lights, service hatches, roof equipment, ladder, cockpit, seats,
-	# kitchen, dinette and rear bed. Named glTF nodes are retained for inspection.
+	# One coherent vintage Class-A scene: flat front, panoramic split windshield,
+	# real window/door apertures, mirrors, lights, service hatches, roof equipment,
+	# cockpit, seats, kitchen, dinette and rear bed. Named glTF nodes are retained.
 	exterior_shell = exterior.find_child("StaticRVExterior", true, false) as Node3D
 	interior_shell = exterior.find_child("StaticRVInterior", true, false) as Node3D
 	cockpit_frame = exterior.find_child("StaticCockpitFrame", true, false) as Node3D
@@ -501,8 +510,8 @@ func _build_rv() -> void:
 	_build_entry_door(exterior)
 	_build_vehicle_lighting()
 
-	_add_wheel("FrontLeft", Vector3(-1.24, -0.62, -2.10), true, false)
-	_add_wheel("FrontRight", Vector3(1.24, -0.62, -2.10), true, false)
+	_add_wheel("FrontLeft", Vector3(-1.24, -0.62, -2.35), true, false)
+	_add_wheel("FrontRight", Vector3(1.24, -0.62, -2.35), true, false)
 	_add_wheel("RearLeft", Vector3(-1.24, -0.62, 1.90), false, true)
 	_add_wheel("RearRight", Vector3(1.24, -0.62, 1.90), false, true)
 
@@ -559,7 +568,7 @@ func _build_vehicle_lighting() -> void:
 	for x in [-0.79, 0.79]:
 		var lamp := SpotLight3D.new()
 		lamp.name = "HeadlampBeam"
-		lamp.position = Vector3(x, 0.49, -3.84)
+		lamp.position = Vector3(x, 0.49, -3.72)
 		lamp.light_color = Color("ffe2a0")
 		lamp.light_energy = 2.2
 		lamp.spot_range = 28.0

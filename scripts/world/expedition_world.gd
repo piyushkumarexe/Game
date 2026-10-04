@@ -213,6 +213,13 @@ func _push_player_outside_rv(candidate: Vector3) -> Vector3:
 	var half_length := 4.15
 	if absf(local.x) >= half_width or absf(local.z) >= half_length:
 		return candidate
+	# The RV now has a hollow compound collider and connected cabin. Preserve the
+	# overhang guard at terrain level, but allow an upright player already inside
+	# and allow passage through the passenger aperture only while its door is open.
+	var inside_cabin := absf(local.x) < 1.10 and local.z > -3.20 and local.z < 3.04 and local.y > 0.05 and local.y < 2.05
+	var in_doorway := local.x > 1.04 and local.z > 0.40 and local.z < 1.56 and local.y > 0.02 and local.y < 1.92
+	if inside_cabin or (in_doorway and rv.entry_door_open):
+		return candidate
 	var distance_to_side := half_width - absf(local.x)
 	var distance_to_end := half_length - absf(local.z)
 	if distance_to_side < distance_to_end:
