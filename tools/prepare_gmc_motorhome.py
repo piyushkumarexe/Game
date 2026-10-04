@@ -73,15 +73,21 @@ def write_body(source: Path, target: Path) -> None:
     doc = json.loads((source / "scene.gltf").read_text(encoding="utf-8"))
     blob = bytearray((source / "scene.bin").read_bytes())
     open_passenger_doorway(doc, blob)
-    # Plane.001_11, Plane.003_12 and Plane.004_13 are the three baked axle pairs.
-    # Their geometry remains in the compact shared binary but cannot be rendered.
+    # Cube.003_2 and Cube.002_5 are the source's massively oversized duplicated
+    # cockpit-seat assemblies. On a phone they filled the windshield and also
+    # protruded through the opened doorway. Dustbound supplies correctly scaled
+    # cockpit seats at runtime. Plane.001_11, Plane.003_12 and Plane.004_13 are
+    # the three baked axle pairs replaced by physics-driven wheel assemblies.
+    # Geometry remains in the licensed shared binary for provenance, but none of
+    # these source nodes can render.
     root_children = doc["nodes"][2]["children"]
-    doc["nodes"][2]["children"] = [index for index in root_children if index not in (17, 19, 21)]
+    removed_nodes = (7, 13, 17, 19, 21)
+    doc["nodes"][2]["children"] = [index for index in root_children if index not in removed_nodes]
     doc["asset"]["generator"] = "Dustbound CC-BY GMC mobile preparation"
     doc["extras"] = {
         "source": "https://sketchfab.com/3d-models/free-gmc-motorhome-reimagined-low-poly-6hiH0iyDqXqtdD9wbqSbyLLhKmz",
         "author": "Karol Miklas",
-        "modifications": "passenger doorway opened; baked wheels removed; textures mobile-sized",
+        "modifications": "passenger doorway opened; oversized source seats and baked wheels removed; textures mobile-sized",
     }
     doc["buffers"][0]["uri"] = "motorhome.bin"
     (target / "motorhome.bin").write_bytes(blob)

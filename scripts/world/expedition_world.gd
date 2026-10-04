@@ -358,6 +358,10 @@ func _apply_quality_profile() -> void:
 	var quality := clampi(GameSession.graphics_quality, 0, 2)
 	var viewport := get_viewport()
 	viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][quality]
+	# HIGH always renders the 3D scene at native scale; FAST deliberately trades
+	# resolution for battery life. Previously all presets shared the same soft
+	# internal result, so HIGH looked almost identical on a 1080p phone.
+	viewport.scaling_3d_scale = [0.78, 0.90, 1.0][quality]
 	var advanced_renderer := RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if quality == 2 and advanced_renderer else Viewport.SCREEN_SPACE_AA_DISABLED
 	viewport.use_debanding = quality == 2
@@ -373,8 +377,10 @@ func _apply_quality_profile() -> void:
 	if sun:
 		sun.shadow_enabled = quality > 0
 		sun.light_energy = [0.92, 1.08, 1.22][quality]
-		sun.directional_shadow_max_distance = [48.0, 82.0, 135.0][quality]
-		sun.shadow_blur = [1.2, 0.85, 0.55][quality]
+		sun.directional_shadow_max_distance = [48.0, 82.0, 150.0][quality]
+		sun.shadow_blur = [1.2, 0.85, 0.45][quality]
+		sun.shadow_bias = [0.08, 0.055, 0.035][quality]
+		sun.shadow_normal_bias = [1.4, 1.05, 0.72][quality]
 	if terrain_material:
 		terrain_material.normal_enabled = quality > 0
 		terrain_material.normal_scale = 0.62 if quality == 2 else 0.38
@@ -565,7 +571,7 @@ func _build_landmarks() -> void:
 	add_child(water)
 
 func _build_scenery() -> void:
-	var tree_count: int = [46, 74, 118][GameSession.graphics_quality]
+	var tree_count: int = [46, 74, 150][GameSession.graphics_quality]
 	for index in tree_count:
 		var z := random.randf_range(-250.0, 103.0)
 		var x := random.randf_range(-118.0, 118.0)
@@ -573,7 +579,7 @@ func _build_scenery() -> void:
 		if route_info.x < 7.2 or route_info.x > 38.0:
 			continue
 		_make_tree(Vector3(x, terrain_height(x, z), z), 0.75 + random.randf() * 0.7, index % 5 == 0)
-	var rock_count: int = [32, 52, 86][GameSession.graphics_quality]
+	var rock_count: int = [32, 52, 104][GameSession.graphics_quality]
 	for index in rock_count:
 		var z := random.randf_range(-255.0, 106.0)
 		var x := random.randf_range(-122.0, 122.0)
@@ -583,7 +589,7 @@ func _build_scenery() -> void:
 		var radius := random.randf_range(0.45, 1.75)
 		_make_rock(Vector3(x, terrain_height(x, z), z), radius,
 			Vector3(random.randf_range(0.8, 1.5), random.randf_range(0.55, 1.15), random.randf_range(0.8, 1.4)), index % 8 == 0)
-	var cover_count: int = [42, 82, 150][GameSession.graphics_quality]
+	var cover_count: int = [42, 82, 220][GameSession.graphics_quality]
 	for index in cover_count:
 		var z := random.randf_range(-252.0, 104.0)
 		var x := random.randf_range(-116.0, 116.0)
@@ -600,7 +606,7 @@ func _build_scenery() -> void:
 		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	# A deliberate tree line gives the opening area a readable forest silhouette
 	# instead of relying on sparse random placements in the player's first view.
-	var camp_tree_count: int = [8, 13, 20][GameSession.graphics_quality]
+	var camp_tree_count: int = [8, 13, 28][GameSession.graphics_quality]
 	for index in camp_tree_count:
 		var angle := TAU * float(index) / float(camp_tree_count) + sin(index * 2.1) * 0.16
 		var radius := 21.0 + float(index % 4) * 4.5
@@ -622,7 +628,7 @@ func _build_high_detail_forest() -> void:
 	# Kenney/MultiMesh layers retain mobile-friendly mid and far coverage.
 	# Build a deliberate opening grove first; route-wide random distribution left
 	# the physical-phone campsite surrounded by large empty green hills.
-	var camp_hero_count: int = [8, 14, 20][GameSession.graphics_quality]
+	var camp_hero_count: int = [8, 14, 28][GameSession.graphics_quality]
 	for index in camp_hero_count:
 		var angle := TAU * float(index) / float(camp_hero_count) + sin(float(index) * 1.73) * 0.19
 		var radius := 18.0 + float(index % 4) * 4.3
@@ -639,7 +645,7 @@ func _build_high_detail_forest() -> void:
 		_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
 		if GameSession.graphics_quality == 0:
 			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
-	var camp_floor_count: int = [20, 38, 62][GameSession.graphics_quality]
+	var camp_floor_count: int = [20, 38, 92][GameSession.graphics_quality]
 	for index in camp_floor_count:
 		var angle := TAU * float(index) / float(camp_floor_count) + sin(float(index) * 2.31) * 0.24
 		var radius := 9.0 + float(index % 7) * 2.75
@@ -656,7 +662,7 @@ func _build_high_detail_forest() -> void:
 		_tint_imported(cover, Color(0.78, 0.88, 0.76, 1.0))
 		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
-	var hero_tree_count: int = [14, 26, 44][GameSession.graphics_quality]
+	var hero_tree_count: int = [14, 26, 60][GameSession.graphics_quality]
 	for index in hero_tree_count:
 		var segment := index % (ROUTE.size() - 1)
 		var t := 0.10 + random.randf() * 0.80
@@ -679,7 +685,7 @@ func _build_high_detail_forest() -> void:
 		if GameSession.graphics_quality == 0:
 			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
-	var floor_cover_count: int = [34, 68, 116][GameSession.graphics_quality]
+	var floor_cover_count: int = [34, 68, 160][GameSession.graphics_quality]
 	for index in floor_cover_count:
 		var segment := index % (ROUTE.size() - 1)
 		var t := random.randf_range(0.04, 0.96)
@@ -700,7 +706,7 @@ func _build_high_detail_forest() -> void:
 		_tint_imported(cover, Color(0.78, 0.88, 0.76, 1.0))
 		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 
-	var hero_rock_count: int = [8, 16, 26][GameSession.graphics_quality]
+	var hero_rock_count: int = [8, 16, 36][GameSession.graphics_quality]
 	for index in hero_rock_count:
 		var segment := index % (ROUTE.size() - 1)
 		var t := random.randf_range(0.08, 0.92)
@@ -738,7 +744,7 @@ func _build_distant_forest() -> void:
 		elif material_name.contains("wood"):
 			forest_mesh.surface_set_material(surface, PrimitiveFactory.material(Color("60412e"), 0.97))
 	template.free()
-	var forest_count: int = [54, 96, 156][GameSession.graphics_quality]
+	var forest_count: int = [54, 96, 240][GameSession.graphics_quality]
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = forest_mesh

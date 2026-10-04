@@ -488,8 +488,11 @@ func _build_rv() -> void:
 	_add_shell_collision("RVMainCollision", Vector3(0.0, -0.03, 0.0), Vector3(2.62, 0.16, 7.55))
 	_add_shell_collision("RVRoofCollision", Vector3(0.0, 2.01, 0.0), Vector3(2.62, 0.18, 7.55))
 	_add_shell_collision("RVLeftWallCollision", Vector3(-1.30, 1.00, 0.0), Vector3(0.16, 1.95, 7.55))
-	_add_shell_collision("RVRightFrontWallCollision", Vector3(1.30, 1.00, -1.64), Vector3(0.16, 1.95, 4.46))
-	_add_shell_collision("RVRightRearWallCollision", Vector3(1.30, 1.00, 2.63), Vector3(0.16, 1.95, 2.30))
+	# End both wall segments outside the finished jambs. The former front segment
+	# overlapped the visible opening by 13 cm, enough to catch a phone player's
+	# capsule even though the door looked fully open.
+	_add_shell_collision("RVRightFrontWallCollision", Vector3(1.30, 1.00, -1.70), Vector3(0.16, 1.95, 4.16))
+	_add_shell_collision("RVRightRearWallCollision", Vector3(1.30, 1.00, 2.68), Vector3(0.16, 1.95, 2.20))
 	_add_shell_collision("RVFrontWallCollision", Vector3(0.0, 1.00, -3.84), Vector3(2.62, 1.95, 0.16))
 	_add_shell_collision("RVRearWallCollision", Vector3(0.0, 1.00, 3.84), Vector3(2.62, 1.95, 0.16))
 
@@ -531,6 +534,7 @@ func _build_rv() -> void:
 	bumper_visual = null
 	_build_steering_visual(interior_source)
 	_build_gear_visual(interior_source)
+	_build_scaled_cockpit_seats()
 	_build_entry_door(interior_source)
 	_build_entry_steps_and_frame()
 	_build_vehicle_lighting()
@@ -542,6 +546,26 @@ func _build_rv() -> void:
 		_add_wheel("Front%s" % side_name, Vector3(side * 1.16, -0.43, -3.00), true, false)
 		_add_wheel("RearForward%s" % side_name, Vector3(side * 1.16, -0.43, 1.12), false, true)
 		_add_wheel("RearAft%s" % side_name, Vector3(side * 1.16, -0.43, 2.14), false, true)
+
+func _build_scaled_cockpit_seats() -> void:
+	# The CC-BY shell shipped two duplicated ~3.4 m-tall seat meshes. They were the
+	# giant headrest seen across the physical-device windshield and their geometry
+	# also escaped through the side opening. Replace them with human-scale seats
+	# behind the eye point, leaving the panoramic glass and dashboard unobstructed.
+	var upholstery := Color("48585a")
+	var vinyl := Color("263235")
+	for side in [-1.0, 1.0]:
+		var side_name := "Driver" if side < 0.0 else "Passenger"
+		var seat_root := Node3D.new()
+		seat_root.name = "%sCockpitSeat" % side_name
+		body_shell.add_child(seat_root)
+		PrimitiveFactory.box(seat_root, "%sSeatBase" % side_name,
+			Vector3(side * 0.66, 0.39, -2.26), Vector3(0.58, 0.20, 0.68), vinyl)
+		var back := PrimitiveFactory.box(seat_root, "%sSeatBack" % side_name,
+			Vector3(side * 0.66, 0.83, -2.02), Vector3(0.60, 0.76, 0.16), upholstery)
+		back.rotation.x = -0.10
+		PrimitiveFactory.box(seat_root, "%sHeadrest" % side_name,
+			Vector3(side * 0.66, 1.31, -1.98), Vector3(0.40, 0.25, 0.15), upholstery)
 
 func _build_steering_visual(exterior: Node3D) -> void:
 	var source_pivot := Vector3(0.53, 0.79, -2.22)

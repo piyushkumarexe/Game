@@ -401,7 +401,7 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("rejected procedural slab exterior is still visible")
 		if not static_interior or not static_interior.mesh or static_interior.mesh.get_surface_count() < 8:
 			failures.append("connected modeled RV interior material surfaces missing")
-		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "RoofCargo", "FrontBumper"]:
+		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "DriverCockpitSeat", "PassengerCockpitSeat", "RoofCargo", "FrontBumper"]:
 			if not smoke_rv.body_shell or not smoke_rv.body_shell.find_child(component_name, true, false):
 				failures.append("modeled RV component missing: %s" % component_name)
 		smoke_rv.set_entry_door_open(true)
@@ -411,7 +411,7 @@ func _run_expedition_smoke_test() -> void:
 		if active_world:
 			var doorway_probe := smoke_rv.global_transform * Vector3(1.30, 0.06, 0.98)
 			var cabin_probe := smoke_rv.global_transform * Vector3(0.0, 0.06, 0.20)
-			var low_approach := smoke_rv.global_transform * Vector3(1.96, -0.86, 0.98)
+			var low_approach := smoke_rv.global_transform * Vector3(2.42, -0.86, 0.98)
 			low_approach.y = active_world.terrain_height(low_approach.x, low_approach.z) + 0.03
 			if active_world.constrain_player_position(low_approach, low_approach).distance_to(low_approach) > 0.05:
 				failures.append("open RV doorway rejects a terrain-level stair approach")
@@ -420,24 +420,37 @@ func _run_expedition_smoke_test() -> void:
 			if active_world.constrain_player_position(cabin_probe, cabin_probe).distance_to(cabin_probe) > 0.05:
 				failures.append("connected RV living interior rejects an upright player")
 			var previous_step_height := -INF
-			for step_x in [2.02, 1.72, 1.43, 1.18, 0.85]:
+			var previous_path_point := low_approach
+			# Walk the complete centreline in phone-sized increments. This verifies
+			# the same horizontal constraint and deterministic step-up path used by
+			# the real controller, not merely one point on either side of the gate.
+			for step_x in [2.24, 2.08, 1.92, 1.76, 1.60, 1.44, 1.28, 1.12, 0.96, 0.80]:
 				var step_probe := smoke_rv.global_transform * Vector3(step_x, -0.86, 0.98)
-				var step_height := active_world.player_floor_height(step_probe)
-				var local_step_height := (smoke_rv.global_transform.affine_inverse() * Vector3(step_probe.x, step_height, step_probe.z)).y
+				step_probe.y = previous_path_point.y
+				var accepted_probe := active_world.constrain_player_position(previous_path_point, step_probe)
+				var accepted_local := smoke_rv.global_transform.affine_inverse() * accepted_probe
+				if absf(accepted_local.x - step_x) > 0.035 or absf(accepted_local.z - 0.98) > 0.035:
+					failures.append("RV entry centreline blocked at x=%.2f (accepted=%s)" % [step_x, accepted_local])
+				var step_height := active_world.player_floor_height(accepted_probe)
+				accepted_probe.y = step_height
+				var local_step_height := (smoke_rv.global_transform.affine_inverse() * accepted_probe).y
 				if local_step_height + 0.03 < previous_step_height:
 					failures.append("RV entry floor descends while walking inward at x=%.2f" % step_x)
 				previous_step_height = local_step_height
+				previous_path_point = accepted_probe
 			if previous_step_height < 0.02:
 				failures.append("RV stair path never reaches connected cabin floor")
 			# Side-on acceptance frame must visibly show the open panel, all three
 			# steps, unobstructed threshold and connected modeled living space.
 			var doorway_camera := Camera3D.new()
 			doorway_camera.name = "DoorwayAcceptanceCamera"
-			doorway_camera.fov = 55.0
+			doorway_camera.fov = 58.0
 			doorway_camera.near = 0.05
 			active_world.add_child(doorway_camera)
-			var doorway_target := smoke_rv.global_transform * Vector3(1.05, 0.82, 0.98)
-			doorway_camera.global_position = smoke_rv.global_transform * Vector3(3.65, 1.68, 2.55)
+			var doorway_target := smoke_rv.global_transform * Vector3(1.02, 0.72, 0.98)
+			# A perpendicular side view exposes the full tread centreline and cabin
+			# portal. The old rear-quarter proof let the open panel hide the gate.
+			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.15, 1.30, 0.98)
 			doorway_camera.look_at(doorway_target, smoke_rv.global_transform.basis.y.normalized())
 			# The gameplay character can stand directly on this sightline after the
 			# movement test. Hide only its visual while documenting the physical entry.

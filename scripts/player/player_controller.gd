@@ -330,7 +330,10 @@ func _build_player() -> void:
 	var collision := CollisionShape3D.new()
 	collision.name = "CollisionShape3D"
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.38
+	# A 0.76 m-wide collider left almost no tolerance in the real 1.04 m coach
+	# doorway. This shoulder-width capsule remains stable but gives touch steering
+	# enough margin to climb the steps without snagging either jamb.
+	capsule.radius = 0.30
 	capsule.height = 1.78
 	collision.shape = capsule
 	collision.position.y = 0.9

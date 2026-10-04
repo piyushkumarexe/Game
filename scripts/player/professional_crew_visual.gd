@@ -108,28 +108,28 @@ func _build_head_accessories() -> void:
 	# A low rounded crown reads as a real expedition/baseball cap. The former
 	# flat cylinder looked like an oversized top hat in the phone close-up.
 	var crown := SphereMesh.new()
-	crown.radius = 0.138
-	crown.height = 0.276
+	crown.radius = 0.112
+	crown.height = 0.224
 	crown.radial_segments = 32
 	crown.rings = 12
-	var crown_instance := _mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.173, 0.0), charcoal)
-	crown_instance.scale.y = 0.47
+	var crown_instance := _mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.157, 0.0), charcoal)
+	crown_instance.scale.y = 0.44
 	var brim := BoxMesh.new()
-	brim.size = Vector3(0.238, 0.018, 0.128)
-	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.126, 0.105), charcoal)
+	brim.size = Vector3(0.202, 0.016, 0.108)
+	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.120, 0.094), charcoal)
 	brim_instance.rotation.x = -0.10
 
 	# Leave a visible nose bridge between compact lenses instead of one heavy
 	# black strip across the character's entire face.
 	for side in [-1.0, 1.0]:
 		var lens_mesh := BoxMesh.new()
-		lens_mesh.size = Vector3(0.082, 0.041, 0.010)
+		lens_mesh.size = Vector3(0.064, 0.034, 0.009)
 		var lens_instance := _mesh(accessory_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.060, 0.057, 0.150), lens)
+			Vector3(side * 0.043, 0.054, 0.148), lens)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
-	bridge.size = Vector3(0.029, 0.007, 0.012)
-	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.058, 0.153), charcoal)
+	bridge.size = Vector3(0.018, 0.006, 0.010)
+	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.055, 0.151), charcoal)
 
 func _resolve_clip(requested: String) -> StringName:
 	if not animation_player:
