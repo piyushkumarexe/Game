@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ['main']
   workflow_dispatch:
+    inputs:
+      emit_preview_log:
+        description: 'Emit compact base64 render previews for visual review'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -82,6 +88,18 @@ jobs:
             echo "::error file=scenes/main.tscn,title=Playable 3D render smoke::$detail"
           fi
           exit $status
+      - name: Emit compact render previews
+        if: github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+          for source in build/validation/expedition-render.png build/validation/rv-cockpit-render.png; do
+            label=$(basename "$source" .png)
+            convert "$source" -resize 480x270 -strip -quality 72 "/tmp/${label}.jpg"
+            echo "${label}_BASE64_BEGIN"
+            base64 -w0 "/tmp/${label}.jpg"
+            echo
+            echo "${label}_BASE64_END"
+          done
       - name: Upload 3D render proof
         uses: actions/upload-artifact@v7.0.1
         with:
