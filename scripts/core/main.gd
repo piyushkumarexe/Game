@@ -270,6 +270,12 @@ func _run_expedition_smoke_test() -> void:
 					failures.append("animated third-person character missing")
 				elif local_player.body_animation_name not in ["Walk", "Run"]:
 					failures.append("moving survivor did not enter walk/run animation (%s)" % local_player.body_animation_name)
+				if local_player.body_rig:
+					if local_player.body_rig.skeletons.size() < 2:
+						failures.append("professional head/outfit skeletons did not import")
+					for accessory in ["ExpeditionCapCrown", "SunglassLens", "PaddedVestPanel"]:
+						if not local_player.body_rig.find_child(accessory, true, false):
+							failures.append("professional crew styling missing: %s" % accessory)
 				if local_player.body_visual and Vector2(movement_velocity.x, movement_velocity.z).length() > 0.5:
 					var visual_forward := local_player.body_visual.global_transform.basis.z.normalized()
 					var travel_forward := Vector3(movement_velocity.x, 0.0, movement_velocity.z).normalized()
@@ -332,19 +338,19 @@ func _run_expedition_smoke_test() -> void:
 					failures.append("%s lacks its modeled tire/rim assembly" % child.name)
 			elif child is CollisionShape3D and child.name.begins_with("RV"):
 				shell_collision_count += 1
-		if wheel_count != 4:
-			failures.append("detailed RV requires 4 physical wheels, found %d" % wheel_count)
+		if wheel_count != 6:
+			failures.append("professional tandem-axle RV requires 6 physical wheels, found %d" % wheel_count)
 		if shell_collision_count != 7:
 			failures.append("RV requires a 7-piece hollow shell collider, found %d" % shell_collision_count)
-		var static_exterior := smoke_rv.body_shell.find_child("StaticRVExterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
+		var rejected_shell := smoke_rv.body_shell.find_child("StaticRVExterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
+		var professional_exterior := smoke_rv.body_shell.find_child("ProfessionalGMCMotorhomeExterior", true, false) as Node3D if smoke_rv.body_shell else null
 		var static_interior := smoke_rv.body_shell.find_child("StaticRVInterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
-		var static_cockpit := smoke_rv.body_shell.find_child("StaticCockpitFrame", true, false) as MeshInstance3D if smoke_rv.body_shell else null
-		if not static_exterior or not static_exterior.mesh or static_exterior.mesh.get_surface_count() < 17:
-			failures.append("detailed RV exterior material surfaces missing")
+		if not professional_exterior or professional_exterior.find_children("*", "MeshInstance3D", true, false).size() < 5:
+			failures.append("professional GMC exterior meshes missing")
+		if rejected_shell and rejected_shell.visible:
+			failures.append("rejected procedural slab exterior is still visible")
 		if not static_interior or not static_interior.mesh or static_interior.mesh.get_surface_count() < 8:
-			failures.append("modeled RV interior material surfaces missing")
-		if not static_cockpit or not static_cockpit.mesh or static_cockpit.mesh.get_surface_count() < 4:
-			failures.append("panoramic cockpit frame/glazing surfaces missing")
+			failures.append("connected modeled RV interior material surfaces missing")
 		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "RoofCargo", "FrontBumper"]:
 			if not smoke_rv.body_shell or not smoke_rv.body_shell.find_child(component_name, true, false):
 				failures.append("modeled RV component missing: %s" % component_name)
@@ -388,9 +394,9 @@ func _run_expedition_smoke_test() -> void:
 						var settled_wheel := settled_child as VehicleWheel3D
 						var wheel_ground := active_world.terrain_height(settled_wheel.global_position.x, settled_wheel.global_position.z)
 						var wheel_clearance := settled_wheel.global_position.y - wheel_ground
-						if wheel_clearance < 0.54:
+						if wheel_clearance < 0.32:
 							failures.append("%s sank below terrain after physics release (clearance %.2f m)" % [settled_wheel.name, wheel_clearance])
-						elif wheel_clearance > 0.95:
+						elif wheel_clearance > 0.62:
 							failures.append("%s is floating above terrain after physics release (clearance %.2f m)" % [settled_wheel.name, wheel_clearance])
 
 	if active_hud and is_instance_valid(active_hud):
@@ -473,8 +479,8 @@ func _run_expedition_smoke_test() -> void:
 		image.save_png("res://build/validation/expedition-render.png")
 
 	# A second render gate proves that first person occupies the world-space RV.
-	# Interior and cockpit frame remain visible while only the opaque outer coach
-	# skin is locally culled. A camera-attached dashboard overlay cannot pass.
+	# The authored shell remains present: back-face culling opens it naturally from
+	# inside while real glazing, dashboard and connected cabin stay world-space.
 	if GameSession.local_player and is_instance_valid(GameSession.local_player) and GameSession.rv:
 		var cockpit_player := GameSession.local_player as ExpeditionPlayer
 		var cockpit_rv := GameSession.rv as ExpeditionRV
@@ -488,14 +494,14 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("driver-eye first-person camera did not become current")
 			if not cockpit_rv.body_shell.visible:
 				failures.append("first-person incorrectly hid the world-space RV model")
-			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.48, -1.55)
+			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.30, -2.30)
 			if cockpit_player.first_camera.global_position.distance_to(expected_eye) > 0.24:
 				failures.append("driver camera is not located in the modeled cockpit")
-			for cockpit_part in ["CockpitSteeringWheel", "StaticRVInterior", "StaticCockpitFrame", "GearLever"]:
+			for cockpit_part in ["CockpitSteeringWheel", "StaticRVInterior", "GearLever"]:
 				if not cockpit_rv.body_shell.find_child(cockpit_part, true, false):
 					failures.append("first-person cockpit part missing: %s" % cockpit_part)
-			if cockpit_rv.exterior_shell and cockpit_rv.exterior_shell.visible:
-				failures.append("opaque exterior skin still blocks the driver-eye camera")
+			if not cockpit_rv.exterior_shell or not cockpit_rv.exterior_shell.visible:
+				failures.append("professional shell/glazing disappeared in driver-eye view")
 			if not cockpit_rv.interior_shell or not cockpit_rv.interior_shell.visible:
 				failures.append("modeled interior is hidden in driver-eye view")
 			var cockpit_image := get_viewport().get_texture().get_image()

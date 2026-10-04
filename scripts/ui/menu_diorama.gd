@@ -2,8 +2,9 @@ class_name MenuDiorama
 extends Node3D
 ## Live 3D title-screen campsite assembled from the same models used in play.
 
-const RV_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
-const RV_WHEEL_SCENE: PackedScene = preload("res://assets/models/rv_wheel.gltf")
+const RV_INTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
+const RV_SCENE: PackedScene = preload("res://assets/third_party/gmc_motorhome/motorhome.gltf")
+const RV_WHEEL_SCENE: PackedScene = preload("res://assets/third_party/gmc_motorhome/wheel.gltf")
 const PINE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tree-pinetallb-detailed.glb")
 const ROCK_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/rock-largeb.glb")
 const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
@@ -25,17 +26,17 @@ func _ready() -> void:
 	camera = Camera3D.new()
 	camera.name = "MenuCamera"
 	camera.fov = 53.0
-	camera.position = Vector3(10.8, 5.0, 11.8)
+	camera.position = Vector3(10.8, 4.15, 12.2)
 	add_child(camera)
-	camera.look_at(Vector3(1.0, 1.75, -0.6), Vector3.UP)
+	camera.look_at(Vector3(1.0, 1.38, -0.6), Vector3.UP)
 	camera.make_current()
 
 func _process(delta: float) -> void:
 	elapsed += delta
 	if not is_instance_valid(camera):
 		return
-	camera.position = Vector3(10.8 + sin(elapsed * 0.16) * 0.55, 5.0 + sin(elapsed * 0.22) * 0.12, 11.8 + cos(elapsed * 0.16) * 0.5)
-	camera.look_at(Vector3(1.0, 1.75, -0.6), Vector3.UP)
+	camera.position = Vector3(10.8 + sin(elapsed * 0.16) * 0.55, 4.15 + sin(elapsed * 0.22) * 0.10, 12.2 + cos(elapsed * 0.16) * 0.5)
+	camera.look_at(Vector3(1.0, 1.38, -0.6), Vector3.UP)
 	if is_instance_valid(rig):
 		rig.rotation.y = -0.68 + sin(elapsed * 0.3) * 0.012
 
@@ -108,17 +109,31 @@ func _build_rig() -> void:
 	rig.rotation.y = -0.68
 	add_child(rig)
 	var exterior := RV_SCENE.instantiate() as Node3D
-	exterior.name = "OriginalDustboundCamper"
-	exterior.position.y = 1.25
+	exterior.name = "ProfessionalGMCMotorhome"
+	exterior.position.y = 1.37
+	exterior.rotation.y = PI
+	exterior.scale = Vector3.ONE * 0.98
 	rig.add_child(exterior)
-	for x in [-1.24, 1.24]:
-		for z in [-2.35, 1.90]:
-			_add_menu_wheel(Vector3(x, 0.63, z))
+	var interior := RV_INTERIOR_SCENE.instantiate() as Node3D
+	interior.name = "MenuConnectedLivingInterior"
+	interior.position.y = 0.86
+	rig.add_child(interior)
+	var old_shell := interior.find_child("StaticRVExterior", true, false) as Node3D
+	if old_shell:
+		old_shell.visible = false
+	var old_frame := interior.find_child("StaticCockpitFrame", true, false) as Node3D
+	if old_frame:
+		old_frame.visible = false
+	for x in [-1.16, 1.16]:
+		for z in [-3.00, 1.12, 2.14]:
+			_add_menu_wheel(Vector3(x, 0.43, z))
 
 func _add_menu_wheel(wheel_position: Vector3) -> void:
 	var wheel := RV_WHEEL_SCENE.instantiate() as Node3D
 	wheel.name = "DetailedMenuWheel"
 	wheel.position = wheel_position
+	var side_scale := -1.145 if wheel_position.x < 0.0 else 1.145
+	wheel.scale = Vector3(side_scale, 1.145, 1.145)
 	rig.add_child(wheel)
 
 func _build_scenery() -> void:

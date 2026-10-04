@@ -710,19 +710,6 @@ for angle_index in range(6):
     wheel.cylinder("LugNut", (0.18, math.cos(angle) * 0.17, math.sin(angle) * 0.17),
                    0.028, 0.055, "DarkMetal", 8, "x")
 wheel.save()
-crew = Obj("crew_member")
-crew.ellipsoid("Torso", (0, 1.05, 0), (.48, .68, .36), "CrewCloth", 12, 7)
-crew.ellipsoid("Head", (0, 1.92, -.03), (.36, .38, .35), "Skin", 12, 7)
-crew.ellipsoid("Nose", (0, 1.88, -.35), (.11, .09, .14), "Skin", 8, 5)
-crew.cylinder("LeftLeg", (-.22, .37, 0), .16, .65, "Canvas", 9)
-crew.cylinder("RightLeg", (.22, .37, 0), .16, .65, "Canvas", 9)
-crew.cylinder("LeftArm", (-.53, 1.08, 0), .12, .72, "Skin", 9)
-crew.cylinder("RightArm", (.53, 1.08, 0), .12, .72, "Skin", 9)
-crew.cylinder("Cap", (0, 2.25, -.02), .37, .12, "Denim", 12)
-crew.box("CapBrim", (0, 2.22, -.37), (.48, .05, .28), "Denim")
-crew.box("Backpack", (0, 1.17, .39), (.58, .72, .23), "Canvas")
-crew.save()
-
 crate = Obj("trail_crate")
 crate.box("CrateCore", (0, 0, 0), (.86, .70, .72), "Wood")
 for y in (-.28, 0, .28):

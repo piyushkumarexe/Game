@@ -13,8 +13,9 @@ const SHIFT_PATTERN: Array[Vector2] = [
 	Vector2(-0.24, -0.20), Vector2.ZERO, Vector2(-0.24, 0.20),
 	Vector2(0.24, 0.20), Vector2(-0.24, 0.0), Vector2(0.24, 0.0), Vector2(0.24, -0.20)
 ]
-const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
-const RV_WHEEL_SCENE: PackedScene = preload("res://assets/models/rv_wheel.gltf")
+const RV_INTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
+const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/third_party/gmc_motorhome/motorhome.gltf")
+const RV_WHEEL_SCENE: PackedScene = preload("res://assets/third_party/gmc_motorhome/wheel.gltf")
 const RVDoorInteractableScript = preload("res://scripts/vehicles/rv_door_interactable.gd")
 
 var prompt := "DRIVE THE RV"
@@ -194,7 +195,7 @@ func _release_driver(id: int) -> void:
 	if Net.world and Net.world.has_method("terrain_height"):
 		var yaw := global_rotation.y
 		var parked_origin := global_position
-		parked_origin.y = float(Net.world.terrain_height(parked_origin.x, parked_origin.z)) + 1.25
+		parked_origin.y = float(Net.world.terrain_height(parked_origin.x, parked_origin.z)) + 0.86
 		global_transform = Transform3D(Basis(Vector3.UP, yaw), parked_origin)
 	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
@@ -206,29 +207,29 @@ func _release_driver(id: int) -> void:
 	brake = 95.0
 	freeze = true
 
-func set_local_driver_first_person(active: bool) -> void:
-	# Keep the world-space cockpit, glazing and interior visible, but cull the
-	# opaque outside coach skin for the local driver. This prevents the camera
-	# being swallowed by a cream body panel without falling back to a HUD overlay.
+func set_local_driver_first_person(_active: bool) -> void:
+	# The professional shell is authored for an interior camera: exterior faces
+	# cull from inside while glazing remains visible. Never hide the motorhome in
+	# first person; doing so removed the real windshield and made the cab a fake
+	# overlay. The old duplicate frame remains disabled in every view.
 	if body_shell:
 		body_shell.visible = true
 	if exterior_shell:
-		exterior_shell.visible = not active
+		exterior_shell.visible = true
 	if interior_shell:
 		interior_shell.visible = true
 	if cockpit_frame:
-		cockpit_frame.visible = true
+		cockpit_frame.visible = false
 
 func driver_seat_transform() -> Transform3D:
-	# The player camera is 1.62 m above its origin. Keep the eye ahead of the seat
-	# back/headrest (front is negative Z), above the wheel, and below the roof.
-	# The previous -1.15 Z position sat on the seat-back surface and rendered the
-	# upholstery as giant upper/lower slabs instead of a usable cockpit.
-	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.14, -1.55))
-	return seat
+	# Camera eye = origin + 1.62 m. This puts the physical-device eye at 1.30 m,
+	# behind the modeled dashboard and centered in the GMC panoramic windshield,
+	# with clear distance from the seat back, header, steering rim and console.
+	return global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.32, -2.30))
 
 func exit_seat_transform() -> Transform3D:
-	return global_transform * Transform3D(Basis.IDENTITY, Vector3(-2.2, 0.1, -0.8))
+	# Exit beside the real passenger doorway rather than through the opposite wall.
+	return global_transform * Transform3D(Basis.IDENTITY, Vector3(2.15, 0.02, 0.98))
 
 func repair(value: float) -> void:
 	health = minf(100.0, health + value)
@@ -279,7 +280,7 @@ func _apply_grounded_stability(_delta: float) -> void:
 		if Net.world and Net.world.has_method("terrain_height"):
 			var ground_height := float(Net.world.terrain_height(wheel.global_position.x, wheel.global_position.z))
 			var clearance := wheel.global_position.y - ground_height
-			var compression := maxf(0.0, 0.78 - clearance)
+			var compression := maxf(0.0, 0.45 - clearance)
 			if compression > 0.0:
 				var spring_force := compression * mass * 28.0 - linear_velocity.y * mass * 4.8
 				spring_force = clampf(spring_force, 0.0, mass * 9.0)
@@ -481,40 +482,63 @@ func _add_shell_collision(collision_name: String, collision_position: Vector3, s
 	add_child(collision)
 
 func _build_rv() -> void:
-	# A compound hollow shell replaces the old solid 2.5 x 6.8 m collision box.
-	# The floor still ends above the tire contact patch, while the split right wall
-	# leaves a genuine passenger-door path into the connected moving interior.
-	_add_shell_collision("RVMainCollision", Vector3(0.0, -0.03, -0.08), Vector3(2.48, 0.16, 6.52))
-	_add_shell_collision("RVRoofCollision", Vector3(0.0, 2.12, -0.08), Vector3(2.48, 0.22, 6.52))
-	_add_shell_collision("RVLeftWallCollision", Vector3(-1.20, 1.08, -0.08), Vector3(0.18, 2.02, 6.52))
-	_add_shell_collision("RVRightFrontWallCollision", Vector3(1.20, 1.08, -1.43), Vector3(0.18, 2.02, 3.82))
-	_add_shell_collision("RVRightRearWallCollision", Vector3(1.20, 1.08, 2.33), Vector3(0.18, 2.02, 1.70))
-	_add_shell_collision("RVFrontWallCollision", Vector3(0.0, 1.08, -3.36), Vector3(2.48, 2.02, 0.18))
-	_add_shell_collision("RVRearWallCollision", Vector3(0.0, 1.08, 3.20), Vector3(2.48, 2.02, 0.18))
+	# Eight-metre vintage GMC proportions with a hollow, traversable shell. The
+	# split passenger wall matches the actual cut mesh doorway; no invisible slab
+	# sits across the threshold or the connected living floor.
+	_add_shell_collision("RVMainCollision", Vector3(0.0, -0.03, 0.0), Vector3(2.62, 0.16, 7.55))
+	_add_shell_collision("RVRoofCollision", Vector3(0.0, 2.01, 0.0), Vector3(2.62, 0.18, 7.55))
+	_add_shell_collision("RVLeftWallCollision", Vector3(-1.30, 1.00, 0.0), Vector3(0.16, 1.95, 7.55))
+	_add_shell_collision("RVRightFrontWallCollision", Vector3(1.30, 1.00, -1.64), Vector3(0.16, 1.95, 4.46))
+	_add_shell_collision("RVRightRearWallCollision", Vector3(1.30, 1.00, 2.63), Vector3(0.16, 1.95, 2.30))
+	_add_shell_collision("RVFrontWallCollision", Vector3(0.0, 1.00, -3.84), Vector3(2.62, 1.95, 0.16))
+	_add_shell_collision("RVRearWallCollision", Vector3(0.0, 1.00, 3.84), Vector3(2.62, 1.95, 0.16))
 
 	body_shell = Node3D.new()
 	body_shell.name = "ExpeditionRVBody"
 	add_child(body_shell)
-	var exterior := RV_EXTERIOR_SCENE.instantiate() as Node3D
-	exterior.name = "DustboundExpeditionRV"
-	body_shell.add_child(exterior)
-	# One coherent vintage Class-A scene: flat front, panoramic split windshield,
-	# real window/door apertures, mirrors, lights, service hatches, roof equipment,
-	# cockpit, seats, kitchen, dinette and rear bed. Named glTF nodes are retained.
-	exterior_shell = exterior.find_child("StaticRVExterior", true, false) as Node3D
-	interior_shell = exterior.find_child("StaticRVInterior", true, false) as Node3D
-	cockpit_frame = exterior.find_child("StaticCockpitFrame", true, false) as Node3D
-	roof_crate = exterior.find_child("RoofCargo", true, false) as Node3D
-	bumper_visual = exterior.find_child("FrontBumper", true, false) as Node3D
-	_build_steering_visual(exterior)
-	_build_gear_visual(exterior)
-	_build_entry_door(exterior)
+
+	# Professional 43.4k-triangle CC-BY hero exterior. Source front is +Z, hence
+	# the 180-degree yaw. Scale/offset align its three authored axles at a genuine
+	# 0.43 m tire radius and place the cabin floor 0.86 m above terrain.
+	var motorhome := RV_EXTERIOR_SCENE.instantiate() as Node3D
+	motorhome.name = "ProfessionalGMCMotorhomeExterior"
+	motorhome.scale = Vector3.ONE * 0.98
+	motorhome.rotation.y = PI
+	motorhome.position.y = 0.51
+	body_shell.add_child(motorhome)
+	exterior_shell = motorhome
+
+	# Retain the detailed connected Dustbound living layout (dashboard, steering,
+	# seats, refrigerator, kitchen, dinette, bed and storage) behind the new shell.
+	# Its rejected slab exterior and duplicate windshield frame never render.
+	var interior_source := RV_INTERIOR_SCENE.instantiate() as Node3D
+	interior_source.name = "ConnectedModeledLivingInterior"
+	body_shell.add_child(interior_source)
+	var old_exterior := interior_source.find_child("StaticRVExterior", true, false) as Node3D
+	if old_exterior:
+		old_exterior.visible = false
+	interior_shell = interior_source.find_child("StaticRVInterior", true, false) as Node3D
+	cockpit_frame = interior_source.find_child("StaticCockpitFrame", true, false) as Node3D
+	if cockpit_frame:
+		cockpit_frame.visible = false
+	roof_crate = interior_source.find_child("RoofCargo", true, false) as Node3D
+	var old_bumper := interior_source.find_child("FrontBumper", true, false) as Node3D
+	if old_bumper:
+		old_bumper.visible = false
+	bumper_visual = null
+	_build_steering_visual(interior_source)
+	_build_gear_visual(interior_source)
+	_build_entry_door(interior_source)
+	_build_entry_steps_and_frame()
 	_build_vehicle_lighting()
 
-	_add_wheel("FrontLeft", Vector3(-1.24, -0.62, -2.35), true, false)
-	_add_wheel("FrontRight", Vector3(1.24, -0.62, -2.35), true, false)
-	_add_wheel("RearLeft", Vector3(-1.24, -0.62, 1.90), false, true)
-	_add_wheel("RearRight", Vector3(1.24, -0.62, 1.90), false, true)
+	# Front steer axle plus a correctly spaced tandem rear bogie. Every wheel uses
+	# Karol Miklas' modeled tire/rim geometry and rotates on VehicleWheel3D.
+	for side in [-1.0, 1.0]:
+		var side_name := "Left" if side < 0.0 else "Right"
+		_add_wheel("Front%s" % side_name, Vector3(side * 1.16, -0.43, -3.00), true, false)
+		_add_wheel("RearForward%s" % side_name, Vector3(side * 1.16, -0.43, 1.12), false, true)
+		_add_wheel("RearAft%s" % side_name, Vector3(side * 1.16, -0.43, 2.14), false, true)
 
 func _build_steering_visual(exterior: Node3D) -> void:
 	steering_visual_root = Node3D.new()
@@ -550,6 +574,20 @@ func _build_entry_door(exterior: Node3D) -> void:
 	entry_door_interactable.position = Vector3(1.58, 0.91, 0.98)
 	entry_door_interactable.setup(self)
 	add_child(entry_door_interactable)
+
+func _build_entry_steps_and_frame() -> void:
+	# Three visible treads bridge real terrain height to the unobstructed cabin
+	# floor. The frame masks the deliberately opened source-mesh edge and makes
+	# the portal read as manufactured coachwork rather than a texture decal.
+	var metal := Color("3b3d3d")
+	var tread := Color("272a28")
+	PrimitiveFactory.box(body_shell, "DoorFrameFront", Vector3(1.35, 1.00, 0.46), Vector3(0.10, 1.96, 0.10), metal)
+	PrimitiveFactory.box(body_shell, "DoorFrameRear", Vector3(1.35, 1.00, 1.50), Vector3(0.10, 1.96, 0.10), metal)
+	PrimitiveFactory.box(body_shell, "DoorFrameHeader", Vector3(1.35, 1.98, 0.98), Vector3(0.10, 0.12, 1.14), metal)
+	PrimitiveFactory.box(body_shell, "EntryThreshold", Vector3(1.40, -0.02, 0.98), Vector3(0.28, 0.10, 1.02), Color("b1a78e"))
+	PrimitiveFactory.box(body_shell, "EntryStepUpper", Vector3(1.57, -0.16, 0.98), Vector3(0.48, 0.12, 1.00), tread)
+	PrimitiveFactory.box(body_shell, "EntryStepMiddle", Vector3(1.78, -0.38, 0.98), Vector3(0.54, 0.12, 0.94), tread)
+	PrimitiveFactory.box(body_shell, "EntryStepLower", Vector3(2.00, -0.60, 0.98), Vector3(0.58, 0.12, 0.88), tread)
 
 func toggle_entry_door() -> void:
 	set_entry_door_open(not entry_door_open)
@@ -604,31 +642,31 @@ func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: boo
 	var wheel := VehicleWheel3D.new()
 	wheel.name = wheel_name
 	wheel.position = wheel_position
-	wheel.wheel_radius = 0.61
-	wheel.wheel_rest_length = 0.30
-	wheel.suspension_travel = 0.32
-	wheel.suspension_stiffness = 25.0
-	wheel.suspension_max_force = 20500.0
-	wheel.damping_compression = 0.78
-	wheel.damping_relaxation = 0.92
-	wheel.wheel_friction_slip = 1.72
+	wheel.wheel_radius = 0.43
+	wheel.wheel_rest_length = 0.21
+	wheel.suspension_travel = 0.24
+	wheel.suspension_stiffness = 31.0
+	wheel.suspension_max_force = 16500.0
+	wheel.damping_compression = 0.82
+	wheel.damping_relaxation = 0.94
+	wheel.wheel_friction_slip = 1.82
 	wheel.use_as_steering = steering_wheel
 	wheel.use_as_traction = traction_wheel
 	add_child(wheel)
-	# VehicleWheel3D uses a suspension ray rather than a solid rolling shape.
-	# A small physical tire core prevents the heavy coach body from falling all
-	# the way to its chassis on devices where a newly unfrozen suspension misses
-	# its first terrain contact. It sits inside the visible 0.61 m tire, so the
-	# ray suspension remains the first contact in normal operation.
+	# The compact core sits within the authored 0.43 m sidewall and only catches
+	# a missed first suspension ray; it cannot produce the old buried/floating
+	# 0.61 m cylinders visible in the physical-device rejection screenshots.
 	var tire_contact := CollisionShape3D.new()
 	tire_contact.name = "%sTireContact" % wheel_name
 	var tire_shape := CylinderShape3D.new()
-	tire_shape.radius = 0.56
-	tire_shape.height = 0.34
+	tire_shape.radius = 0.40
+	tire_shape.height = 0.30
 	tire_contact.shape = tire_shape
 	tire_contact.position = wheel_position
 	tire_contact.rotation.z = PI * 0.5
 	add_child(tire_contact)
 	var assembly := RV_WHEEL_SCENE.instantiate() as Node3D
-	assembly.name = "%sDetailedAssembly" % wheel_name
+	assembly.name = "DetailedWheelAssembly"
+	var side_scale := -1.145 if wheel_position.x < 0.0 else 1.145
+	assembly.scale = Vector3(side_scale, 1.145, 1.145)
 	wheel.add_child(assembly)

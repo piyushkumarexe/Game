@@ -7,7 +7,7 @@ const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
 const TOUCH_LOOK_SENSITIVITY := 0.0042
-const StylizedCrewVisualScript = preload("res://scripts/player/stylized_crew_visual.gd")
+const ProfessionalCrewVisualScript = preload("res://scripts/player/professional_crew_visual.gd")
 const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
 
 var peer_id := 1
@@ -30,7 +30,7 @@ var third_person := false
 var spring_arm: SpringArm3D
 var interact_ray: RayCast3D
 var body_visual: Node3D
-var body_rig: StylizedCrewVisual
+var body_rig: ProfessionalCrewVisual
 var body_animation: AnimationPlayer
 var body_animation_name := ""
 var movement_direction := Vector3.ZERO
@@ -275,11 +275,13 @@ func enter_driver(vehicle: Node) -> void:
 	head.rotation = Vector3.ZERO
 	look_pitch = 0.0
 	spring_arm.add_excluded_object(vehicle.get_rid())
-	spring_arm.spring_length = 8.4
-	spring_arm.position = Vector3(-0.53, 1.10, 1.10)
-	# A slightly elevated three-quarter chase view exposes wheel contact and the
-	# coach side instead of staring level into the full-height rear wall.
-	spring_arm.rotation = Vector3(-0.12, 0.30, 0.0)
+	# Gamer-facing rear three-quarter view: the pivot stays near window height and
+	# the arm trails just beyond the eight-metre coach. The previous high pivot
+	# turned the physical phone view into an unusable roof inspection camera.
+	spring_arm.spring_length = 7.6
+	spring_arm.position = Vector3(-0.40, -0.05, 0.30)
+	spring_arm.rotation = Vector3(-0.08, 0.22, 0.0)
+	third_camera.fov = 68.0
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
 	if peer_id == multiplayer.get_unique_id():
@@ -332,11 +334,12 @@ func _build_player() -> void:
 	collision.position.y = 0.9
 	add_child(collision)
 
-	body_rig = StylizedCrewVisualScript.new()
+	body_rig = ProfessionalCrewVisualScript.new()
 	body_visual = body_rig
-	body_visual.name = "RoundedExpeditionCrew"
+	body_visual.name = "ProfessionalExpeditionCrew"
+	# Quaternius faces +Z; gameplay forward is -Z.
 	body_visual.rotation.y = PI
-	body_visual.scale = Vector3.ONE * 0.82
+	body_visual.scale = Vector3.ONE * 0.98
 	add_child(body_visual)
 	body_animation = null
 	body_animation_name = "Idle"
@@ -348,7 +351,7 @@ func _build_player() -> void:
 	first_camera = Camera3D.new()
 	first_camera.name = "FirstPersonCamera"
 	first_camera.fov = 76.0
-	first_camera.near = 0.045
+	first_camera.near = 0.030
 	head.add_child(first_camera)
 	camera = first_camera
 

@@ -816,7 +816,7 @@ func _create_checkpoint(position: Vector3, index: int, title: String, size: Vect
 func _on_checkpoint_entered(body: Node, index: int, title: String, checkpoint_position: Vector3) -> void:
 	if body != rv or (Net.is_online and not multiplayer.is_server()):
 		return
-	var safe_height := terrain_height(checkpoint_position.x, checkpoint_position.z) + 1.25
+	var safe_height := terrain_height(checkpoint_position.x, checkpoint_position.z) + 0.86
 	last_checkpoint_transform = Transform3D(rv.global_transform.basis.orthonormalized(),
 		Vector3(checkpoint_position.x, safe_height, checkpoint_position.z))
 	GameSession.set_checkpoint(index, title)
@@ -829,7 +829,7 @@ func _spawn_rv() -> void:
 	var basis := Basis(Vector3.UP, PI)
 	var spawn_x := ROUTE[0].x + 2.2
 	var spawn_z := ROUTE[0].z - 2.0
-	var spawn := Vector3(spawn_x, terrain_height(spawn_x, spawn_z) + 1.25, spawn_z)
+	var spawn := Vector3(spawn_x, terrain_height(spawn_x, spawn_z) + 0.86, spawn_z)
 	rv.setup(Transform3D(basis, spawn))
 	GameSession.rv = rv
 

@@ -24,7 +24,7 @@ The handcrafted route contains:
 
 ### 3D vehicle
 
-- Four-wheel `VehicleBody3D` RV with suspension, steering and rear-wheel traction
+- Six-wheel tandem-axle `VehicleBody3D` motorhome with suspension, front steering and rear-bogie traction
 - Low-center-of-mass stability tuning, parked braking, velocity guards and a sane 115 km/h ceiling
 - Reverse, neutral and five forward gear ratios
 - Fuel, layered health, impact damage and performance degradation
@@ -64,9 +64,9 @@ The handcrafted route contains:
 - A brighter live 3D campsite home screen and deliberately clustered opening forest
 - Fully draggable, persistent mobile control layout with adjustable size, opacity, swipe sensitivity, and FAST/BALANCED/HIGH quality profiles
 - Context-sensitive mobile BRAKE plus movement, use, sprint, jump, view, gears, and twin-winch controls
-- Original rounded, stout crew character with cap, sunglasses, padded vest, articulated limbs, travel-facing rotation, and procedural idle/walk/run/jump/landing motion
-- Original Class C RV with four suspension-driven all-terrain wheel assemblies, tapered cab, split windshield, mirrors, lamps, hinged entry door, step, service panels, roof equipment, awning, ladder and spare
-- Separately culled exterior skin plus continuously modeled cockpit/living interior with movable steering wheel and physical gear lever, dashboard, gauges, seats, refrigerator, kitchen, dinette, storage and bed—driver-eye view no longer uses a dashboard overlay
+- Professionally modeled and skinned Quaternius CC0 crew base/Ranger outfit with normal facial spacing, original cap, sunglasses and padded-vest styling, named-bone idle/walk/run/jump/landing motion, and travel-facing rotation
+- Karol Miklas' professionally shaped CC-BY vintage GMC motorhome hero mesh with curved coachwork, PBR paint/glazing, fascia, lamps, mirrors, trim, roof rack and six separated suspension-driven tire/rim assemblies
+- Genuinely opened passenger doorway with three exterior steps, unobstructed split shell collision, and a connected modeled cockpit/living interior containing movable steering, physical gear lever, dashboard, gauges, seats, refrigerator, kitchen, dinette, storage and bed—driver-eye view uses world geometry rather than an overlay
 - Layered near/mid/far forest using textured Quaternius CC0 hero trees, undergrowth and rocks alongside mobile-batched Kenney scenery
 - Centered non-overhead chase camera plus separate modeled-cockpit render validation
 - Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, batched RV materials, and throttled vehicle HUD updates for mobile performance
@@ -99,7 +99,7 @@ The handcrafted route contains:
 - iOS 15+ Xcode export preset
 - Multiplayer/voice implementation retained but disabled in the 0.10 correction UI and runtime
 
-Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. A curated textured forest layer comes from Quaternius' CC0 Stylized Nature MegaKit Standard edition. Provenance and preserved license notices are documented under [`assets/third_party`](assets/third_party). The RV, crew character, map and game-specific assets remain original.
+Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. Quaternius' CC0 work supplies the textured nature layer and the professionally rigged crew base/Ranger clothing. The hero exterior is based on Karol Miklas' “FREE GMC Motorhome reimagined low poly” under CC-BY-4.0. Dustbound's connected interior, functional doorway/steps, character accessories, map, mechanisms and game-specific assets are original. Exact provenance, modifications and preserved license notices are documented under [`assets/third_party`](assets/third_party).
 
 See [`docs/game-research.md`](docs/game-research.md) for the researched mechanic breakdown and the original-design boundary.
 
