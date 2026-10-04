@@ -122,9 +122,9 @@ func _apply_pose(stride: float, arm_swing: float, crouch: float, weight: float) 
 	# gait swing. Knees flex on every planted half-cycle instead of remaining rigid.
 	for skeleton in skeletons:
 		_set_bone(skeleton, "upperarm_l",
-			Quaternion(Vector3.FORWARD, 0.78) * Quaternion(Vector3.RIGHT, -arm_swing), weight)
+			Quaternion(Vector3.FORWARD, 1.42) * Quaternion(Vector3.RIGHT, -arm_swing), weight)
 		_set_bone(skeleton, "upperarm_r",
-			Quaternion(Vector3.FORWARD, -0.78) * Quaternion(Vector3.RIGHT, arm_swing), weight)
+			Quaternion(Vector3.FORWARD, -1.42) * Quaternion(Vector3.RIGHT, arm_swing), weight)
 		_set_bone(skeleton, "lowerarm_l", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
 		_set_bone(skeleton, "lowerarm_r", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
 		_set_bone(skeleton, "thigh_l", Quaternion(Vector3.RIGHT, stride + crouch), weight)
