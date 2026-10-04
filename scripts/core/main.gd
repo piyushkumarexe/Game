@@ -199,7 +199,7 @@ func _run_expedition_smoke_test() -> void:
 		var local_player: ExpeditionPlayer = GameSession.local_player as ExpeditionPlayer
 		if not local_player.global_position.is_finite() or local_player.global_position.y < 1.0:
 			failures.append("player fell below the campsite (y=%.2f)" % local_player.global_position.y)
-		if not local_player.is_on_floor():
+		if not local_player.grounded:
 			failures.append("player is not grounded after campsite spawn")
 		if local_player.velocity.length() > 1.5:
 			failures.append("idle player is unstable (%.2f m/s)" % local_player.velocity.length())

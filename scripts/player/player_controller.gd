@@ -20,6 +20,8 @@ var carried_item := ""
 var interaction_text := ""
 var remote_target := Transform3D.IDENTITY
 var safe_position := Vector3.ZERO
+var grounded := true
+var vertical_velocity := 0.0
 var look_pitch := 0.0
 var head: Node3D
 var camera: Camera3D
@@ -104,20 +106,48 @@ func _move_on_foot(delta: float) -> void:
 	var speed := SPRINT_SPEED if GameSession.is_action_pressed("sprint") else WALK_SPEED
 	velocity.x = move_toward(velocity.x, direction.x * speed, 22.0 * delta)
 	velocity.z = move_toward(velocity.z, direction.z * speed, 22.0 * delta)
-	if not is_on_floor():
-		velocity.y -= 16.0 * delta
-	elif Input.is_action_just_pressed("jump") or GameSession.consume_touch_press("jump"):
-		velocity.y = JUMP_FORCE
-	move_and_slide()
-	if is_on_floor() and global_position.y > -18.0:
+
+	# CharacterBody3D was being pinned or falling through overlapping generated
+	# trimesh/box contacts on Android. In the single-player build the procedural
+	# terrain is authoritative, so horizontal locomotion and floor following are
+	# deterministic while the RV keeps full rigid-body physics.
+	var next_position := global_position + Vector3(velocity.x, 0.0, velocity.z) * delta
+	next_position.x = clampf(next_position.x, -126.0, 126.0)
+	next_position.z = clampf(next_position.z, -266.0, 108.0)
+	var floor_height := _terrain_floor(next_position.x, next_position.z)
+	var jump_pressed := Input.is_action_just_pressed("jump") or GameSession.consume_touch_press("jump")
+	if grounded and jump_pressed:
+		grounded = false
+		vertical_velocity = JUMP_FORCE
+	if grounded:
+		vertical_velocity = 0.0
+		next_position.y = floor_height
+	else:
+		vertical_velocity -= 16.0 * delta
+		next_position.y = global_position.y + vertical_velocity * delta
+		if next_position.y <= floor_height:
+			next_position.y = floor_height
+			vertical_velocity = 0.0
+			grounded = true
+	velocity.y = vertical_velocity
+	global_position = next_position
+	if grounded:
 		safe_position = global_position
 	if not global_position.is_finite() or global_position.y < -18.0:
 		_recover_on_foot()
 	_apply_mobile_and_gamepad_look(delta, false)
 
+func _terrain_floor(x: float, z: float) -> float:
+	if Net.world and Net.world.has_method("terrain_height"):
+		return float(Net.world.terrain_height(x, z)) + 0.03
+	return safe_position.y
+
+
 func _recover_on_foot() -> void:
-	global_position = safe_position + Vector3.UP * 0.45
+	global_position = safe_position + Vector3.UP * 0.12
 	velocity = Vector3.ZERO
+	vertical_velocity = 0.0
+	grounded = true
 	reset_physics_interpolation()
 	GameSession.toast_requested.emit("BACK ON THE TRAIL", "Recovered at the last safe footing.")
 
@@ -152,7 +182,7 @@ func _update_body_animation() -> void:
 		return
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
 	var target := "Idle"
-	if not is_on_floor():
+	if not grounded:
 		target = "Jump_Idle"
 	elif horizontal_speed > 5.1:
 		target = "Run"
