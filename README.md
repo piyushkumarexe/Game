@@ -2,7 +2,7 @@
 
 A true 3D, first-/third-person single-player mobile physics adventure built with Godot 4.7.2.
 
-Version 0.9 is a **single-player RV, cockpit, character-locomotion, mobile rendering, physics, performance, and control rebuild** with an original map, missions, recovery tools, hazards, viewport-level multi-touch controls, full gamepad mappings, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
+Version 0.10 is an **in-development physical-device correction release** for the RV shell/cockpit, suspension clearance, animated mechanisms, rounded crew character, and forest density. It is not stable until fresh Android device screenshots pass the visual and physics checklist. Multiplayer and proximity voice remain deliberately dormant until the core phone experience is stable.
 
 > This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
@@ -64,9 +64,10 @@ The handcrafted route contains:
 - A brighter live 3D campsite home screen and deliberately clustered opening forest
 - Fully draggable, persistent mobile control layout with adjustable size, opacity, swipe sensitivity, and FAST/BALANCED/HIGH quality profiles
 - Context-sensitive mobile BRAKE plus movement, use, sprint, jump, view, gears, and twin-winch controls
-- Textured and animated Quaternius CC0 survivor that turns toward travel and blends idle, walk, run, takeoff, airborne and landing states
-- Original Class C RV with four suspension-driven all-terrain wheel assemblies, tapered cab, split windshield, mirrors, lamps, entry door, step, service panels, roof equipment, awning, ladder and spare
-- Continuous modeled cockpit/living interior with movable steering wheel, dashboard, gauges, seats, kitchen, dinette, storage and bed—driver-eye view no longer uses a dashboard overlay
+- Original rounded, stout crew character with cap, sunglasses, padded vest, articulated limbs, travel-facing rotation, and procedural idle/walk/run/jump/landing motion
+- Original Class C RV with four suspension-driven all-terrain wheel assemblies, tapered cab, split windshield, mirrors, lamps, hinged entry door, step, service panels, roof equipment, awning, ladder and spare
+- Separately culled exterior skin plus continuously modeled cockpit/living interior with movable steering wheel and physical gear lever, dashboard, gauges, seats, refrigerator, kitchen, dinette, storage and bed—driver-eye view no longer uses a dashboard overlay
+- Layered near/mid/far forest using textured Quaternius CC0 hero trees, undergrowth and rocks alongside mobile-batched Kenney scenery
 - Centered non-overhead chase camera plus separate modeled-cockpit render validation
 - Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, batched RV materials, and throttled vehicle HUD updates for mobile performance
 - Coherent lit forest/campsite palette replacing cyan trees, pink canvas, and white unlit stones
@@ -96,9 +97,9 @@ The handcrafted route contains:
 - GDScript only; no third-party runtime plugins
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
-- Multiplayer/voice implementation retained but disabled in the 0.9 stabilization UI and runtime
+- Multiplayer/voice implementation retained but disabled in the 0.10 correction UI and runtime
 
-Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. The animated survivor comes from Quaternius' CC0 Zombie Apocalypse Kit. Provenance is documented under [`assets/third_party`](assets/third_party). The RV, map and game-specific assets remain original.
+Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. A curated textured forest layer comes from Quaternius' CC0 Stylized Nature MegaKit Standard edition. Provenance and preserved license notices are documented under [`assets/third_party`](assets/third_party). The RV, crew character, map and game-specific assets remain original.
 
 See [`docs/game-research.md`](docs/game-research.md) for the researched mechanic breakdown and the original-design boundary.
 
@@ -110,7 +111,7 @@ Install Godot 4.7.2 and open `project.godot`, or run:
 godot --editor --path .
 ```
 
-The 0.9 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
+The 0.10 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
 
 ## GitHub mobile builds
 

@@ -55,7 +55,7 @@ func _build_environment() -> void:
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	environment.ambient_light_color = Color("dce6d5")
-	environment.ambient_light_energy = 0.82
+	environment.ambient_light_energy = 0.64
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.fog_enabled = true
@@ -67,7 +67,7 @@ func _build_environment() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55.0, -34.0, 0.0)
 	sun.light_color = Color("fff0cf")
-	sun.light_energy = 1.08
+	sun.light_energy = 0.96
 	sun.shadow_enabled = GameSession.graphics_quality > 0
 	sun.directional_shadow_max_distance = 70.0
 	add_child(sun)

@@ -17,6 +17,23 @@ const ROCK_SCENES: Array[PackedScene] = [
 ]
 const GRASS_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/grass-large.glb")
 const BUSH_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/plant-bushdetailed.glb")
+const HERO_TREE_SCENES: Array[PackedScene] = [
+	preload("res://assets/third_party/quaternius/nature/Pine_1.gltf"),
+	preload("res://assets/third_party/quaternius/nature/Pine_3.gltf"),
+	preload("res://assets/third_party/quaternius/nature/CommonTree_3.gltf"),
+	preload("res://assets/third_party/quaternius/nature/CommonTree_4.gltf")
+]
+const FOREST_FLOOR_SCENES: Array[PackedScene] = [
+	preload("res://assets/third_party/quaternius/nature/Bush_Common.gltf"),
+	preload("res://assets/third_party/quaternius/nature/Fern_1.gltf"),
+	preload("res://assets/third_party/quaternius/nature/Grass_Wispy_Short.gltf"),
+	preload("res://assets/third_party/quaternius/nature/Grass_Wispy_Tall.gltf"),
+	preload("res://assets/third_party/quaternius/nature/Flower_3_Group.gltf")
+]
+const HERO_ROCK_SCENES: Array[PackedScene] = [
+	preload("res://assets/third_party/quaternius/nature/Rock_Medium_1.gltf"),
+	preload("res://assets/third_party/quaternius/nature/Rock_Medium_2.gltf")
+]
 const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
 const CAMPFIRE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/campfire-stones.glb")
 const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
@@ -248,7 +265,7 @@ func _build_environment() -> void:
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	environment.ambient_light_color = Color("dce6d5")
-	environment.ambient_light_energy = 0.82
+	environment.ambient_light_energy = 0.64
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.glow_enabled = GameSession.graphics_quality >= 2
@@ -262,7 +279,7 @@ func _build_environment() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55.0, -34.0, 0.0)
 	sun.light_color = Color("fff0cf")
-	sun.light_energy = 1.08
+	sun.light_energy = 0.96
 	sun.shadow_enabled = GameSession.graphics_quality > 0
 	sun.directional_shadow_max_distance = 72.0 if GameSession.graphics_quality == 1 else 120.0
 	add_child(sun)
@@ -474,6 +491,7 @@ func _build_scenery() -> void:
 		var x := ROUTE[0].x + cos(angle) * radius
 		var z := ROUTE[0].z + sin(angle) * radius
 		_make_tree(Vector3(x, terrain_height(x, z), z), 0.78 + float(index % 3) * 0.16, false)
+	_build_high_detail_forest()
 	_build_distant_forest()
 	# Reliable cable anchors along challenge sections.
 	for anchor_position in [Vector3(18, 5, -8), Vector3(46, 6, -32), Vector3(-34, 7, -109), Vector3(-13, 11, -131), Vector3(22, 19, -169), Vector3(-24, 29, -199)]:
@@ -482,6 +500,70 @@ func _build_scenery() -> void:
 		var wildlife: TrailWildlife = WildlifeScript.new()
 		add_child(wildlife)
 		wildlife.setup(Vector3(wildlife_position.x, terrain_height(wildlife_position.x, wildlife_position.z) + 0.2, wildlife_position.z))
+
+func _build_high_detail_forest() -> void:
+	# Hero foliage uses textured CC0 meshes close to the road while the cheaper
+	# Kenney/MultiMesh layers retain mobile-friendly mid and far coverage.
+	var hero_tree_count: int = [14, 26, 44][GameSession.graphics_quality]
+	for index in hero_tree_count:
+		var segment := index % (ROUTE.size() - 1)
+		var t := 0.10 + random.randf() * 0.80
+		var center := ROUTE[segment].lerp(ROUTE[segment + 1], t)
+		var forward := ROUTE[segment + 1] - ROUTE[segment]
+		forward.y = 0.0
+		forward = forward.normalized()
+		var side := Vector3(-forward.z, 0.0, forward.x)
+		var side_sign := -1.0 if index % 2 == 0 else 1.0
+		var distance := random.randf_range(10.5, 25.0)
+		var position := center + side * distance * side_sign
+		position.y = terrain_height(position.x, position.z) + 0.12
+		var tree := HERO_TREE_SCENES[index % HERO_TREE_SCENES.size()].instantiate() as Node3D
+		tree.name = "HeroTexturedForestTree"
+		tree.position = position
+		tree.rotation.y = random.randf_range(-PI, PI)
+		tree.scale = Vector3.ONE * random.randf_range(0.88, 1.34)
+		props_root.add_child(tree)
+		if GameSession.graphics_quality == 0:
+			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+
+	var floor_cover_count: int = [34, 68, 116][GameSession.graphics_quality]
+	for index in floor_cover_count:
+		var segment := index % (ROUTE.size() - 1)
+		var t := random.randf_range(0.04, 0.96)
+		var center := ROUTE[segment].lerp(ROUTE[segment + 1], t)
+		var forward := ROUTE[segment + 1] - ROUTE[segment]
+		forward.y = 0.0
+		forward = forward.normalized()
+		var side := Vector3(-forward.z, 0.0, forward.x)
+		var side_sign := -1.0 if index % 2 == 0 else 1.0
+		var position := center + side * random.randf_range(5.8, 19.0) * side_sign
+		position.y = terrain_height(position.x, position.z) + 0.05
+		var cover := FOREST_FLOOR_SCENES[index % FOREST_FLOOR_SCENES.size()].instantiate() as Node3D
+		cover.name = "TexturedForestFloor"
+		cover.position = position
+		cover.rotation.y = random.randf_range(-PI, PI)
+		cover.scale = Vector3.ONE * random.randf_range(0.58, 1.32)
+		props_root.add_child(cover)
+		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+
+	var hero_rock_count: int = [8, 16, 26][GameSession.graphics_quality]
+	for index in hero_rock_count:
+		var segment := index % (ROUTE.size() - 1)
+		var t := random.randf_range(0.08, 0.92)
+		var center := ROUTE[segment].lerp(ROUTE[segment + 1], t)
+		var forward := ROUTE[segment + 1] - ROUTE[segment]
+		forward.y = 0.0
+		forward = forward.normalized()
+		var side := Vector3(-forward.z, 0.0, forward.x)
+		var side_sign := -1.0 if index % 2 == 0 else 1.0
+		var position := center + side * random.randf_range(8.0, 24.0) * side_sign
+		position.y = terrain_height(position.x, position.z) + 0.04
+		var rock := HERO_ROCK_SCENES[index % HERO_ROCK_SCENES.size()].instantiate() as Node3D
+		rock.name = "TexturedHeroRock"
+		rock.position = position
+		rock.rotation = Vector3(0.0, random.randf_range(-PI, PI), random.randf_range(-0.10, 0.10))
+		rock.scale = Vector3.ONE * random.randf_range(0.75, 1.65)
+		props_root.add_child(rock)
 
 func _build_distant_forest() -> void:
 	# Batch the background forest into one MultiMesh instead of hundreds of

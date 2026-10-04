@@ -36,7 +36,7 @@ jobs:
                           for mesh in exterior['meshes'] for primitive in mesh['primitives'])
           assert triangles >= 5500, triangles
           assert len(exterior['materials']) >= 24, len(exterior['materials'])
-          assert {'StaticRVBody', 'CockpitSteeringWheel', 'RoofCargo'} <= {node.get('name') for node in exterior['nodes']}
+          assert {'StaticRVExterior', 'StaticRVInterior', 'StaticCockpitFrame', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor', 'RoofCargo'} <= {node.get('name') for node in exterior['nodes']}
           assert any(node.get('name') == 'DetailedWheelAssembly' for node in wheel['nodes'])
           print(f'RV asset verified: {triangles} triangles, {len(exterior["materials"])} materials')
           PY

@@ -9,8 +9,13 @@ const MAX_ENGINE_FORCE := 4300.0
 const MAX_STEER := 0.43
 const MAX_FUEL := 100.0
 const MAX_SAFE_SPEED := 32.0
+const SHIFT_PATTERN: Array[Vector2] = [
+	Vector2(-0.24, -0.20), Vector2.ZERO, Vector2(-0.24, 0.20),
+	Vector2(0.24, 0.20), Vector2(-0.24, 0.0), Vector2(0.24, 0.0), Vector2(0.24, -0.20)
+]
 const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
 const RV_WHEEL_SCENE: PackedScene = preload("res://assets/models/rv_wheel.gltf")
+const RVDoorInteractableScript = preload("res://scripts/vehicles/rv_door_interactable.gd")
 
 var prompt := "DRIVE THE RV"
 var health := 100.0
@@ -38,6 +43,13 @@ var body_shell: Node3D
 var bumper_visual: Node3D
 var roof_crate: Node3D
 var steering_visual_root: Node3D
+var gear_visual_root: Node3D
+var exterior_shell: Node3D
+var interior_shell: Node3D
+var cockpit_frame: Node3D
+var entry_door_pivot: Node3D
+var entry_door_interactable: RVEntryDoorInteractable
+var entry_door_open := false
 var cabin_light: OmniLight3D
 var headlamps: Array[SpotLight3D] = []
 var stats_emit_accumulator := 0.0
@@ -151,6 +163,7 @@ func _request_driver(requested_peer: int) -> void:
 func _assign_driver(id: int) -> void:
 	driver_peer_id = id
 	engine_running = true
+	set_entry_door_open(false)
 	freeze = false
 	sleeping = false
 	safe_spawn_seconds = maxf(safe_spawn_seconds, 0.8)
@@ -193,11 +206,18 @@ func _release_driver(id: int) -> void:
 	brake = 95.0
 	freeze = true
 
-func set_local_driver_first_person(_active: bool) -> void:
-	# First person now looks through the same modeled cockpit used by the exterior.
-	# Never hide the shell: doing that turns the dashboard into a fake HUD overlay.
+func set_local_driver_first_person(active: bool) -> void:
+	# Keep the world-space cockpit, glazing and interior visible, but cull the
+	# opaque outside coach skin for the local driver. This prevents the camera
+	# being swallowed by a cream body panel without falling back to a HUD overlay.
 	if body_shell:
 		body_shell.visible = true
+	if exterior_shell:
+		exterior_shell.visible = not active
+	if interior_shell:
+		interior_shell.visible = true
+	if cockpit_frame:
+		cockpit_frame.visible = true
 
 func driver_seat_transform() -> Transform3D:
 	# The player camera is 1.62 m above its origin. This places their eyes behind
@@ -437,9 +457,12 @@ func _build_rv() -> void:
 	var collision := CollisionShape3D.new()
 	collision.name = "RVMainCollision"
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(2.64, 2.95, 7.02)
+	# Keep the chassis collider well above the tire contact patch. The previous
+	# box bottom sat below the wheel centres, so the body hit terrain first and
+	# buried all four tires as soon as parking freeze was released.
+	shape.size = Vector3(2.48, 2.48, 6.82)
 	collision.shape = shape
-	collision.position = Vector3(0.0, 0.98, -0.18)
+	collision.position = Vector3(0.0, 1.11, -0.18)
 	add_child(collision)
 
 	body_shell = Node3D.new()
@@ -451,9 +474,14 @@ func _build_rv() -> void:
 	# This is one coherent exterior/interior scene: tapered cab, split windshield,
 	# mirrors, lights, service hatches, roof equipment, ladder, cockpit, seats,
 	# kitchen, dinette and rear bed. Named glTF nodes are retained for inspection.
+	exterior_shell = exterior.find_child("StaticRVExterior", true, false) as Node3D
+	interior_shell = exterior.find_child("StaticRVInterior", true, false) as Node3D
+	cockpit_frame = exterior.find_child("StaticCockpitFrame", true, false) as Node3D
 	roof_crate = exterior.find_child("RoofCargo", true, false) as Node3D
 	bumper_visual = exterior.find_child("FrontBumper", true, false) as Node3D
 	_build_steering_visual(exterior)
+	_build_gear_visual(exterior)
+	_build_entry_door(exterior)
 	_build_vehicle_lighting()
 
 	_add_wheel("FrontLeft", Vector3(-1.24, -0.62, -2.10), true, false)
@@ -470,6 +498,45 @@ func _build_steering_visual(exterior: Node3D) -> void:
 		var component := exterior.find_child(component_name, true, false) as Node3D
 		if component:
 			component.reparent(steering_visual_root, true)
+
+func _build_gear_visual(exterior: Node3D) -> void:
+	gear_visual_root = Node3D.new()
+	gear_visual_root.name = "GearLeverPivot"
+	gear_visual_root.position = Vector3(0.10, 0.43, -2.19)
+	body_shell.add_child(gear_visual_root)
+	for component_name in ["GearLever", "GearKnob"]:
+		var component := exterior.find_child(component_name, true, false) as Node3D
+		if component:
+			component.reparent(gear_visual_root, true)
+
+func _build_entry_door(exterior: Node3D) -> void:
+	entry_door_pivot = Node3D.new()
+	entry_door_pivot.name = "EntryDoorHingePivot"
+	entry_door_pivot.position = Vector3(1.377, 0.91, 1.40)
+	body_shell.add_child(entry_door_pivot)
+	for component_name in ["EntryDoor", "EntryDoorGlass", "EntryDoorHandle"]:
+		var component := exterior.find_child(component_name, true, false) as Node3D
+		if component:
+			component.reparent(entry_door_pivot, true)
+	entry_door_interactable = RVDoorInteractableScript.new()
+	entry_door_interactable.name = "FunctionalEntryDoor"
+	entry_door_interactable.position = Vector3(1.58, 0.91, 0.98)
+	entry_door_interactable.setup(self)
+	add_child(entry_door_interactable)
+
+func toggle_entry_door() -> void:
+	set_entry_door_open(not entry_door_open)
+
+func set_entry_door_open(should_open: bool) -> void:
+	entry_door_open = should_open
+	if entry_door_interactable:
+		entry_door_interactable.refresh_prompt()
+	if not entry_door_pivot:
+		return
+	var target_angle := -1.48 if should_open else 0.0
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(entry_door_pivot, "rotation:y", target_angle, 0.55)
 
 func _build_vehicle_lighting() -> void:
 	for x in [-0.79, 0.79]:
@@ -497,6 +564,10 @@ func _build_vehicle_lighting() -> void:
 func _update_vehicle_visuals() -> void:
 	if steering_visual_root:
 		steering_visual_root.rotation.z = lerp_angle(steering_visual_root.rotation.z, -steering * 2.25, 0.24)
+	if gear_visual_root:
+		var lever_target := SHIFT_PATTERN[clampi(gear, 0, SHIFT_PATTERN.size() - 1)]
+		gear_visual_root.rotation.x = lerp_angle(gear_visual_root.rotation.x, lever_target.x, 0.22)
+		gear_visual_root.rotation.z = lerp_angle(gear_visual_root.rotation.z, lever_target.y, 0.22)
 	if cabin_light:
 		cabin_light.visible = engine_running
 	for lamp in headlamps:

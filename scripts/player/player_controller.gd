@@ -7,7 +7,7 @@ const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
 const TOUCH_LOOK_SENSITIVITY := 0.0042
-const CREW_SCENE: PackedScene = preload("res://assets/third_party/quaternius/characters_matt.gltf")
+const StylizedCrewVisualScript = preload("res://scripts/player/stylized_crew_visual.gd")
 const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
 
 var peer_id := 1
@@ -30,6 +30,7 @@ var third_person := false
 var spring_arm: SpringArm3D
 var interact_ray: RayCast3D
 var body_visual: Node3D
+var body_rig: StylizedCrewVisual
 var body_animation: AnimationPlayer
 var body_animation_name := ""
 var movement_direction := Vector3.ZERO
@@ -201,7 +202,7 @@ func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
 		head.rotation.x = look_pitch
 
 func _update_body_animation(delta: float) -> void:
-	if not body_animation or is_driving:
+	if is_driving or (not body_rig and not body_animation):
 		return
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
 	var target := "Idle"
@@ -220,11 +221,14 @@ func _update_body_animation(delta: float) -> void:
 		target = "Run"
 	elif horizontal_speed > 0.25:
 		target = "Walk"
-	if target == body_animation_name or not body_animation.has_animation(target):
+	if body_rig:
+		body_rig.set_locomotion(target, horizontal_speed, vertical_velocity, delta)
+	if target == body_animation_name:
 		return
 	body_animation_name = target
-	body_animation.speed_scale = 1.0
-	body_animation.play(target, blend)
+	if body_animation and body_animation.has_animation(target):
+		body_animation.speed_scale = 1.0
+		body_animation.play(target, blend)
 
 func _toggle_camera_mode() -> void:
 	_apply_camera_mode(not third_person)
@@ -324,24 +328,14 @@ func _build_player() -> void:
 	collision.position.y = 0.9
 	add_child(collision)
 
-	body_visual = CREW_SCENE.instantiate() as Node3D
-	body_visual.name = "ExpeditionCrewModel"
-	# A textured, skinned, adult-proportioned survivor replaces the rigid
-	# mannequin placeholder. Quaternius' CC0 model includes real locomotion.
+	body_rig = StylizedCrewVisualScript.new()
+	body_visual = body_rig
+	body_visual.name = "RoundedExpeditionCrew"
 	body_visual.rotation.y = PI
+	body_visual.scale = Vector3.ONE * 0.82
 	add_child(body_visual)
-	for hidden_prop in ["Axe", "Guitar", "Knife", "Pistol", "Rifle", "Shotgun", "SMG", "Spear", "WoodenBat_Barbed", "WoodenBat_Saw"]:
-		var prop := body_visual.find_child(hidden_prop, true, false)
-		if prop is Node3D:
-			(prop as Node3D).visible = false
-	var animation_players := body_visual.find_children("*", "AnimationPlayer", true, false)
-	body_animation = animation_players[0] as AnimationPlayer if not animation_players.is_empty() else null
-	if body_animation:
-		for looping_clip in ["Idle", "Walk", "Run", "Jump_Idle"]:
-			if body_animation.has_animation(looping_clip):
-				body_animation.get_animation(looping_clip).loop_mode = Animation.LOOP_LINEAR
-		body_animation.play("Idle")
-		body_animation_name = "Idle"
+	body_animation = null
+	body_animation_name = "Idle"
 
 	head = Node3D.new()
 	head.name = "Head"

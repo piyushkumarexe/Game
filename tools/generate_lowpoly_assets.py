@@ -551,6 +551,9 @@ rv.box("NavigationScreen", (-0.15, 0.69, -2.455), (0.29, 0.18, 0.025), "Screen")
 for y in (0.43, 0.54):
     for x in (-0.26, -0.04):
         rv.cylinder("ConsoleControl", (x, y, -2.455), 0.035, 0.024, "Chrome", 10, "z")
+rv.box("GearGate", (0.10, 0.43, -2.19), (0.30, 0.08, 0.40), "DarkMetal")
+rv.cylinder("GearLever", (0.10, 0.64, -2.19), 0.038, 0.42, "Chrome", 12, "y")
+rv.ellipsoid("GearKnob", (0.10, 0.88, -2.19), (0.09, 0.12, 0.09), "Dashboard", 14, 8)
 rv.torus("CockpitSteeringWheel", (0.53, 0.79, -2.22), 0.32, 0.047, "Rubber", "z", 24, 8)
 rv.cylinder("SteeringHub", (0.53, 0.79, -2.22), 0.115, 0.09, "Dashboard", 16, "z")
 rv.box("SteeringSpokeHorizontal", (0.53, 0.79, -2.235), (0.54, 0.065, 0.06), "Dashboard")
@@ -584,6 +587,10 @@ rv.box("CabDividerRight", (0.92, 1.24, -1.12), (0.48, 1.44, 0.10), "InteriorWood
 rv.box("KitchenLowerCabinet", (-0.90, 0.46, 0.18), (0.55, 0.82, 1.62), "InteriorWood")
 rv.box("KitchenCounter", (-0.88, 0.91, 0.18), (0.64, 0.10, 1.68), "Countertop")
 rv.box("KitchenUpperCabinet", (-0.94, 1.67, 0.34), (0.46, 0.58, 1.28), "InteriorWood")
+rv.box("RefrigeratorBody", (-0.91, 1.03, 1.46), (0.54, 1.72, 0.66), "LightMetal")
+rv.box("RefrigeratorDoor", (-0.60, 1.03, 1.46), (0.035, 1.58, 0.58), "InteriorVinyl")
+rv.box("FridgeHandle", (-0.56, 1.20, 1.20), (0.025, 0.42, 0.055), "Chrome")
+rv.box("FridgeFreezerLine", (-0.555, 1.47, 1.46), (0.020, 0.035, 0.54), "DarkMetal")
 for z in (-0.26, 0.28, 0.82):
     rv.box("KitchenCabinetDoor", (-0.595, 0.54, z), (0.035, 0.55, 0.44), "InteriorWood")
     rv.box("KitchenCabinetHandle", (-0.565, 0.58, z - 0.14), (0.025, 0.05, 0.14), "Chrome")
@@ -743,8 +750,27 @@ def convert_obj_to_gltf(source: Path) -> None:
                 dynamic_components = {
                     "RoofCargo", "FrontBumper", "CockpitSteeringWheel",
                     "SteeringHub", "SteeringSpokeHorizontal", "SteeringSpokeLower",
+                    "EntryDoor", "EntryDoorGlass", "EntryDoorHandle",
+                    "GearLever", "GearKnob",
                 }
-                object_name = authored_name if authored_name in dynamic_components else "StaticRVBody"
+                interior_prefixes = (
+                    "CabInterior", "Dashboard", "Instrument", "Gauge", "CenterConsole",
+                    "Navigation", "ConsoleControl", "Pedal", "Driver", "Passenger",
+                    "CabOverhead", "SunVisor", "RearView", "Interior", "CabDivider",
+                    "Kitchen", "Stove", "Dinette", "RearBed", "RearMattress",
+                    "RearBlanket", "RearOverhead", "RearCabinet", "RouteMap",
+                    "FireExtinguisher", "Extinguisher", "Refrigerator", "Fridge",
+                    "GearGate",
+                )
+                cockpit_frame_prefixes = ("Windshield", "CabSideGlass", "CabWindowLowerTrim")
+                if authored_name in dynamic_components:
+                    object_name = authored_name
+                elif authored_name.startswith(interior_prefixes):
+                    object_name = "StaticRVInterior"
+                elif authored_name.startswith(cockpit_frame_prefixes):
+                    object_name = "StaticCockpitFrame"
+                else:
+                    object_name = "StaticRVExterior"
             elif source.stem == "rv_wheel":
                 object_name = "DetailedWheelAssembly"
             else:
