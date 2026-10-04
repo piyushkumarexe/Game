@@ -278,6 +278,7 @@ func _run_expedition_smoke_test() -> void:
 					elif local_player.body_rig.current_clip != "Walk_Carry":
 						failures.append("moving crew did not play an authored locomotion clip (%s)" % local_player.body_rig.current_clip)
 					else:
+						local_player.body_rig._copy_animation_pose()
 						var source_skeleton := local_player.body_rig.animation_skeleton
 						var proof_skeleton := local_player.body_rig.skeletons[0]
 						var source_thigh := source_skeleton.find_bone("thigh_l")
