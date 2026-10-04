@@ -4,6 +4,7 @@ extends CanvasLayer
 
 const TouchLookAreaScript = preload("res://scripts/ui/touch_look_area.gd")
 const MobileInputRouterScript = preload("res://scripts/ui/mobile_input_router.gd")
+const ControlLayoutEditorScript = preload("res://scripts/ui/control_layout_editor.gd")
 
 var mission_title: Label
 var mission_detail: Label
@@ -21,6 +22,7 @@ var crew_label: Label
 var toast_tween: Tween
 var touch_root: Control
 var input_router: MobileInputRouter
+var settings_editor: ControlLayoutEditor
 
 func _ready() -> void:
 	layer = 20
@@ -53,6 +55,8 @@ func _process(_delta: float) -> void:
 				node.visible = driving
 			elif node.has_meta("walking_only"):
 				node.visible = not driving
+	if GameSession.consume_touch_press("control_settings") and not is_instance_valid(settings_editor):
+		_open_control_editor()
 
 func _build_hud() -> void:
 	var root := Control.new()
@@ -242,10 +246,70 @@ func _build_touch_controls(root: Control) -> void:
 	down.set_meta("driving_only", true)
 	down.visible = false
 	action_buttons.append(down)
+	var handbrake := _make_touch_button("BRAKE", "handbrake", Vector2(-205, -190), true)
+	handbrake.set_meta("driving_only", true)
+	handbrake.visible = false
+	action_buttons.append(handbrake)
+	var settings := _make_touch_button("LAYOUT", "control_settings", Vector2(-103, -590), false)
+	settings.anchor_top = 0.0
+	settings.anchor_bottom = 0.0
+	settings.offset_left = -98.0
+	settings.offset_top = 104.0
+	settings.offset_right = -18.0
+	settings.offset_bottom = 150.0
+	settings.add_theme_font_size_override("font_size", 11)
+	settings.set_meta("fixed_control", true)
+	action_buttons.append(settings)
+	_apply_control_layout()
 	input_router = MobileInputRouterScript.new()
 	input_router.name = "MobileInputRouter"
 	add_child(input_router)
 	input_router.setup(move_stick, action_buttons)
+
+func _apply_control_layout() -> void:
+	if not touch_root:
+		return
+	var move_stick := touch_root.find_child("MoveStick", true, false) as Control
+	if move_stick:
+		_place_custom_control(move_stick, "move", Vector2(180.0, 180.0))
+	for action: String in GameSession.DEFAULT_CONTROL_LAYOUT:
+		if action == "move":
+			continue
+		var button := touch_root.find_child("Touch_%s" % action, true, false) as Button
+		if button:
+			_place_custom_control(button, action, Vector2(88.0, 70.0))
+			var base_modulate := Color(1, 1, 1, GameSession.control_opacity)
+			button.set_meta("base_modulate", base_modulate)
+			button.modulate = base_modulate
+
+func _place_custom_control(control: Control, action: String, base_size: Vector2) -> void:
+	var anchor := GameSession.control_position(action)
+	control.anchor_left = anchor.x
+	control.anchor_right = anchor.x
+	control.anchor_top = anchor.y
+	control.anchor_bottom = anchor.y
+	var scaled_size := base_size * GameSession.control_scale
+	control.offset_left = -scaled_size.x * 0.5
+	control.offset_right = scaled_size.x * 0.5
+	control.offset_top = -scaled_size.y * 0.5
+	control.offset_bottom = scaled_size.y * 0.5
+	control.modulate.a = GameSession.control_opacity
+
+func _open_control_editor() -> void:
+	if is_instance_valid(settings_editor):
+		return
+	if input_router:
+		input_router.clear_all()
+		input_router.set_process_input(false)
+	settings_editor = ControlLayoutEditorScript.new()
+	settings_editor.setup(_close_control_editor)
+	get_tree().root.add_child(settings_editor)
+
+func _close_control_editor() -> void:
+	_apply_control_layout()
+	if input_router:
+		input_router.set_process_input(true)
+	settings_editor = null
 
 func _make_touch_button(text: String, action: StringName, bottom_right_offset: Vector2, hold: bool) -> Button:
 	var button := Button.new()
@@ -263,6 +327,8 @@ func _make_touch_button(text: String, action: StringName, bottom_right_offset: V
 	button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.set_meta("input_action", action)
 	button.set_meta("hold_action", hold)
+	button.set_meta("base_modulate", Color(1, 1, 1, GameSession.control_opacity))
+	button.modulate = button.get_meta("base_modulate")
 	button.add_theme_font_size_override("font_size", 13)
 	button.add_theme_color_override("font_color", Color("fff2d5"))
 	button.add_theme_stylebox_override("normal", _panel_style(Color(0.04, 0.055, 0.07, 0.58), Color(0.94, 0.67, 0.28, 0.55), 24))

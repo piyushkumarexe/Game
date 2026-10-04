@@ -39,47 +39,45 @@ def write_png(name: str, width: int, height: int, pixel: Callable[[int, int], tu
     (TEXTURE_DIR / name).write_bytes(data)
 
 
-def paint_texture(name: str, base: tuple[int, int, int], seed: int, pattern: str) -> None:
-    rng = random.Random(seed)
-    noise = [[rng.randint(-13, 13) for _ in range(128)] for _ in range(128)]
-
+def paint_texture(name: str, base: tuple[int, int, int], seed: int, pattern: str, size: int = 256) -> None:
+    """Paint seamless, low-frequency material detail without visible tile grids."""
     def pixel(x: int, y: int) -> tuple[int, int, int]:
-        value = noise[y][x]
+        detail_hash = (x * 73856093 ^ y * 19349663 ^ seed * 83492791) & 0xFFFFFFFF
+        value = (detail_hash % 15) - 7
+        u, v = x / float(size), y / float(size)
+        value += int(math.sin(math.tau * (u * 2.0 + v)) * 5 + math.cos(math.tau * (v * 3.0 - u)) * 3)
         if pattern == "panel":
-            if x % 64 in (0, 1) or y % 48 in (0, 1):
-                value -= 24
-            if (x + y * 3) % 97 < 2:
-                value += 12
+            value += int(math.sin(math.tau * u) * 4)
+            if detail_hash % 521 < 2:
+                value -= 12
         elif pattern == "stripe":
-            value += 15 if (y // 12) % 2 == 0 else -8
-            if y % 32 < 2:
-                value += 30
+            value += int(math.sin(math.tau * (v * 2.0 + u * 0.4)) * 7)
         elif pattern == "wood":
-            value += int(math.sin(x * 0.20 + math.sin(y * 0.08) * 2.2) * 17)
-            if x % 31 < 2:
-                value -= 25
+            value += int(math.sin(x * 0.12 + math.sin(y * 0.035) * 2.2) * 14)
+            if x % 73 < 2:
+                value -= 15
         elif pattern == "pine":
-            value += int(math.sin((x + y) * 0.17) * 11)
-            if (x * 5 + y * 3) % 43 < 3:
-                value += 22
+            value += int(math.sin((x + y) * 0.11) * 9)
+            if detail_hash % 89 < 4:
+                value += 14
         elif pattern == "rock":
-            value += int(math.sin(x * 0.09) * 9 + math.cos(y * 0.13) * 12)
-            if ((x // 18) + (y // 15)) % 3 == 0:
-                value -= 11
+            value += int(math.sin(x * 0.055) * 7 + math.cos(y * 0.071) * 9)
         elif pattern == "fabric":
-            value += 8 if (x + y) % 5 == 0 else -3
+            value += 5 if (x + y) % 7 == 0 else -2
         return tuple(channel + value for channel in base)
 
-    write_png(name, 128, 128, pixel)
+    write_png(name, size, size, pixel)
 
 
 for args in [
-    ("rv_cream.png", (215, 202, 166), 17, "panel"),
-    ("rv_stripe.png", (158, 64, 35), 29, "stripe"),
-    ("trail_wood.png", (121, 76, 42), 41, "wood"),
-    ("pine_needles.png", (45, 82, 62), 53, "pine"),
-    ("canyon_stone.png", (126, 78, 54), 67, "rock"),
-    ("crew_fabric.png", (174, 78, 42), 71, "fabric"),
+    ("rv_cream.png", (205, 184, 140), 17, "panel", 512),
+    ("rv_stripe.png", (132, 67, 38), 29, "stripe", 512),
+    ("trail_wood.png", (132, 86, 47), 41, "wood", 256),
+    ("pine_needles.png", (58, 103, 67), 53, "pine", 256),
+    ("canyon_stone.png", (142, 102, 74), 67, "rock", 256),
+    ("crew_fabric.png", (174, 78, 42), 71, "fabric", 256),
+    ("terrain_detail.png", (224, 226, 205), 89, "rock", 512),
+    ("road_gravel.png", (157, 119, 78), 97, "rock", 512),
 ]:
     paint_texture(*args)
 
@@ -100,7 +98,7 @@ def ground_pixel(x: int, y: int) -> tuple[int, int, int]:
     grain = (grain_hash % 13) - 6
     pebble = -18 if grain_hash % 389 < 3 else (11 if grain_hash % 257 < 3 else 0)
     value = macro + patch + grain * 0.45 + pebble
-    return (int(132 + value), int(82 + value * 0.72), int(52 + value * 0.48))
+    return (int(166 + value), int(124 + value * 0.72), int(78 + value * 0.48))
 
 
 write_png("ground_dirt.png", 512, 512, ground_pixel)
@@ -314,29 +312,47 @@ Ns 60
 
 rv = Obj("rv_exterior")
 rv.box("Coach", (0, .83, .28), (2.48, 1.92, 5.05), "RV_Cream")
+rv.box("LowerSkirt", (0, -.03, .22), (2.52, .28, 5.20), "DarkMetal")
 rv.box("Cab", (0, .28, -2.65), (2.38, 1.15, 1.10), "RV_Cream")
 rv.box("RoofCap", (0, 1.91, .28), (2.58, .18, 5.20), "RV_Cream")
+rv.box("RoofCrown", (0, 2.05, .28), (2.30, .12, 4.92), "RV_Cream")
 for side in (-1, 1):
     rv.box(f"StripeSide{side}", (side*1.255, .55, .18), (.045, .36, 4.80), "RV_Stripe")
+    rv.box(f"LowerTrim{side}", (side*1.272, .02, .12), (.035, .10, 4.95), "LightMetal")
 rv.box("StripeFront", (0, .48, -3.215), (2.28, .30, .045), "RV_Stripe")
-rv.box("Windshield", (0, .91, -3.225), (1.74, .61, .04), "Window")
+rv.box("WindshieldFrame", (0, .91, -3.235), (1.98, .78, .035), "DarkMetal")
+rv.box("Windshield", (0, .91, -3.255), (1.78, .60, .025), "Window")
 for side in (-1, 1):
-    rv.box(f"CabSideWindow{side}", (side*1.215, .92, -2.55), (.035, .58, .75), "Window")
+    rv.box(f"CabWindowFrame{side}", (side*1.225, .92, -2.55), (.03, .70, .88), "DarkMetal")
+    rv.box(f"CabSideWindow{side}", (side*1.242, .92, -2.55), (.022, .57, .74), "Window")
+    rv.box(f"MirrorArm{side}", (side*1.47, .85, -2.78), (.42, .055, .055), "DarkMetal")
+    rv.box(f"Mirror{side}", (side*1.66, .86, -2.78), (.07, .34, .25), "DarkMetal")
 for index, z in enumerate((-.72, .42, 1.52)):
-    rv.box(f"CoachWindowL{index}", (-1.26, 1.13, z), (.035, .60, .74), "Window")
-rv.box("CoachWindowR", (1.26, 1.13, -.58), (.035, .60, 1.08), "Window")
-rv.box("Door", (1.265, .68, 1.26), (.04, 1.62, .82), "RV_Cream")
-rv.box("DoorWindow", (1.29, 1.12, 1.26), (.025, .53, .58), "Window")
+    rv.box(f"CoachWindowFrameL{index}", (-1.27, 1.13, z), (.025, .72, .86), "DarkMetal")
+    rv.box(f"CoachWindowL{index}", (-1.285, 1.13, z), (.02, .58, .72), "Window")
+rv.box("CoachWindowFrameR", (1.27, 1.13, -.58), (.025, .72, 1.20), "DarkMetal")
+rv.box("CoachWindowR", (1.285, 1.13, -.58), (.02, .58, 1.06), "Window")
+rv.box("DoorFrame", (1.275, .68, 1.26), (.035, 1.76, .94), "DarkMetal")
+rv.box("Door", (1.295, .68, 1.26), (.025, 1.65, .83), "RV_Cream")
+rv.box("DoorWindow", (1.315, 1.12, 1.26), (.018, .53, .58), "Window")
+rv.box("DoorHandle", (1.345, .69, .96), (.025, .055, .20), "DarkMetal")
+rv.box("SideAwning", (1.38, 1.83, -.15), (.22, .18, 2.95), "RV_Stripe")
 rv.box("FrontBumper", (0, -.18, -3.32), (2.58, .22, .28), "LightMetal")
 rv.box("RearBumper", (0, -.18, 2.94), (2.52, .22, .27), "LightMetal")
 rv.box("Grille", (0, .18, -3.25), (1.16, .34, .04), "DarkMetal")
+rv.box("FrontPlate", (0, -.02, -3.40), (.58, .18, .025), "Canvas")
 for x in (-.82, .82): rv.box(f"Headlamp{x}", (x, .38, -3.25), (.36, .27, .05), "Lamp")
+for x in (-.87, .87): rv.box(f"TailLamp{x}", (x, .48, 2.825), (.25, .38, .04), "RV_Stripe")
 for x in (-.86, .86):
-    rv.box("RackRail", (x, 2.09, .45), (.07, .17, 3.55), "DarkMetal")
-for z in (-1.22, -.2, .82, 1.75): rv.box("RackCrossbar", (0, 2.09, z), (1.82, .07, .07), "DarkMetal")
-rv.box("RoofCargo", (-.42, 2.30, .45), (.82, .42, 1.18), "Wood")
-rv.cylinder("SpareWheel", (0, .55, 2.86), .58, .26, "Rubber", 14, "z")
-for y in (.15, .62, 1.09, 1.56): rv.box("RearLadderRung", (1.02, y, 2.87), (.42, .045, .06), "LightMetal")
+    rv.box("RackRail", (x, 2.16, .45), (.07, .17, 3.55), "DarkMetal")
+for z in (-1.22, -.2, .82, 1.75): rv.box("RackCrossbar", (0, 2.16, z), (1.82, .07, .07), "DarkMetal")
+rv.box("RoofCargo", (-.48, 2.38, .62), (.82, .42, 1.18), "Wood")
+rv.box("SolarPanel", (.52, 2.25, -.52), (.92, .08, 1.42), "Window")
+rv.box("RoofVent", (.42, 2.27, 1.52), (.62, .18, .62), "LightMetal")
+rv.cylinder("SpareWheel", (0, .55, 2.86), .58, .26, "Rubber", 18, "z")
+rv.cylinder("SpareHub", (0, .55, 3.01), .24, .06, "LightMetal", 12, "z")
+for y in (.15, .62, 1.09, 1.56): rv.box("RearLadderRung", (1.02, y, 2.91), (.42, .045, .06), "LightMetal")
+for x in (.82, 1.22): rv.box("RearLadderRail", (x, .86, 2.91), (.045, 1.70, .06), "LightMetal")
 rv.save()
 
 crew = Obj("crew_member")
@@ -476,7 +492,10 @@ def convert_obj_to_gltf(source: Path) -> None:
     texture_lookup: dict[str, int] = {}
     for name in used_materials:
         color, texture_file, roughness = MATERIALS[name]
-        pbr = {"baseColorFactor": list(color), "roughnessFactor": roughness, "metallicFactor": 0.0}
+        # Textures already contain the authored palette; multiplying them by the
+        # same dark color again made the RV and terrain look burnt on Android.
+        factor = (1.0, 1.0, 1.0, color[3]) if texture_file else color
+        pbr = {"baseColorFactor": list(factor), "roughnessFactor": roughness, "metallicFactor": 0.0}
         if texture_file:
             if texture_file not in texture_lookup:
                 images.append({"uri": f"../textures/{texture_file}"})

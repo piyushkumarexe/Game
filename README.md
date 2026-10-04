@@ -2,7 +2,7 @@
 
 A true 3D, first-/third-person single-player mobile physics adventure built with Godot 4.7.2.
 
-Version 0.6 is a **single-player stability and rendering rebuild** with an original map, physical RV, missions, recovery tools, hazards, viewport-level multi-touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
+Version 0.7 is a **single-player mobile rendering, performance, physics-camera, and control-customization rebuild** with an original map, physical RV, missions, recovery tools, hazards, viewport-level multi-touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
 
 > This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
@@ -59,11 +59,15 @@ The handcrafted route contains:
 - Collision-aware **VIEW 1P / 3P** switch for walking and driving
 - Context-sensitive touch actions for interaction, sprint, jump, gears and both winches
 - Mission, speed, gear, fuel and RV-integrity HUD
-- Two-sided, occlusion-safe Android terrain with baked color variation, a flattened trail camp, and a canyon-basin fail-safe
-- A 512×512 seamless multi-scale ground texture with far less visible repetition
+- Bright, two-sided, occlusion-safe Android forest terrain with baked meadow/cliff/trail variation and a canyon-basin fail-safe
+- Neutral-detail terrain and dedicated gravel textures that preserve readable color instead of multiplying the world almost black
+- A brighter live 3D campsite home screen and deliberately clustered opening forest
+- Fully draggable, persistent mobile control layout with adjustable size, opacity, swipe sensitivity, and FAST/BALANCED/HIGH quality profiles
+- Context-sensitive mobile BRAKE plus movement, use, sprint, jump, view, gears, and twin-winch controls
 - Textured and animated Quaternius CC0 survivor with idle, walk, run and jump locomotion
-- Original modeled RV coach, cockpit, signs and supply props combined with selected Kenney CC0 environment models
-- Painted terrain/model textures and a live 3D campsite home screen
+- More detailed original camper with framed glazing, mirrors, awning, roof equipment, trim, ladder, spare and mobile chase-camera clearance
+- Lower-profile first-person dashboard and a longer, raised third-person driving chase camera
+- Reduced shadow resolution, quality-scaled scenery/shadows, and throttled vehicle HUD updates for mobile performance
 - Original generated app/key artwork, with no remote runtime assets
 
 ## Controls
@@ -77,8 +81,10 @@ The handcrafted route contains:
 | Jump | **JUMP** | `Space` |
 | Sprint | **SPRINT** | `Shift` |
 | Shift down / up | **GEAR − / +** | `Z / X` |
+| Brake / handbrake | **BRAKE** | `Space` |
 | Front cable | **FRONT CABLE** | `Q` |
 | Rear cable | **REAR CABLE** | `R` |
+| Customize layout | **LAYOUT**, then drag/save | Main-menu **CONTROLS & PERFORMANCE** |
 
 ## Engine
 
@@ -86,7 +92,7 @@ The handcrafted route contains:
 - GDScript only; no third-party runtime plugins
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
-- Multiplayer/voice implementation retained but disabled in the 0.6 stability UI and runtime
+- Multiplayer/voice implementation retained but disabled in the 0.7 stabilization UI and runtime
 
 Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. The animated survivor comes from Quaternius' CC0 Zombie Apocalypse Kit. Provenance is documented under [`assets/third_party`](assets/third_party). The RV, map and game-specific assets remain original.
 
@@ -100,7 +106,7 @@ Install Godot 4.7.2 and open `project.godot`, or run:
 godot --editor --path .
 ```
 
-The 0.6 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION**.
+The 0.7 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
 
 ## GitHub mobile builds
 

@@ -7,6 +7,7 @@ signal toast_requested(title: String, detail: String)
 signal run_finished(success: bool)
 signal local_player_ready(player: Node)
 signal touch_input_changed
+signal settings_changed
 
 enum Mode { MENU, LOBBY, PLAYING, RESULTS }
 enum Role { DRIVER, MECHANIC, SCOUT, NAVIGATOR }
@@ -36,10 +37,32 @@ var mobile_actions: Dictionary = {}
 var player_name: String = "Rover"
 var selected_role: Role = Role.DRIVER
 var reduced_graphics: bool = false
+var graphics_quality := 1
+var control_scale := 1.0
+var control_opacity := 0.82
+var touch_look_speed := 1.0
+var control_layout: Dictionary = {}
+
+const SETTINGS_PATH := "user://dustbound_settings.cfg"
+const DEFAULT_CONTROL_LAYOUT := {
+	"move": Vector2(0.085, 0.85),
+	"toggle_view": Vector2(0.945, 0.52),
+	"interact": Vector2(0.945, 0.77),
+	"jump": Vector2(0.953, 0.91),
+	"sprint": Vector2(0.872, 0.91),
+	"winch_front": Vector2(0.800, 0.91),
+	"winch_rear": Vector2(0.722, 0.91),
+	"shift_up": Vector2(0.947, 0.64),
+	"shift_down": Vector2(0.870, 0.64),
+	"handbrake": Vector2(0.870, 0.77)
+}
 
 func _ready() -> void:
 	_create_input_actions()
-	reduced_graphics = OS.has_feature("mobile")
+	graphics_quality = 1 if OS.has_feature("mobile") else 2
+	control_layout = DEFAULT_CONTROL_LAYOUT.duplicate(true)
+	_load_settings()
+	reduced_graphics = graphics_quality == 0
 
 func reset_run() -> void:
 	mission_index = 0
@@ -54,6 +77,49 @@ func reset_run() -> void:
 	mobile_actions.clear()
 	mode = Mode.PLAYING
 	_emit_mission()
+
+func control_position(action: StringName) -> Vector2:
+	return Vector2(control_layout.get(str(action), DEFAULT_CONTROL_LAYOUT.get(str(action), Vector2(0.5, 0.5))))
+
+func set_control_position(action: StringName, normalized_position: Vector2) -> void:
+	control_layout[str(action)] = Vector2(
+		clampf(normalized_position.x, 0.035, 0.965),
+		clampf(normalized_position.y, 0.08, 0.94)
+	)
+
+func reset_control_layout() -> void:
+	control_layout = DEFAULT_CONTROL_LAYOUT.duplicate(true)
+	control_scale = 1.0
+	control_opacity = 0.82
+	touch_look_speed = 1.0
+	settings_changed.emit()
+
+func save_settings() -> void:
+	var config := ConfigFile.new()
+	config.set_value("video", "quality", graphics_quality)
+	config.set_value("controls", "scale", control_scale)
+	config.set_value("controls", "opacity", control_opacity)
+	config.set_value("controls", "look_speed", touch_look_speed)
+	for action: String in control_layout:
+		config.set_value("layout", action, control_layout[action])
+	var error := config.save(SETTINGS_PATH)
+	if error != OK:
+		push_warning("Could not save mobile settings: %s" % error_string(error))
+	reduced_graphics = graphics_quality == 0
+	settings_changed.emit()
+
+func _load_settings() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return
+	graphics_quality = clampi(int(config.get_value("video", "quality", graphics_quality)), 0, 2)
+	control_scale = clampf(float(config.get_value("controls", "scale", 1.0)), 0.72, 1.35)
+	control_opacity = clampf(float(config.get_value("controls", "opacity", 0.82)), 0.35, 1.0)
+	touch_look_speed = clampf(float(config.get_value("controls", "look_speed", 1.0)), 0.55, 1.65)
+	for action: String in DEFAULT_CONTROL_LAYOUT:
+		var saved_position: Variant = config.get_value("layout", action, DEFAULT_CONTROL_LAYOUT[action])
+		if saved_position is Vector2:
+			set_control_position(action, saved_position)
 
 func complete_target(target: String) -> bool:
 	if mission_index >= MISSIONS.size():

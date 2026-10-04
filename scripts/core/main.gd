@@ -4,6 +4,7 @@ extends Node
 const WorldScript = preload("res://scripts/world/expedition_world.gd")
 const HUDScript = preload("res://scripts/ui/expedition_hud.gd")
 const MenuDioramaScript = preload("res://scripts/ui/menu_diorama.gd")
+const ControlLayoutEditorScript = preload("res://scripts/ui/control_layout_editor.gd")
 
 var menu_layer: CanvasLayer
 var name_input: LineEdit
@@ -13,6 +14,7 @@ var status_label: Label
 var active_world: ExpeditionWorld
 var active_hud: ExpeditionHUD
 var menu_world: MenuDiorama
+var settings_editor: ControlLayoutEditor
 
 func _ready() -> void:
 	if OS.has_feature("mobile"):
@@ -93,8 +95,13 @@ func _show_main_menu() -> void:
 	solo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	solo.pressed.connect(_start_solo)
 	content.add_child(solo)
+	var settings := _button("CONTROLS & PERFORMANCE", Vector2.ZERO, Vector2(0, 46), Color("315c61"))
+	settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings.add_theme_font_size_override("font_size", 14)
+	settings.pressed.connect(_show_control_settings)
+	content.add_child(settings)
 
-	status_label = _label("STABILITY BUILD • MULTIPLAYER TEMPORARILY DISABLED", 11, Color("bcb9ae"), true)
+	status_label = _label("SINGLE-PLAYER MOBILE BUILD • CUSTOM CONTROLS", 11, Color("bcb9ae"), true)
 	status_label.custom_minimum_size.y = 34
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status_label)
@@ -113,6 +120,13 @@ func _show_main_menu() -> void:
 	badge.add_theme_color_override("font_color", Color("fff0d1"))
 	badge.add_theme_stylebox_override("normal", _style(Color(0.03, 0.04, 0.055, 0.72), Color(1, 1, 1, 0.16), 14))
 	root.add_child(badge)
+
+func _show_control_settings() -> void:
+	if is_instance_valid(settings_editor):
+		return
+	settings_editor = ControlLayoutEditorScript.new()
+	settings_editor.setup(func() -> void: settings_editor = null)
+	get_tree().root.add_child(settings_editor)
 
 func _start_solo() -> void:
 	_save_profile()
@@ -307,6 +321,10 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("swipe camera-look area missing")
 		if not active_hud.find_child("Touch_toggle_view", true, false):
 			failures.append("touch first/third-person button missing")
+		if not active_hud.find_child("Touch_control_settings", true, false):
+			failures.append("mobile control-layout settings button missing")
+		if not active_hud.find_child("Touch_handbrake", true, false):
+			failures.append("mobile RV brake button missing")
 	if active_world:
 		var terrain := active_world.find_child("RedmesaTerrain", true, false) as MeshInstance3D
 		if not terrain:
@@ -340,6 +358,23 @@ func _run_expedition_smoke_test() -> void:
 				colors[image.get_pixel(x, y).to_rgba32()] = true
 		if colors.size() < 18:
 			failures.append("viewport lacks visual variation (%d sampled colors)" % colors.size())
+		# The former smoke test accepted a technically varied but almost-black
+		# terrain. Measure the lower gameplay view where ground/road must be legible.
+		var luminance_total := 0.0
+		var luminance_samples := 0
+		var dark_samples := 0
+		for y in range(int(height * 0.46), height, maxi(1, int(height / 22.0))):
+			for x in range(0, width, maxi(1, int(width / 28.0))):
+				var pixel := image.get_pixel(x, y)
+				var luminance := pixel.r * 0.2126 + pixel.g * 0.7152 + pixel.b * 0.0722
+				luminance_total += luminance
+				luminance_samples += 1
+				if luminance < 0.075:
+					dark_samples += 1
+		var average_luminance := luminance_total / maxf(float(luminance_samples), 1.0)
+		var dark_ratio := float(dark_samples) / maxf(float(luminance_samples), 1.0)
+		if average_luminance < 0.17 or dark_ratio > 0.42:
+			failures.append("ground render is underexposed (luma=%.3f dark=%.2f)" % [average_luminance, dark_ratio])
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build/validation"))
 		image.save_png("res://build/validation/expedition-render.png")
 	print("3D_RENDER_SMOKE camera=%s meshes=%d failures=%s" % [current_camera.name if current_camera else "none", mesh_count, failures])

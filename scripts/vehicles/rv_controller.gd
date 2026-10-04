@@ -36,6 +36,7 @@ var start_transform := Transform3D.IDENTITY
 var body_shell: Node3D
 var bumper_visual: Node3D
 var roof_crate: Node3D
+var stats_emit_accumulator := 0.0
 
 func setup(spawn_transform: Transform3D) -> void:
 	name = "ExpeditionRV"
@@ -75,7 +76,12 @@ func _physics_process(delta: float) -> void:
 	if Net.is_online:
 		_sync_rv.rpc(global_transform, linear_velocity, angular_velocity, health, fuel, gear, engine_running, driver_peer_id,
 			front_winch, rear_winch)
-	stats_changed.emit(health, fuel, gear, _hud_speed_kmh())
+	# Text layout and signal fan-out at 60 Hz wastes mobile CPU. Ten updates per
+	# second is visually smooth for HUD meters and leaves time for physics/render.
+	stats_emit_accumulator += delta
+	if stats_emit_accumulator >= 0.10:
+		stats_emit_accumulator = 0.0
+		stats_changed.emit(health, fuel, gear, _hud_speed_kmh())
 
 func submit_driver_input(peer_id: int, throttle: float, steering_input: float, handbrake_pressed: bool,
 	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed := false, rear_pressed := false) -> void:
@@ -208,7 +214,9 @@ func damage(value: float, source := "IMPACT") -> void:
 		GameSession.run_finished.emit(false)
 
 func _simulate_driver(delta: float) -> void:
-	steering = move_toward(steering, steer_input * MAX_STEER, delta * 1.8)
+	var horizontal_speed := Vector2(linear_velocity.x, linear_velocity.z).length()
+	var steering_limit := lerpf(MAX_STEER, 0.20, clampf(horizontal_speed / MAX_SAFE_SPEED, 0.0, 1.0))
+	steering = move_toward(steering, steer_input * steering_limit, delta * 1.8)
 	var parked := driver_peer_id == 0
 	if parked or not engine_running or fuel <= 0.0 or health <= 0.0 or gear == 1:
 		engine_force = 0.0

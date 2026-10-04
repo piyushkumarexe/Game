@@ -166,8 +166,9 @@ func _drive_vehicle(delta: float) -> void:
 func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
 	var swipe := GameSession.consume_touch_look()
 	var stick := GameSession.look_vector()
-	var yaw_change := swipe.x * TOUCH_LOOK_SENSITIVITY + stick.x * delta * 2.6
-	var pitch_change := swipe.y * TOUCH_LOOK_SENSITIVITY + stick.y * delta * 2.2
+	var touch_sensitivity := TOUCH_LOOK_SENSITIVITY * GameSession.touch_look_speed
+	var yaw_change := swipe.x * touch_sensitivity + stick.x * delta * 2.6
+	var pitch_change := swipe.y * touch_sensitivity + stick.y * delta * 2.2
 	if absf(yaw_change) > 0.0001:
 		if driving:
 			head.rotation.y = clampf(head.rotation.y - yaw_change, -1.25, 1.25)
@@ -237,6 +238,8 @@ func enter_driver(vehicle: Node) -> void:
 	is_driving = true
 	driven_vehicle = vehicle
 	spring_arm.add_excluded_object(vehicle.get_rid())
+	spring_arm.spring_length = 7.2
+	spring_arm.position = Vector3(0.0, 1.05, 0.0)
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
 	if peer_id == multiplayer.get_unique_id():
@@ -250,6 +253,8 @@ func leave_driver(exit_transform: Transform3D) -> void:
 	driven_vehicle = null
 	spring_arm.clear_excluded_objects()
 	spring_arm.add_excluded_object(get_rid())
+	spring_arm.spring_length = 4.2
+	spring_arm.position = Vector3(0.0, 0.30, 0.0)
 	global_transform = exit_transform
 	$CollisionShape3D.set_deferred("disabled", false)
 	head.rotation = Vector3.ZERO
@@ -340,8 +345,10 @@ func _build_player() -> void:
 	camera.add_child(hands_visual)
 	cockpit_visual = COCKPIT_SCENE.instantiate() as Node3D
 	cockpit_visual.name = "DriverCockpit"
-	cockpit_visual.scale = Vector3.ONE * 0.72
-	cockpit_visual.position = Vector3(0.0, -0.12, -0.12)
+	# Keep only a slim dashboard/steering-wheel frame. The previous scale filled
+	# the lower half of a phone screen with a cream rectangle.
+	cockpit_visual.scale = Vector3.ONE * 0.42
+	cockpit_visual.position = Vector3(0.0, -0.33, -0.16)
 	cockpit_visual.visible = false
 	camera.add_child(cockpit_visual)
 

@@ -33,7 +33,8 @@ func _begin_touch(pointer: int, screen_position: Vector2) -> void:
 		var action := StringName(button.get_meta("input_action", ""))
 		var hold_action := bool(button.get_meta("hold_action", false))
 		pointer_actions[pointer] = {"action": action, "hold": hold_action, "button": button}
-		button.modulate = Color(1.18, 1.08, 0.88, 1.0)
+		var base: Color = button.get_meta("base_modulate", Color.WHITE)
+		button.modulate = Color(1.18, 1.08, 0.88, base.a)
 		if hold_action:
 			GameSession.set_touch_action(action, true)
 		else:
@@ -67,7 +68,7 @@ func _end_touch(pointer: int) -> void:
 			GameSession.set_touch_action(action, false)
 		var button: Button = info["button"]
 		if is_instance_valid(button):
-			button.modulate = Color.WHITE
+			button.modulate = button.get_meta("base_modulate", Color.WHITE)
 		pointer_actions.erase(pointer)
 
 func _inside_move_zone(screen_position: Vector2) -> bool:

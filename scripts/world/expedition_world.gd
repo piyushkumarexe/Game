@@ -21,6 +21,8 @@ const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-
 const CAMPFIRE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/campfire-stones.glb")
 const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
 const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
+const TERRAIN_DETAIL: Texture2D = preload("res://assets/textures/terrain_detail.png")
+const ROAD_TEXTURE: Texture2D = preload("res://assets/textures/road_gravel.png")
 
 const ROUTE: Array[Vector3] = [
 	Vector3(0, 2.2, 85), Vector3(-8, 2.0, 55), Vector3(14, 1.2, 24),
@@ -98,8 +100,8 @@ func _build_bootstrap_view() -> void:
 	basin.mesh = basin_mesh
 	basin.position = Vector3(0.0, -10.5, -80.0)
 	var basin_material := StandardMaterial3D.new()
-	basin_material.albedo_texture = GROUND_TEXTURE
-	basin_material.albedo_color = Color("654535")
+	basin_material.albedo_texture = TERRAIN_DETAIL
+	basin_material.albedo_color = Color("526b4b")
 	basin_material.uv1_scale = Vector3(12.0, 12.0, 12.0)
 	basin_material.roughness = 1.0
 	basin.material_override = basin_material
@@ -199,37 +201,42 @@ func _build_environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("263f55")
-	sky_material.sky_horizon_color = Color("d2875a")
-	sky_material.ground_bottom_color = Color("2a2627")
-	sky_material.ground_horizon_color = Color("9a6247")
-	sky_material.sun_angle_max = 14.0
-	sky_material.sun_curve = 0.08
+	# Bright late-morning forest light replaces the underexposed sunset that
+	# multiplied the terrain into an almost-black silhouette on Android.
+	sky_material.sky_top_color = Color("4f91bc")
+	sky_material.sky_horizon_color = Color("c9ded1")
+	sky_material.ground_bottom_color = Color("526b55")
+	sky_material.ground_horizon_color = Color("a9bea0")
+	sky_material.sun_angle_max = 9.0
+	sky_material.sun_curve = 0.12
 	sky.sky_material = sky_material
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.48
+	environment.ambient_light_color = Color("dce6d5")
+	environment.ambient_light_energy = 0.82
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.glow_enabled = not GameSession.reduced_graphics
+	environment.glow_enabled = GameSession.graphics_quality >= 2
 	environment.fog_enabled = true
-	environment.fog_light_color = Color("a97863")
-	environment.fog_light_energy = 0.16
-	environment.fog_density = 0.0018
-	environment.fog_sky_affect = 0.48
+	environment.fog_light_color = Color("c2d3c4")
+	environment.fog_light_energy = 0.42
+	environment.fog_density = 0.00125
+	environment.fog_sky_affect = 0.34
 	world_environment.environment = environment
 	add_child(world_environment)
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
-	sun.light_color = Color("ffd4a3")
-	sun.light_energy = 0.92
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 135.0
+	sun.rotation_degrees = Vector3(-55.0, -34.0, 0.0)
+	sun.light_color = Color("fff0cf")
+	sun.light_energy = 1.08
+	sun.shadow_enabled = GameSession.graphics_quality > 0
+	sun.directional_shadow_max_distance = 72.0 if GameSession.graphics_quality == 1 else 120.0
 	add_child(sun)
 
 func _build_terrain() -> void:
-	var x_count := 74 if GameSession.reduced_graphics else 96
-	var z_count := 104 if GameSession.reduced_graphics else 132
+	var terrain_sizes := [Vector2i(64, 88), Vector2i(78, 108), Vector2i(96, 132)]
+	var terrain_size: Vector2i = terrain_sizes[GameSession.graphics_quality]
+	var x_count := terrain_size.x
+	var z_count := terrain_size.y
 	var x_min := -130.0
 	var x_max := 130.0
 	var z_min := -270.0
@@ -249,15 +256,18 @@ func _build_terrain() -> void:
 			var normal := Vector3(terrain_height(x - sample, z) - terrain_height(x + sample, z), sample * 2.0,
 				terrain_height(x, z - sample) - terrain_height(x, z + sample)).normalized()
 			normals.append(normal)
-			var terrain_tint := Color("a8794f")
-			if normal.y < 0.72:
-				terrain_tint = Color("79564a")
+			var route_distance := float(_nearest_route_data(Vector2(x, z)).x)
+			var terrain_tint := Color("769758")
+			if route_distance < 6.5:
+				terrain_tint = Color("b58b5d")
+			elif normal.y < 0.70:
+				terrain_tint = Color("796a58")
 			elif y > 18.0:
-				terrain_tint = Color("ad8a61")
-			elif sin(x * 0.19 + z * 0.11) > 0.48:
-				terrain_tint = Color("936642")
+				terrain_tint = Color("668252")
+			elif sin(x * 0.13 + z * 0.09) > 0.42:
+				terrain_tint = Color("88a762")
 			colors.append(terrain_tint)
-			uvs.append(Vector2(x * 0.025, z * 0.025))
+			uvs.append(Vector2(x * 0.035, z * 0.035))
 	for z_index in z_count - 1:
 		for x_index in x_count - 1:
 			var current := z_index * x_count + x_index
@@ -279,7 +289,7 @@ func _build_terrain() -> void:
 	# It is reliable on Android's OpenGL fallback and still gets variation from
 	# baked vertex colors, so scenery can never appear to float over a void.
 	var terrain_material := StandardMaterial3D.new()
-	terrain_material.albedo_texture = GROUND_TEXTURE
+	terrain_material.albedo_texture = TERRAIN_DETAIL
 	terrain_material.albedo_color = Color.WHITE
 	terrain_material.vertex_color_use_as_albedo = true
 	terrain_material.roughness = 0.97
@@ -297,8 +307,11 @@ func _build_terrain() -> void:
 func _build_road() -> void:
 	var road_mesh := ImmediateMesh.new()
 	var road_material := StandardMaterial3D.new()
-	road_material.albedo_color = Color("8c6245")
+	road_material.albedo_texture = ROAD_TEXTURE
+	road_material.albedo_color = Color("f1d4a5")
 	road_material.roughness = 1.0
+	road_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	for segment in ROUTE.size() - 1:
 		if segment == 3:
 			continue
@@ -306,13 +319,14 @@ func _build_road() -> void:
 		var b := ROUTE[segment + 1] + Vector3.UP * 0.09
 		var forward := (b - a).normalized()
 		var right := forward.cross(Vector3.UP).normalized() * 3.7
+		var tile_length := a.distance_to(b) / 5.5
 		road_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, road_material)
 		road_mesh.surface_set_uv(Vector2(0, 0)); road_mesh.surface_add_vertex(a - right)
-		road_mesh.surface_set_uv(Vector2(0, 1)); road_mesh.surface_add_vertex(a + right)
-		road_mesh.surface_set_uv(Vector2(1, 0)); road_mesh.surface_add_vertex(b - right)
-		road_mesh.surface_set_uv(Vector2(1, 0)); road_mesh.surface_add_vertex(b - right)
-		road_mesh.surface_set_uv(Vector2(0, 1)); road_mesh.surface_add_vertex(a + right)
-		road_mesh.surface_set_uv(Vector2(1, 1)); road_mesh.surface_add_vertex(b + right)
+		road_mesh.surface_set_uv(Vector2(1, 0)); road_mesh.surface_add_vertex(a + right)
+		road_mesh.surface_set_uv(Vector2(0, tile_length)); road_mesh.surface_add_vertex(b - right)
+		road_mesh.surface_set_uv(Vector2(0, tile_length)); road_mesh.surface_add_vertex(b - right)
+		road_mesh.surface_set_uv(Vector2(1, 0)); road_mesh.surface_add_vertex(a + right)
+		road_mesh.surface_set_uv(Vector2(1, tile_length)); road_mesh.surface_add_vertex(b + right)
 		road_mesh.surface_end()
 	var road := MeshInstance3D.new()
 	road.name = "DustRoad"
@@ -376,7 +390,7 @@ func _build_landmarks() -> void:
 	add_child(water)
 
 func _build_scenery() -> void:
-	var tree_count := 74 if GameSession.reduced_graphics else 118
+	var tree_count: int = [46, 74, 118][GameSession.graphics_quality]
 	for index in tree_count:
 		var z := random.randf_range(-250.0, 103.0)
 		var x := random.randf_range(-118.0, 118.0)
@@ -384,7 +398,7 @@ func _build_scenery() -> void:
 		if route_info.x < 7.2 or route_info.x > 38.0:
 			continue
 		_make_tree(Vector3(x, terrain_height(x, z), z), 0.75 + random.randf() * 0.7, index % 5 == 0)
-	var rock_count := 54 if GameSession.reduced_graphics else 86
+	var rock_count: int = [32, 52, 86][GameSession.graphics_quality]
 	for index in rock_count:
 		var z := random.randf_range(-255.0, 106.0)
 		var x := random.randf_range(-122.0, 122.0)
@@ -394,7 +408,7 @@ func _build_scenery() -> void:
 		var radius := random.randf_range(0.45, 1.75)
 		_make_rock(Vector3(x, terrain_height(x, z), z), radius,
 			Vector3(random.randf_range(0.8, 1.5), random.randf_range(0.55, 1.15), random.randf_range(0.8, 1.4)), index % 8 == 0)
-	var cover_count := 90 if GameSession.reduced_graphics else 150
+	var cover_count: int = [42, 82, 150][GameSession.graphics_quality]
 	for index in cover_count:
 		var z := random.randf_range(-252.0, 104.0)
 		var x := random.randf_range(-116.0, 116.0)
@@ -407,6 +421,16 @@ func _build_scenery() -> void:
 		cover.rotation.y = random.randf_range(-PI, PI)
 		cover.scale = Vector3.ONE * random.randf_range(1.25, 2.15)
 		props_root.add_child(cover)
+		_set_shadow_mode(cover, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	# A deliberate tree line gives the opening area a readable forest silhouette
+	# instead of relying on sparse random placements in the player's first view.
+	var camp_tree_count: int = [8, 13, 20][GameSession.graphics_quality]
+	for index in camp_tree_count:
+		var angle := TAU * float(index) / float(camp_tree_count) + sin(index * 2.1) * 0.16
+		var radius := 21.0 + float(index % 4) * 4.5
+		var x := ROUTE[0].x + cos(angle) * radius
+		var z := ROUTE[0].z + sin(angle) * radius
+		_make_tree(Vector3(x, terrain_height(x, z), z), 0.78 + float(index % 3) * 0.16, false)
 	# Reliable cable anchors along challenge sections.
 	for anchor_position in [Vector3(18, 5, -8), Vector3(46, 6, -32), Vector3(-34, 7, -109), Vector3(-13, 11, -131), Vector3(22, 19, -169), Vector3(-24, 29, -199)]:
 		_make_winch_post(anchor_position)
@@ -425,6 +449,8 @@ func _make_tree(position: Vector3, scale_factor: float, anchor: bool) -> void:
 	var model := PINE_SCENES[random.randi_range(0, PINE_SCENES.size() - 1)].instantiate() as Node3D
 	model.scale = Vector3.ONE * 3.45
 	tree.add_child(model)
+	if GameSession.graphics_quality == 0 and not anchor:
+		_set_shadow_mode(model, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if anchor:
 		var trunk_body := StaticBody3D.new()
 		var trunk_collision := CollisionShape3D.new()
@@ -447,6 +473,8 @@ func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collisio
 	var model := ROCK_SCENES[random.randi_range(0, ROCK_SCENES.size() - 1)].instantiate() as Node3D
 	model.scale = Vector3.ONE * 2.15
 	rock_root.add_child(model)
+	if GameSession.graphics_quality < 2 and not collision_enabled:
+		_set_shadow_mode(model, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	if collision_enabled:
 		var body := StaticBody3D.new()
 		var collision := CollisionShape3D.new()
@@ -456,6 +484,12 @@ func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collisio
 		collision.position.y = 0.6
 		body.add_child(collision)
 		rock_root.add_child(body)
+
+func _set_shadow_mode(root_node: Node, mode: int) -> void:
+	if root_node is GeometryInstance3D:
+		(root_node as GeometryInstance3D).cast_shadow = mode
+	for mesh_node: Node in root_node.find_children("*", "GeometryInstance3D", true, false):
+		(mesh_node as GeometryInstance3D).cast_shadow = mode
 
 func _make_winch_post(position: Vector3) -> void:
 	var post := PrimitiveFactory.cylinder(props_root, "SteelWinchPost", position, 0.18, 2.6, Color("626c6c"), true)

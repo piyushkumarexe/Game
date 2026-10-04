@@ -2,13 +2,14 @@ class_name MenuDiorama
 extends Node3D
 ## Live 3D title-screen campsite assembled from the same models used in play.
 
-const RV_SCENE: PackedScene = preload("res://assets/third_party/kenney/car-kit/ambulance.glb")
+const RV_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
 const PINE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tree-pinetallb-detailed.glb")
 const ROCK_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/rock-largeb.glb")
 const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
 const CAMPFIRE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/campfire-stones.glb")
 const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
-const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
+const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/terrain_detail.png")
+const ROAD_TEXTURE: Texture2D = preload("res://assets/textures/road_gravel.png")
 
 var camera: Camera3D
 var rig: Node3D
@@ -43,28 +44,31 @@ func _build_environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("172f47")
-	sky_material.sky_horizon_color = Color("e58b50")
-	sky_material.ground_bottom_color = Color("171619")
-	sky_material.ground_horizon_color = Color("8c4d35")
+	sky_material.sky_top_color = Color("4f91bc")
+	sky_material.sky_horizon_color = Color("c9ded1")
+	sky_material.ground_bottom_color = Color("526b55")
+	sky_material.ground_horizon_color = Color("a9bea0")
 	sky_material.sun_angle_max = 10.0
 	sky_material.sun_curve = 0.08
 	sky.sky_material = sky_material
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.88
+	environment.ambient_light_color = Color("dce6d5")
+	environment.ambient_light_energy = 0.82
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.fog_enabled = true
-	environment.fog_light_color = Color("cf7953")
-	environment.fog_density = 0.008
+	environment.fog_light_color = Color("c2d3c4")
+	environment.fog_light_energy = 0.4
+	environment.fog_density = 0.0035
 	world_environment.environment = environment
 	add_child(world_environment)
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-42.0, -28.0, 0.0)
-	sun.light_color = Color("ffd19a")
-	sun.light_energy = 1.35
-	sun.shadow_enabled = true
+	sun.rotation_degrees = Vector3(-55.0, -34.0, 0.0)
+	sun.light_color = Color("fff0cf")
+	sun.light_energy = 1.08
+	sun.shadow_enabled = GameSession.graphics_quality > 0
+	sun.directional_shadow_max_distance = 70.0
 	add_child(sun)
 
 func _build_ground() -> void:
@@ -77,7 +81,8 @@ func _build_ground() -> void:
 	ground.mesh = mesh
 	var material := StandardMaterial3D.new()
 	material.albedo_texture = GROUND_TEXTURE
-	material.uv1_scale = Vector3(18.0, 18.0, 18.0)
+	material.albedo_color = Color("78995b")
+	material.uv1_scale = Vector3(8.0, 8.0, 8.0)
 	material.roughness = 1.0
 	ground.material_override = material
 	add_child(ground)
@@ -88,7 +93,9 @@ func _build_ground() -> void:
 	road.position = Vector3(1.8, 0.025, -4.0)
 	road.rotation.y = -0.34
 	var road_material := StandardMaterial3D.new()
-	road_material.albedo_color = Color("8c5639")
+	road_material.albedo_texture = ROAD_TEXTURE
+	road_material.albedo_color = Color("e2c394")
+	road_material.uv1_scale = Vector3(2.0, 8.0, 2.0)
 	road_material.roughness = 1.0
 	road.material_override = road_material
 	add_child(road)
@@ -100,18 +107,36 @@ func _build_rig() -> void:
 	rig.rotation.y = -0.68
 	add_child(rig)
 	var exterior := RV_SCENE.instantiate() as Node3D
-	exterior.name = "KenneyCC0ExpeditionBody"
-	exterior.scale = Vector3(1.72, 2.1, 2.1)
-	exterior.rotation.y = PI
+	exterior.name = "OriginalDustboundCamper"
+	exterior.position.y = 1.25
 	rig.add_child(exterior)
-	for side_x in [-1.30, 1.30]:
-		for window_z in [-0.58, 0.45]:
-			PrimitiveFactory.box(rig, "CabinWindow", Vector3(side_x, 2.33, window_z),
-				Vector3(0.035, 0.62, 0.74), Color("193540"))
-	PrimitiveFactory.box(rig, "RoofSolarPanel", Vector3(0.0, 3.84, 0.25),
-		Vector3(1.55, 0.07, 1.75), Color("294a55"))
-	PrimitiveFactory.cylinder(rig, "RearSpare", Vector3(0.0, 1.30, 3.18),
-		0.48, 0.24, Color("17191c"), false, Vector3(PI * 0.5, 0.0, 0.0), 18)
+	for x in [-1.18, 1.18]:
+		for z in [-2.08, 1.92]:
+			_add_menu_wheel(Vector3(x, 0.58, z))
+
+func _add_menu_wheel(wheel_position: Vector3) -> void:
+	var tire := MeshInstance3D.new()
+	var tire_mesh := CylinderMesh.new()
+	tire_mesh.top_radius = 0.56
+	tire_mesh.bottom_radius = 0.56
+	tire_mesh.height = 0.34
+	tire_mesh.radial_segments = 16
+	tire.mesh = tire_mesh
+	tire.position = wheel_position
+	tire.rotation.z = PI * 0.5
+	tire.material_override = PrimitiveFactory.material(Color("17191c"), 0.96)
+	rig.add_child(tire)
+	var hub := MeshInstance3D.new()
+	var hub_mesh := CylinderMesh.new()
+	hub_mesh.top_radius = 0.22
+	hub_mesh.bottom_radius = 0.22
+	hub_mesh.height = 0.38
+	hub_mesh.radial_segments = 12
+	hub.mesh = hub_mesh
+	hub.position = wheel_position
+	hub.rotation.z = PI * 0.5
+	hub.material_override = PrimitiveFactory.material(Color("9ca59d"), 0.38, 0.45)
+	rig.add_child(hub)
 
 func _build_scenery() -> void:
 	var tree_data := [
