@@ -96,7 +96,14 @@ jobs:
             label=$(basename "$source" .png)
             convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
             encoded=$(base64 -w0 "/tmp/${label}.jpg")
-            echo "::notice title=${label}_BASE64::${encoded}"
+            part=0
+            while [ -n "$encoded" ]; do
+              piece=${encoded:0:3500}
+              encoded=${encoded:3500}
+              printf -v part_label '%03d' "$part"
+              echo "::notice title=${label}_BASE64_${part_label}::${piece}"
+              part=$((part + 1))
+            done
           done
       - name: Upload 3D render proof
         uses: actions/upload-artifact@v7.0.1
