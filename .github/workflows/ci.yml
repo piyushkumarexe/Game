@@ -31,30 +31,39 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
-      - name: Verify generated RV assets
+      - name: Verify professional vehicle and crew assets
         run: |
+          # The generated scene now supplies only the connected interior and
+          # mechanisms. Rebuilding it must not restore the deleted placeholder.
           python3 tools/generate_lowpoly_assets.py
+          test ! -e assets/models/crew_member.gltf
           python3 - <<'PY'
           import json
-          exterior = json.load(open('assets/models/rv_exterior.gltf', encoding='utf-8'))
-          wheel = json.load(open('assets/models/rv_wheel.gltf', encoding='utf-8'))
-          triangles = sum(exterior['accessors'][primitive['indices']]['count'] // 3
-                          for mesh in exterior['meshes'] for primitive in mesh['primitives'])
-          assert triangles >= 6000, triangles
-          assert len(exterior['materials']) >= 28, len(exterior['materials'])
-          assert {'StaticRVExterior', 'StaticRVInterior', 'StaticCockpitFrame', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor', 'RoofCargo'} <= {node.get('name') for node in exterior['nodes']}
-          assert any(node.get('name') == 'DetailedWheelAssembly' for node in wheel['nodes'])
-          source = open('tools/generate_lowpoly_assets.py', encoding='utf-8').read()
-          for required in ('FrontRoofBrow', 'FrontLowerShell', 'WindshieldLeft',
-                           'CoachWindowBayPillar', 'WheelArchTrim', 'InteriorWindowPillar'):
-              assert required in source, f'missing replacement RV component: {required}'
-          for removed in ('rv.profile_prism("CabBody"', 'rv.profile_prism("CabHood"',
-                          'rv.profile_prism("OvercabSleeper"'):
-              assert removed not in source, f'rejected Class-C component returned: {removed}'
+          interior = json.load(open('assets/models/rv_exterior.gltf', encoding='utf-8'))
+          motorhome = json.load(open('assets/third_party/gmc_motorhome/motorhome.gltf', encoding='utf-8'))
+          wheel = json.load(open('assets/third_party/gmc_motorhome/wheel.gltf', encoding='utf-8'))
+          head = json.load(open('assets/third_party/quaternius_crew/crew_head.gltf', encoding='utf-8'))
+          outfit = json.load(open('assets/third_party/quaternius_crew/ranger_outfit.gltf', encoding='utf-8'))
+          motorhome_triangles = sum(motorhome['accessors'][primitive['indices']]['count'] // 3
+                                    for mesh in motorhome['meshes'] for primitive in mesh['primitives'])
+          wheel_triangles = wheel['accessors'][wheel['meshes'][0]['primitives'][0]['indices']]['count'] // 3
+          assert motorhome_triangles >= 42000, motorhome_triangles
+          assert wheel_triangles >= 1500, wheel_triangles
+          assert not {17, 19, 21} & set(motorhome['nodes'][2]['children']), 'baked axle pairs still render'
+          assert {'StaticRVInterior', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor'} <= {node.get('name') for node in interior['nodes']}
+          assert len(head.get('skins', [])) == 1 and len(outfit.get('skins', [])) == 1
+          assert 72 not in outfit['nodes'][74]['children'], 'Ranger hood intersects expedition cap'
+          assert head['accessors'][head['meshes'][2]['primitives'][0]['indices']]['count'] // 3 >= 3000
+          for notice in ('assets/third_party/gmc_motorhome/ATTRIBUTION.md',
+                         'assets/third_party/quaternius_crew/base-license.txt',
+                         'assets/third_party/quaternius_crew/outfits-license.txt'):
+              assert open(notice, encoding='utf-8').read().strip(), notice
           controller = open('scripts/vehicles/rv_controller.gd', encoding='utf-8').read()
-          assert controller.count('_add_wheel("') == 4
-          assert controller.count('-2.35), true, false)') == 2
-          print(f'Replacement RV verified: {triangles} triangles, {len(exterior["materials"])} materials')
+          for required in ('RearForward%s', 'RearAft%s', 'wheel.wheel_radius = 0.43',
+                           'ProfessionalGMCMotorhomeExterior', '_build_entry_steps_and_frame'):
+              assert required in controller, required
+          assert 'StylizedCrewVisual' not in open('scripts/player/player_controller.gd', encoding='utf-8').read()
+          print(f'Professional assets verified: motorhome={motorhome_triangles} triangles wheel={wheel_triangles} triangles')
           PY
       - name: Install Godot 4.7.2
         uses: chickensoft-games/setup-godot@v2.4.3
