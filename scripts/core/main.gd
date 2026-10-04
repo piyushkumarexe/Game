@@ -362,7 +362,8 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("packed RV did not assign the physical driver seat")
 			else:
 				smoke_player._apply_camera_mode(true)
-				await get_tree().create_timer(0.75).timeout
+				# Let the full 3.6-ton suspension complete its damped release transient.
+				await get_tree().create_timer(1.50).timeout
 				if get_viewport().get_camera_3d() != smoke_player.third_camera:
 					failures.append("RV chase camera did not become current")
 				if not smoke_rv.body_shell.visible:

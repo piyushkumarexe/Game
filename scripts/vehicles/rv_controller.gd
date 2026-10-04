@@ -280,7 +280,7 @@ func _apply_grounded_stability(_delta: float) -> void:
 			var clearance := wheel.global_position.y - ground_height
 			var compression := maxf(0.0, 0.68 - clearance)
 			if compression > 0.0:
-				var spring_force := compression * mass * 20.0 - linear_velocity.y * mass * 0.22
+				var spring_force := compression * mass * 20.0 - linear_velocity.y * mass * 4.0
 				spring_force = clampf(spring_force, 0.0, mass * 7.0)
 				apply_force(Vector3.UP * spring_force, wheel.global_position - global_position)
 				terrain_support_count += 1
