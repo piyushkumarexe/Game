@@ -38,8 +38,25 @@ jobs:
       - name: Render the playable 3D expedition
         run: |
           mkdir -p build/validation
-          xvfb-run -a godot --path . -- --smoke-expedition
-          test -s build/validation/expedition-render.png
+          set +e
+          xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            test -s build/validation/expedition-render.png
+            status=$?
+          fi
+          {
+            echo '### Playable 3D render smoke log'
+            echo '```text'
+            tail -120 render-smoke.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            detail=$(tail -100 render-smoke.log | tr '\n' '|' | cut -c 1-7000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=scenes/main.tscn,title=Playable 3D render smoke::$detail"
+          fi
+          exit $status
       - name: Upload 3D render proof
         uses: actions/upload-artifact@v7.0.1
         with:
