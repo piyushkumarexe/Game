@@ -94,11 +94,9 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
           for source in build/validation/expedition-render.png build/validation/rv-cockpit-render.png; do
             label=$(basename "$source" .png)
-            convert "$source" -resize 480x270 -strip -quality 72 "/tmp/${label}.jpg"
-            echo "${label}_BASE64_BEGIN"
-            base64 -w0 "/tmp/${label}.jpg"
-            echo
-            echo "${label}_BASE64_END"
+            convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
+            encoded=$(base64 -w0 "/tmp/${label}.jpg")
+            echo "::notice title=${label}_BASE64::${encoded}"
           done
       - name: Upload 3D render proof
         uses: actions/upload-artifact@v7.0.1
