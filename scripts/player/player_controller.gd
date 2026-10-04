@@ -6,7 +6,8 @@ const WALK_SPEED := 4.4
 const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
-const CREW_SCENE: PackedScene = preload("res://assets/models/crew_member.gltf")
+const TOUCH_LOOK_SENSITIVITY := 0.0042
+const CREW_SCENE: PackedScene = preload("res://assets/third_party/kenney/mini-characters/character-male-a.glb")
 const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
 const COCKPIT_SCENE: PackedScene = preload("res://assets/models/rv_cockpit.gltf")
 
@@ -21,6 +22,10 @@ var remote_target := Transform3D.IDENTITY
 var look_pitch := 0.0
 var head: Node3D
 var camera: Camera3D
+var first_camera: Camera3D
+var third_camera: Camera3D
+var third_person := false
+var spring_arm: SpringArm3D
 var interact_ray: RayCast3D
 var body_visual: Node3D
 var carried_visual: MeshInstance3D
@@ -39,10 +44,8 @@ func setup(id: int, display_name: String, selected_role: int, spawn_position: Ve
 	set_multiplayer_authority(peer_id)
 	_build_player()
 	if peer_id == multiplayer.get_unique_id():
-		camera.make_current()
-		body_visual.visible = false
+		_apply_camera_mode(false)
 		nameplate.visible = false
-		hands_visual.visible = true
 		GameSession.register_local_player(self)
 		call_deferred("_ensure_local_camera")
 		if not OS.has_feature("mobile"):
@@ -63,17 +66,22 @@ func _ensure_local_camera() -> void:
 		camera.make_current()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if peer_id != multiplayer.get_unique_id() or is_driving:
+	if peer_id != multiplayer.get_unique_id():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-event.relative.x * LOOK_SENSITIVITY)
-		look_pitch = clampf(look_pitch - event.relative.y * LOOK_SENSITIVITY, -1.35, 1.35)
+		if is_driving:
+			head.rotation.y = clampf(head.rotation.y - event.relative.x * LOOK_SENSITIVITY, -1.25, 1.25)
+		else:
+			rotate_y(-event.relative.x * LOOK_SENSITIVITY)
+		look_pitch = clampf(look_pitch - event.relative.y * LOOK_SENSITIVITY, -1.15, 1.15)
 		head.rotation.x = look_pitch
 
 func _physics_process(delta: float) -> void:
 	if peer_id != multiplayer.get_unique_id():
 		transform = transform.interpolate_with(remote_target, minf(1.0, delta * 13.0))
 		return
+	if Input.is_action_just_pressed("toggle_view") or GameSession.consume_touch_press("toggle_view"):
+		_toggle_camera_mode()
 	if is_driving and driven_vehicle:
 		_drive_vehicle(delta)
 	else:
@@ -92,13 +100,9 @@ func _move_on_foot(delta: float) -> void:
 	elif Input.is_action_just_pressed("jump") or GameSession.consume_touch_press("jump"):
 		velocity.y = JUMP_FORCE
 	move_and_slide()
-	var look := GameSession.look_vector()
-	if look.length_squared() > 0.002:
-		rotate_y(-look.x * delta * 2.6)
-		look_pitch = clampf(look_pitch - look.y * delta * 2.2, -1.35, 1.35)
-		head.rotation.x = look_pitch
+	_apply_mobile_and_gamepad_look(delta, false)
 
-func _drive_vehicle(_delta: float) -> void:
+func _drive_vehicle(delta: float) -> void:
 	global_transform = driven_vehicle.driver_seat_transform()
 	velocity = Vector3.ZERO
 	var input := GameSession.movement_vector()
@@ -108,12 +112,39 @@ func _drive_vehicle(_delta: float) -> void:
 		Input.is_action_just_pressed("shift_down") or GameSession.consume_touch_press("shift_down"),
 		Input.is_action_just_pressed("winch_front") or GameSession.consume_touch_press("winch_front"),
 		Input.is_action_just_pressed("winch_rear") or GameSession.consume_touch_press("winch_rear"))
-	var look := GameSession.look_vector()
-	if look.length_squared() > 0.002:
-		look_pitch = clampf(look_pitch - look.y * 0.035, -0.8, 0.8)
-		head.rotation = Vector3(look_pitch, clampf(-look.x * 0.6, -1.0, 1.0), 0.0)
-	else:
-		head.rotation.y = lerpf(head.rotation.y, 0.0, 0.1)
+	_apply_mobile_and_gamepad_look(delta, true)
+
+func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
+	var swipe := GameSession.consume_touch_look()
+	var stick := GameSession.look_vector()
+	var yaw_change := swipe.x * TOUCH_LOOK_SENSITIVITY + stick.x * delta * 2.6
+	var pitch_change := swipe.y * TOUCH_LOOK_SENSITIVITY + stick.y * delta * 2.2
+	if absf(yaw_change) > 0.0001:
+		if driving:
+			head.rotation.y = clampf(head.rotation.y - yaw_change, -1.25, 1.25)
+		else:
+			rotate_y(-yaw_change)
+	if absf(pitch_change) > 0.0001:
+		look_pitch = clampf(look_pitch - pitch_change, -1.15, 1.15)
+		head.rotation.x = look_pitch
+
+func _toggle_camera_mode() -> void:
+	_apply_camera_mode(not third_person)
+	GameSession.toast_requested.emit("THIRD-PERSON CAMERA" if third_person else "FIRST-PERSON CAMERA",
+		"Swipe anywhere on the right side to look around.")
+
+func _apply_camera_mode(use_third_person: bool) -> void:
+	third_person = use_third_person
+	camera = third_camera if third_person else first_camera
+	camera.make_current()
+	var local_player := peer_id == multiplayer.get_unique_id()
+	if local_player:
+		body_visual.visible = third_person and not is_driving
+		hands_visual.visible = not third_person and not is_driving and carried_item.is_empty()
+		cockpit_visual.visible = not third_person and is_driving
+		carried_visual.visible = not third_person and carried_item == "plank"
+		if driven_vehicle and driven_vehicle.has_method("set_local_driver_first_person"):
+			driven_vehicle.set_local_driver_first_person(is_driving and not third_person)
 
 func _update_interaction() -> void:
 	if is_driving:
@@ -135,27 +166,34 @@ func _update_interaction() -> void:
 func enter_driver(vehicle: Node) -> void:
 	is_driving = true
 	driven_vehicle = vehicle
+	spring_arm.add_excluded_object(vehicle.get_rid())
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
-	hands_visual.visible = false
-	cockpit_visual.visible = true
-	GameSession.toast_requested.emit("DRIVER SEAT", "Use the left stick to steer and drive. Shift with GEAR − / GEAR +.")
+	if peer_id == multiplayer.get_unique_id():
+		_apply_camera_mode(third_person)
+	GameSession.toast_requested.emit("DRIVER SEAT", "Drive with the left stick, swipe to look, and tap VIEW for chase camera.")
 
 func leave_driver(exit_transform: Transform3D) -> void:
+	if driven_vehicle and driven_vehicle.has_method("set_local_driver_first_person"):
+		driven_vehicle.set_local_driver_first_person(false)
 	is_driving = false
 	driven_vehicle = null
+	spring_arm.clear_excluded_objects()
+	spring_arm.add_excluded_object(get_rid())
 	global_transform = exit_transform
 	$CollisionShape3D.set_deferred("disabled", false)
 	head.rotation = Vector3.ZERO
 	look_pitch = 0.0
-	body_visual.visible = peer_id != multiplayer.get_unique_id()
-	hands_visual.visible = peer_id == multiplayer.get_unique_id()
-	cockpit_visual.visible = false
+	if peer_id == multiplayer.get_unique_id():
+		_apply_camera_mode(third_person)
+	else:
+		body_visual.visible = true
 
 func update_carried_visual() -> void:
-	carried_visual.visible = carried_item == "plank"
-	if peer_id == multiplayer.get_unique_id() and not is_driving:
-		hands_visual.visible = carried_item.is_empty()
+	if peer_id == multiplayer.get_unique_id():
+		_apply_camera_mode(third_person)
+	else:
+		carried_visual.visible = carried_item == "plank"
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
 func _sync_state(new_transform: Transform3D, new_velocity: Vector3, driving: bool) -> void:
@@ -177,7 +215,7 @@ func _build_player() -> void:
 
 	body_visual = CREW_SCENE.instantiate() as Node3D
 	body_visual.name = "TexturedCrewModel"
-	body_visual.scale = Vector3.ONE * 0.82
+	body_visual.scale = Vector3.ONE * 2.65
 	body_visual.rotation.y = PI
 	add_child(body_visual)
 
@@ -185,10 +223,26 @@ func _build_player() -> void:
 	head.name = "Head"
 	head.position.y = 1.62
 	add_child(head)
-	camera = Camera3D.new()
-	camera.fov = 76.0
-	camera.near = 0.045
-	head.add_child(camera)
+	first_camera = Camera3D.new()
+	first_camera.name = "FirstPersonCamera"
+	first_camera.fov = 76.0
+	first_camera.near = 0.045
+	head.add_child(first_camera)
+	camera = first_camera
+
+	spring_arm = SpringArm3D.new()
+	spring_arm.name = "ThirdPersonSpringArm"
+	spring_arm.spring_length = 4.2
+	spring_arm.margin = 0.22
+	spring_arm.collision_mask = 1 | 4 | 8
+	spring_arm.position = Vector3(0.0, 0.30, 0.0)
+	head.add_child(spring_arm)
+	spring_arm.add_excluded_object(get_rid())
+	third_camera = Camera3D.new()
+	third_camera.name = "ThirdPersonCamera"
+	third_camera.fov = 70.0
+	third_camera.near = 0.10
+	spring_arm.add_child(third_camera)
 
 	hands_visual = HANDS_SCENE.instantiate() as Node3D
 	hands_visual.name = "FirstPersonHands"
@@ -196,14 +250,16 @@ func _build_player() -> void:
 	camera.add_child(hands_visual)
 	cockpit_visual = COCKPIT_SCENE.instantiate() as Node3D
 	cockpit_visual.name = "DriverCockpit"
+	cockpit_visual.scale = Vector3.ONE * 0.72
+	cockpit_visual.position = Vector3(0.0, -0.12, -0.12)
 	cockpit_visual.visible = false
 	camera.add_child(cockpit_visual)
 
 	interact_ray = RayCast3D.new()
-	interact_ray.target_position = Vector3(0.0, 0.0, -3.6)
+	interact_ray.target_position = Vector3(0.0, 0.0, -4.2)
 	interact_ray.collision_mask = 1 | 4 | 8
 	interact_ray.collide_with_areas = true
-	camera.add_child(interact_ray)
+	head.add_child(interact_ray)
 
 	carried_visual = MeshInstance3D.new()
 	var plank_mesh := BoxMesh.new()

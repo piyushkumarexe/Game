@@ -7,9 +7,18 @@ const RVScript = preload("res://scripts/vehicles/rv_controller.gd")
 const InteractableScript = preload("res://scripts/gameplay/interactable.gd")
 const WildlifeScript = preload("res://scripts/gameplay/wildlife.gd")
 const RockfallScript = preload("res://scripts/gameplay/rockfall_hazard.gd")
-const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
-const PINE_SCENE: PackedScene = preload("res://assets/models/pine_tree.gltf")
-const ROCK_SCENE: PackedScene = preload("res://assets/models/canyon_rock.gltf")
+const PINE_SCENES: Array[PackedScene] = [
+	preload("res://assets/third_party/kenney/nature-kit/tree-pinetalla-detailed.glb"),
+	preload("res://assets/third_party/kenney/nature-kit/tree-pinetallb-detailed.glb")
+]
+const ROCK_SCENES: Array[PackedScene] = [
+	preload("res://assets/third_party/kenney/nature-kit/rock-largea.glb"),
+	preload("res://assets/third_party/kenney/nature-kit/rock-largeb.glb")
+]
+const GRASS_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/grass-large.glb")
+const BUSH_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/plant-bushdetailed.glb")
+const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
+const CAMPFIRE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/campfire-stones.glb")
 const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
 const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
 
@@ -195,6 +204,7 @@ func _build_terrain() -> void:
 	var z_max := 112.0
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	for z_index in z_count:
@@ -207,6 +217,14 @@ func _build_terrain() -> void:
 			var normal := Vector3(terrain_height(x - sample, z) - terrain_height(x + sample, z), sample * 2.0,
 				terrain_height(x, z - sample) - terrain_height(x, z + sample)).normalized()
 			normals.append(normal)
+			var terrain_tint := Color("a8794f")
+			if normal.y < 0.72:
+				terrain_tint = Color("79564a")
+			elif y > 18.0:
+				terrain_tint = Color("ad8a61")
+			elif sin(x * 0.19 + z * 0.11) > 0.48:
+				terrain_tint = Color("936642")
+			colors.append(terrain_tint)
 			uvs.append(Vector2(x * 0.08, z * 0.08))
 	for z_index in z_count - 1:
 		for x_index in x_count - 1:
@@ -217,6 +235,7 @@ func _build_terrain() -> void:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
@@ -224,10 +243,17 @@ func _build_terrain() -> void:
 	var terrain := MeshInstance3D.new()
 	terrain.name = "RedmesaTerrain"
 	terrain.mesh = mesh
-	var shader_material := ShaderMaterial.new()
-	shader_material.shader = TERRAIN_SHADER
-	shader_material.set_shader_parameter("ground_texture", GROUND_TEXTURE)
-	terrain.material_override = shader_material
+	# StandardMaterial3D is deliberately used here instead of a custom shader.
+	# It is reliable on Android's OpenGL fallback and still gets variation from
+	# baked vertex colors, so scenery can never appear to float over a void.
+	var terrain_material := StandardMaterial3D.new()
+	terrain_material.albedo_texture = GROUND_TEXTURE
+	terrain_material.albedo_color = Color.WHITE
+	terrain_material.vertex_color_use_as_albedo = true
+	terrain_material.roughness = 0.97
+	terrain_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	terrain_material.texture_repeat = true
+	terrain.material_override = terrain_material
 	add_child(terrain)
 	terrain.create_trimesh_collision()
 
@@ -260,13 +286,25 @@ func _build_landmarks() -> void:
 	props_root = Node3D.new()
 	props_root.name = "OriginalLandmarks"
 	add_child(props_root)
-	# Starting campground
-	PrimitiveFactory.box(props_root, "CampDeck", ROUTE[0] + Vector3(-5, 0.05, 0), Vector3(7, 0.25, 5), Color("68442d"), true)
-	PrimitiveFactory.box(props_root, "CampAwning", ROUTE[0] + Vector3(-5, 2.1, 0), Vector3(6, 0.18, 4), Color("d29b55"), false)
-	for x in [-7.4, -2.6]:
-		for z in [83.2, 86.8]:
-			PrimitiveFactory.cylinder(props_root, "AwningPost", Vector3(x, 3.25, z), 0.09, 2.2, Color("302a28"), false)
-	PrimitiveFactory.label_3d(props_root, "REDMESA\nTRAIL CAMP", ROUTE[0] + Vector3(-5, 3.25, -2.2), Color("fff0d0"), 48)
+	# Starting campground uses detailed CC0 camping props rather than blockouts.
+	var tent := TENT_SCENE.instantiate() as Node3D
+	tent.name = "TrailCampTent"
+	tent.position = ROUTE[0] + Vector3(-6.0, 0.08, 0.7)
+	tent.rotation.y = 0.32
+	tent.scale = Vector3.ONE * 3.25
+	props_root.add_child(tent)
+	var fire_ring := CAMPFIRE_SCENE.instantiate() as Node3D
+	fire_ring.name = "CampfireRing"
+	fire_ring.position = ROUTE[0] + Vector3(-2.5, 0.08, 2.0)
+	fire_ring.scale = Vector3.ONE * 2.3
+	props_root.add_child(fire_ring)
+	var fire_light := OmniLight3D.new()
+	fire_light.position = fire_ring.position + Vector3.UP * 0.45
+	fire_light.light_color = Color("ffad5a")
+	fire_light.light_energy = 1.35
+	fire_light.omni_range = 7.0
+	props_root.add_child(fire_light)
+	PrimitiveFactory.label_3d(props_root, "REDMESA\nTRAIL CAMP", ROUTE[0] + Vector3(-6.0, 3.25, -1.8), Color("fff0d0"), 48)
 	# Broken span supports
 	var bridge_mid := (ROUTE[3] + ROUTE[4]) * 0.5
 	PrimitiveFactory.box(props_root, "BridgeApproachA", ROUTE[3] + Vector3(0, -0.2, 0), Vector3(7.2, 0.45, 5.0), Color("5e4939"), true, Vector3(0, 0.55, 0))
@@ -319,6 +357,18 @@ func _build_scenery() -> void:
 		var radius := random.randf_range(0.45, 1.75)
 		_make_rock(Vector3(x, terrain_height(x, z), z), radius,
 			Vector3(random.randf_range(0.8, 1.5), random.randf_range(0.55, 1.15), random.randf_range(0.8, 1.4)), index % 8 == 0)
+	var cover_count := 90 if GameSession.reduced_graphics else 150
+	for index in cover_count:
+		var z := random.randf_range(-252.0, 104.0)
+		var x := random.randf_range(-116.0, 116.0)
+		if _nearest_route_data(Vector2(x, z)).x < 5.0:
+			continue
+		var cover := (BUSH_SCENE if index % 6 == 0 else GRASS_SCENE).instantiate() as Node3D
+		cover.name = "TrailBush" if index % 6 == 0 else "TrailGrass"
+		cover.position = Vector3(x, terrain_height(x, z), z)
+		cover.rotation.y = random.randf_range(-PI, PI)
+		cover.scale = Vector3.ONE * random.randf_range(1.25, 2.15)
+		props_root.add_child(cover)
 	# Reliable cable anchors along challenge sections.
 	for anchor_position in [Vector3(18, 5, -8), Vector3(46, 6, -32), Vector3(-34, 7, -109), Vector3(-13, 11, -131), Vector3(22, 19, -169), Vector3(-24, 29, -199)]:
 		_make_winch_post(anchor_position)
@@ -334,7 +384,8 @@ func _make_tree(position: Vector3, scale_factor: float, anchor: bool) -> void:
 	tree.rotation.y = random.randf_range(-PI, PI)
 	tree.scale = Vector3.ONE * scale_factor
 	props_root.add_child(tree)
-	var model := PINE_SCENE.instantiate()
+	var model := PINE_SCENES[random.randi_range(0, PINE_SCENES.size() - 1)].instantiate() as Node3D
+	model.scale = Vector3.ONE * 3.45
 	tree.add_child(model)
 	if anchor:
 		var trunk_body := StaticBody3D.new()
@@ -355,7 +406,8 @@ func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collisio
 	rock_root.rotation.y = random.randf_range(-PI, PI)
 	rock_root.scale = shape_scale * radius
 	props_root.add_child(rock_root)
-	var model := ROCK_SCENE.instantiate()
+	var model := ROCK_SCENES[random.randi_range(0, ROCK_SCENES.size() - 1)].instantiate() as Node3D
+	model.scale = Vector3.ONE * 2.15
 	rock_root.add_child(model)
 	if collision_enabled:
 		var body := StaticBody3D.new()
@@ -413,7 +465,7 @@ func _create_checkpoint(position: Vector3, index: int, title: String, size: Vect
 func _on_checkpoint_entered(body: Node, index: int, title: String, checkpoint_position: Vector3) -> void:
 	if body != rv or (Net.is_online and not multiplayer.is_server()):
 		return
-	last_checkpoint_transform = Transform3D(rv.global_transform.basis.orthonormalized(), checkpoint_position + Vector3.UP * 2.2)
+	last_checkpoint_transform = Transform3D(rv.global_transform.basis.orthonormalized(), checkpoint_position + Vector3.UP * 1.28)
 	GameSession.set_checkpoint(index, title)
 	if index == 4:
 		GameSession.complete_target("finish")
@@ -422,7 +474,7 @@ func _spawn_rv() -> void:
 	rv = RVScript.new()
 	add_child(rv)
 	var basis := Basis(Vector3.UP, PI)
-	rv.setup(Transform3D(basis, ROUTE[0] + Vector3(2.2, 2.1, -2.0)))
+	rv.setup(Transform3D(basis, ROUTE[0] + Vector3(2.2, 1.28, -2.0)))
 	GameSession.rv = rv
 
 func _nearest_route_data(point: Vector2) -> Vector3:

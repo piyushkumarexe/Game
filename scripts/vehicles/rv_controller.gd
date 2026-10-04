@@ -5,10 +5,11 @@ extends VehicleBody3D
 signal stats_changed(health: float, fuel: float, gear: int, speed: float)
 
 const GEAR_RATIOS := [-0.62, 0.0, 0.68, 0.92, 1.16, 1.38, 1.55]
-const MAX_ENGINE_FORCE := 5200.0
-const MAX_STEER := 0.46
+const MAX_ENGINE_FORCE := 4300.0
+const MAX_STEER := 0.43
 const MAX_FUEL := 100.0
-const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
+const MAX_SAFE_SPEED := 32.0
+const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/third_party/kenney/car-kit/ambulance.glb")
 
 var prompt := "DRIVE THE RV"
 var health := 100.0
@@ -29,6 +30,7 @@ var engine_audio: AudioStreamPlayer3D
 var engine_playback: AudioStreamGeneratorPlayback
 var audio_phase := 0.0
 var last_impact_time := -10.0
+var safe_spawn_seconds := 2.5
 var start_transform := Transform3D.IDENTITY
 var body_shell: Node3D
 var bumper_visual: Node3D
@@ -36,9 +38,13 @@ var roof_crate: Node3D
 
 func setup(spawn_transform: Transform3D) -> void:
 	name = "ExpeditionRV"
-	mass = 3100.0
+	mass = 3600.0
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3(0.0, -0.55, 0.18)
+	center_of_mass = Vector3(0.0, -0.82, 0.18)
+	linear_damp = 0.18
+	angular_damp = 2.8
+	continuous_cd = true
+	can_sleep = true
 	contact_monitor = true
 	max_contacts_reported = 12
 	collision_layer = 4
@@ -57,6 +63,8 @@ func _physics_process(delta: float) -> void:
 	if Net.is_online and not multiplayer.is_server():
 		_fill_engine_audio()
 		return
+	safe_spawn_seconds = maxf(0.0, safe_spawn_seconds - delta)
+	_stabilize_motion()
 	_simulate_driver(delta)
 	_simulate_winch(front_winch, _front_hook_position(), delta)
 	_simulate_winch(rear_winch, _rear_hook_position(), delta)
@@ -66,7 +74,7 @@ func _physics_process(delta: float) -> void:
 	if Net.is_online:
 		_sync_rv.rpc(global_transform, linear_velocity, angular_velocity, health, fuel, gear, engine_running, driver_peer_id,
 			front_winch, rear_winch)
-	stats_changed.emit(health, fuel, gear, linear_velocity.length() * 3.6)
+	stats_changed.emit(health, fuel, gear, _hud_speed_kmh())
 
 func submit_driver_input(peer_id: int, throttle: float, steering_input: float, handbrake_pressed: bool,
 	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed := false, rear_pressed := false) -> void:
@@ -146,10 +154,14 @@ func _release_driver(id: int) -> void:
 	throttle_input = 0.0
 	brake = 55.0
 
+func set_local_driver_first_person(active: bool) -> void:
+	if body_shell:
+		body_shell.visible = not active
+
 func driver_seat_transform() -> Transform3D:
 	# The player camera is 1.62 m above its origin. Offset the character origin so
-	# the actual viewpoint sits behind the windshield instead of above the roof.
-	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.58, -0.48, -1.82))
+	# the actual viewpoint sits naturally behind the windshield.
+	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.48, -0.52, -1.25))
 	return seat
 
 func exit_seat_transform() -> Transform3D:
@@ -165,11 +177,14 @@ func add_fuel(value: float) -> void:
 func respawn_at(new_transform: Transform3D) -> void:
 	global_transform = new_transform
 	linear_velocity = Vector3.ZERO
+	safe_spawn_seconds = 1.5
 	angular_velocity = Vector3.ZERO
 	health = maxf(health, 55.0)
 	fuel = maxf(fuel, 35.0)
 
 func damage(value: float, source := "IMPACT") -> void:
+	if safe_spawn_seconds > 0.0:
+		return
 	if Time.get_ticks_msec() / 1000.0 - last_impact_time < 0.35:
 		return
 	last_impact_time = Time.get_ticks_msec() / 1000.0
@@ -181,16 +196,36 @@ func damage(value: float, source := "IMPACT") -> void:
 
 func _simulate_driver(delta: float) -> void:
 	steering = move_toward(steering, steer_input * MAX_STEER, delta * 1.8)
-	if not engine_running or fuel <= 0.0 or health <= 0.0 or gear == 1:
+	var parked := driver_peer_id == 0
+	if parked or not engine_running or fuel <= 0.0 or health <= 0.0 or gear == 1:
 		engine_force = 0.0
 	else:
 		var health_factor := lerpf(0.42, 1.0, health / 100.0)
-		engine_force = throttle_input * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor
+		var speed_factor := clampf((MAX_SAFE_SPEED - linear_velocity.length()) / 8.0, 0.0, 1.0)
+		engine_force = throttle_input * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor
 		fuel = maxf(0.0, fuel - absf(throttle_input) * delta * 0.16)
-	brake = 72.0 if handbrake_input else (18.0 if absf(throttle_input) < 0.05 else 0.0)
+	brake = 95.0 if parked else (82.0 if handbrake_input else (24.0 if absf(throttle_input) < 0.05 else 0.0))
 	if global_position.y < -24.0 or global_transform.basis.y.dot(Vector3.UP) < -0.55:
-		if linear_velocity.length() < 1.0:
+		if linear_velocity.length() < 2.0 or global_position.y < -40.0:
 			respawn_at(Net.world.last_checkpoint_transform if Net.world else start_transform)
+
+func _stabilize_motion() -> void:
+	if not linear_velocity.is_finite() or not angular_velocity.is_finite():
+		respawn_at(Net.world.last_checkpoint_transform if Net.world else start_transform)
+		return
+	if linear_velocity.length() > MAX_SAFE_SPEED:
+		linear_velocity = linear_velocity.normalized() * MAX_SAFE_SPEED
+	if angular_velocity.length() > 3.8:
+		angular_velocity = angular_velocity.normalized() * 3.8
+	# Suppress the one-frame suspension kick which caused parked RV launches on
+	# slower mobile physics ticks.
+	if safe_spawn_seconds > 0.0:
+		linear_velocity = linear_velocity.limit_length(2.5)
+		angular_velocity = angular_velocity.limit_length(0.65)
+
+func _hud_speed_kmh() -> float:
+	var horizontal := Vector2(linear_velocity.x, linear_velocity.z).length() * 3.6
+	return clampf(horizontal, 0.0, MAX_SAFE_SPEED * 3.6)
 
 func _toggle_winch(data: Dictionary, front: bool) -> void:
 	if bool(data["active"]):
@@ -254,7 +289,7 @@ func _sync_rv(new_transform: Transform3D, new_linear: Vector3, new_angular: Vect
 	_update_cable(front_cable, front_winch, _front_hook_position())
 	_update_cable(rear_cable, rear_winch, _rear_hook_position())
 	_update_damage_visuals()
-	stats_changed.emit(health, fuel, gear, linear_velocity.length() * 3.6)
+	stats_changed.emit(health, fuel, gear, _hud_speed_kmh())
 
 func _on_body_entered(_body: Node) -> void:
 	var impact := linear_velocity.length()
@@ -322,22 +357,39 @@ func _update_damage_visuals() -> void:
 func _build_rv() -> void:
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(2.45, 2.15, 5.35)
+	shape.size = Vector3(2.60, 3.20, 6.35)
 	collision.shape = shape
-	collision.position = Vector3(0.0, 0.62, 0.0)
+	collision.position = Vector3(0.0, 0.80, 0.0)
 	add_child(collision)
 
 	body_shell = Node3D.new()
-	body_shell.name = "OriginalRVBody"
+	body_shell.name = "ExpeditionRVBody"
 	add_child(body_shell)
-	var exterior := RV_EXTERIOR_SCENE.instantiate()
-	exterior.name = "TexturedRVExterior"
+	var exterior := RV_EXTERIOR_SCENE.instantiate() as Node3D
+	exterior.name = "KenneyCC0ExpeditionBody"
+	exterior.scale = Vector3(1.72, 2.1, 2.1)
+	exterior.position.y = -1.18
+	exterior.rotation.y = PI
 	body_shell.add_child(exterior)
+	# VehicleWheel3D provides the animated wheels; hide the model's fixed wheels.
+	for model_wheel: Node in exterior.find_children("wheel-*", "Node3D", true, false):
+		if model_wheel is Node3D:
+			(model_wheel as Node3D).visible = false
+	# Expedition-camper details make the licensed response body read as an RV:
+	# side cabin windows, roof solar and a rear-mounted spare.
+	for side_x in [-1.30, 1.30]:
+		for window_z in [-0.58, 0.45]:
+			PrimitiveFactory.box(body_shell, "CabinWindow", Vector3(side_x, 1.15, window_z),
+				Vector3(0.035, 0.62, 0.74), Color("193540"))
+	roof_crate = PrimitiveFactory.box(body_shell, "RoofSolarPanel", Vector3(0.0, 2.66, 0.25),
+		Vector3(1.55, 0.07, 1.75), Color("294a55"))
+	PrimitiveFactory.cylinder(body_shell, "RearSpare", Vector3(0.0, 0.12, 3.18),
+		0.48, 0.24, Color("17191c"), false, Vector3(PI * 0.5, 0.0, 0.0), 18)
 
-	_add_wheel("FrontLeft", Vector3(-1.18, -0.62, -1.82), true, false)
-	_add_wheel("FrontRight", Vector3(1.18, -0.62, -1.82), true, false)
-	_add_wheel("RearLeft", Vector3(-1.18, -0.62, 1.78), false, true)
-	_add_wheel("RearRight", Vector3(1.18, -0.62, 1.78), false, true)
+	_add_wheel("FrontLeft", Vector3(-1.18, -0.62, -2.08), true, false)
+	_add_wheel("FrontRight", Vector3(1.18, -0.62, -2.08), true, false)
+	_add_wheel("RearLeft", Vector3(-1.18, -0.62, 1.92), false, true)
+	_add_wheel("RearRight", Vector3(1.18, -0.62, 1.92), false, true)
 
 func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: bool, traction_wheel: bool) -> void:
 	var wheel := VehicleWheel3D.new()
@@ -346,11 +398,11 @@ func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: boo
 	wheel.wheel_radius = 0.56
 	wheel.wheel_rest_length = 0.32
 	wheel.suspension_travel = 0.35
-	wheel.suspension_stiffness = 28.0
-	wheel.suspension_max_force = 9000.0
-	wheel.damping_compression = 0.42
-	wheel.damping_relaxation = 0.55
-	wheel.wheel_friction_slip = 2.25
+	wheel.suspension_stiffness = 22.0
+	wheel.suspension_max_force = 18000.0
+	wheel.damping_compression = 0.72
+	wheel.damping_relaxation = 0.88
+	wheel.wheel_friction_slip = 1.55
 	wheel.use_as_steering = steering_wheel
 	wheel.use_as_traction = traction_wheel
 	add_child(wheel)

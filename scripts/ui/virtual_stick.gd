@@ -55,7 +55,7 @@ func _update_value(local_position: Vector2) -> void:
 
 func _push_value() -> void:
 	if look_stick:
-		GameSession.mobile_look = value
+		GameSession.add_touch_look(value * 9.0)
 	else:
 		GameSession.mobile_move = value
 

@@ -31,7 +31,7 @@ var local_player: Node
 var rv: Node
 var world: Node
 var mobile_move := Vector2.ZERO
-var mobile_look := Vector2.ZERO
+var mobile_look_delta := Vector2.ZERO
 var mobile_actions: Dictionary = {}
 var player_name: String = "Rover"
 var selected_role: Role = Role.DRIVER
@@ -49,6 +49,9 @@ func reset_run() -> void:
 	local_player = null
 	rv = null
 	world = null
+	mobile_move = Vector2.ZERO
+	mobile_look_delta = Vector2.ZERO
+	mobile_actions.clear()
 	mode = Mode.PLAYING
 	_emit_mission()
 
@@ -90,8 +93,15 @@ func movement_vector() -> Vector2:
 	return mobile_move if mobile_move.length_squared() > keyboard.length_squared() else keyboard
 
 func look_vector() -> Vector2:
-	var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
-	return mobile_look if mobile_look.length_squared() > stick.length_squared() else stick
+	return Input.get_vector("look_left", "look_right", "look_up", "look_down")
+
+func add_touch_look(relative: Vector2) -> void:
+	mobile_look_delta += relative
+
+func consume_touch_look() -> Vector2:
+	var relative := mobile_look_delta
+	mobile_look_delta = Vector2.ZERO
+	return relative
 
 func is_action_pressed(action: StringName) -> bool:
 	return Input.is_action_pressed(action) or touch_action(action)
@@ -127,6 +137,7 @@ func _create_input_actions() -> void:
 	_bind_keys("winch_rear", [KEY_R])
 	_bind_keys("shift_up", [KEY_X])
 	_bind_keys("shift_down", [KEY_Z])
+	_bind_keys("toggle_view", [KEY_C])
 	_bind_keys("handbrake", [KEY_SPACE])
 	_bind_keys("pause", [KEY_ESCAPE])
 	_add_joy_axis("move_left", JOY_AXIS_LEFT_X, -1.0)

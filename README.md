@@ -1,6 +1,6 @@
 # Dustbound Expeditions
 
-A true 3D, first-person, 1–4 player mobile co-op physics adventure built with Godot 4.7.2.
+A true 3D, first-/third-person, 1–4 player mobile co-op physics adventure built with Godot 4.7.2.
 
 This branch replaces the earlier 2D prototype. The current project is a playable **3D vertical slice** with an original map, physical RV, multiplayer, proximity voice, missions, recovery tools, hazards, native touch controls, and Android/iOS export configuration.
 
@@ -25,6 +25,7 @@ The handcrafted route contains:
 ### 3D vehicle
 
 - Four-wheel `VehicleBody3D` RV with suspension, steering and rear-wheel traction
+- Low-center-of-mass stability tuning, parked braking, velocity guards and a sane 115 km/h ceiling
 - Reverse, neutral and five forward gear ratios
 - Fuel, layered health, impact damage and performance degradation
 - Breakable/damage-reactive exterior details
@@ -55,11 +56,12 @@ Direct-IP internet games require the host to forward UDP `24817`. A production r
 ### Mobile presentation
 
 - Strict landscape launch on Android and iOS, with an expanding widescreen viewport
-- Dual virtual sticks for movement/driving and camera control
+- Left movement/driving stick plus direct right-side swipe free-look (no camera joystick)
+- Collision-aware **VIEW 1P / 3P** switch for walking and driving
 - Context-sensitive touch actions for interaction, sprint, jump, gears and both winches
 - Mission, crew, speed, gear, fuel and RV-integrity HUD
-- OpenGL compatibility renderer, MSAA-safe mobile settings and reduced mobile terrain density
-- Original textured glTF models for the RV, cockpit, first-person hands, crew, trees, rocks, signs and supply crates
+- Android-safe `StandardMaterial3D` terrain with baked color variation, plus reduced mobile terrain density
+- Original cockpit, first-person hands, signs and supply models combined with selected Kenney CC0 vehicle, crew and nature models
 - Painted terrain/model textures and a live 3D campsite home screen
 - Original generated app/key artwork, with no remote runtime assets
 
@@ -68,7 +70,8 @@ Direct-IP internet games require the host to forward UDP `24817`. A production r
 | Action | Touch | Keyboard/gamepad |
 |---|---|---|
 | Walk / drive | Left stick | `WASD` / left stick |
-| Look | Right stick | Mouse / right stick |
+| Look | Swipe/drag the right side | Mouse / right stick |
+| First-/third-person view | **VIEW 1P / 3P** | `C` |
 | Interact / enter / exit | **USE** | `E` |
 | Jump | **JUMP** | `Space` |
 | Sprint | **SPRINT** | `Shift` |
@@ -83,6 +86,8 @@ Direct-IP internet games require the host to forward UDP `24817`. A production r
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
 - Godot ENet networking and AudioEffectCapture voice pipeline
+
+Selected vehicle, crew, tree, rock and campsite GLBs come from Kenney's CC0 asset packs. Their provenance and license are documented in [`assets/third_party/kenney/LICENSE.md`](assets/third_party/kenney/LICENSE.md).
 
 See [`docs/game-research.md`](docs/game-research.md) for the researched mechanic breakdown and the original-design boundary.
 

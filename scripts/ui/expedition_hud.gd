@@ -2,6 +2,8 @@ class_name ExpeditionHUD
 extends CanvasLayer
 ## Mission, vehicle and mobile co-op HUD.
 
+const TouchLookAreaScript = preload("res://scripts/ui/touch_look_area.gd")
+
 var mission_title: Label
 var mission_detail: Label
 var mission_count: Label
@@ -203,17 +205,13 @@ func _build_touch_controls(root: Control) -> void:
 	move_stick.offset_right = 198.0
 	move_stick.offset_bottom = -18.0
 	touch_root.add_child(move_stick)
-	var look_stick := VirtualStick.new()
-	look_stick.look_stick = true
-	look_stick.anchor_left = 1.0
-	look_stick.anchor_top = 1.0
-	look_stick.anchor_right = 1.0
-	look_stick.anchor_bottom = 1.0
-	look_stick.offset_left = -430.0
-	look_stick.offset_top = -194.0
-	look_stick.offset_right = -250.0
-	look_stick.offset_bottom = -14.0
-	touch_root.add_child(look_stick)
+	var look_area := TouchLookAreaScript.new()
+	look_area.anchor_left = 0.30
+	look_area.anchor_top = 0.18
+	look_area.anchor_right = 1.0
+	look_area.anchor_bottom = 1.0
+	touch_root.add_child(look_area)
+	_make_touch_button("VIEW\n1P / 3P", "toggle_view", Vector2(-112, -368), false)
 	_make_touch_button("USE", "interact", Vector2(-112, -190), false)
 	var jump := _make_touch_button("JUMP", "jump", Vector2(-102, -100), false)
 	jump.set_meta("walking_only", true)

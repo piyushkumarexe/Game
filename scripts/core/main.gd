@@ -197,6 +197,14 @@ func _run_expedition_smoke_test() -> void:
 		failures.append("local player missing")
 	if not GameSession.rv or not is_instance_valid(GameSession.rv):
 		failures.append("physics RV missing")
+	if GameSession.local_player and (not GameSession.local_player.third_camera or not GameSession.local_player.spring_arm):
+		failures.append("first/third-person camera rig missing")
+	if active_world:
+		var terrain := active_world.find_child("RedmesaTerrain", true, false) as MeshInstance3D
+		if not terrain:
+			failures.append("generated terrain missing")
+		elif not (terrain.material_override is StandardMaterial3D):
+			failures.append("terrain is not using the Android-safe standard material")
 	var current_camera := get_viewport().get_camera_3d()
 	if not current_camera:
 		failures.append("current 3D camera missing")

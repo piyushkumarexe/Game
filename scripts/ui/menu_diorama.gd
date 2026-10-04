@@ -1,10 +1,12 @@
 class_name MenuDiorama
 extends Node3D
-## Live 3D title-screen campsite assembled from the same original models used in play.
+## Live 3D title-screen campsite assembled from the same models used in play.
 
-const RV_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
-const PINE_SCENE: PackedScene = preload("res://assets/models/pine_tree.gltf")
-const ROCK_SCENE: PackedScene = preload("res://assets/models/canyon_rock.gltf")
+const RV_SCENE: PackedScene = preload("res://assets/third_party/kenney/car-kit/ambulance.glb")
+const PINE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tree-pinetallb-detailed.glb")
+const ROCK_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/rock-largeb.glb")
+const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
+const CAMPFIRE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/campfire-stones.glb")
 const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
 const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
 
@@ -23,7 +25,7 @@ func _ready() -> void:
 	camera.fov = 53.0
 	camera.position = Vector3(10.8, 5.0, 11.8)
 	add_child(camera)
-	camera.look_at(Vector3(1.0, 1.15, -0.6), Vector3.UP)
+	camera.look_at(Vector3(1.0, 1.75, -0.6), Vector3.UP)
 	camera.make_current()
 
 func _process(delta: float) -> void:
@@ -31,7 +33,7 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(camera):
 		return
 	camera.position = Vector3(10.8 + sin(elapsed * 0.16) * 0.55, 5.0 + sin(elapsed * 0.22) * 0.12, 11.8 + cos(elapsed * 0.16) * 0.5)
-	camera.look_at(Vector3(1.0, 1.15, -0.6), Vector3.UP)
+	camera.look_at(Vector3(1.0, 1.75, -0.6), Vector3.UP)
 	if is_instance_valid(rig):
 		rig.rotation.y = -0.68 + sin(elapsed * 0.3) * 0.012
 
@@ -93,24 +95,23 @@ func _build_ground() -> void:
 
 func _build_rig() -> void:
 	rig = Node3D.new()
-	rig.name = "MenuTexturedRV"
-	rig.position = Vector3(2.0, 0.58, -1.2)
+	rig.name = "MenuExpeditionRV"
+	rig.position = Vector3(2.0, 0.02, -1.2)
 	rig.rotation.y = -0.68
 	add_child(rig)
-	var exterior := RV_SCENE.instantiate()
+	var exterior := RV_SCENE.instantiate() as Node3D
+	exterior.name = "KenneyCC0ExpeditionBody"
+	exterior.scale = Vector3(1.72, 2.1, 2.1)
+	exterior.rotation.y = PI
 	rig.add_child(exterior)
-	for wheel_position in [Vector3(-1.2, 0.0, -1.82), Vector3(1.2, 0.0, -1.82), Vector3(-1.2, 0.0, 1.78), Vector3(1.2, 0.0, 1.78)]:
-		var wheel := MeshInstance3D.new()
-		var wheel_mesh := CylinderMesh.new()
-		wheel_mesh.top_radius = 0.57
-		wheel_mesh.bottom_radius = 0.57
-		wheel_mesh.height = 0.36
-		wheel_mesh.radial_segments = 16
-		wheel.mesh = wheel_mesh
-		wheel.position = wheel_position
-		wheel.rotation.z = PI * 0.5
-		wheel.material_override = PrimitiveFactory.material(Color("15171a"), 0.96)
-		rig.add_child(wheel)
+	for side_x in [-1.30, 1.30]:
+		for window_z in [-0.58, 0.45]:
+			PrimitiveFactory.box(rig, "CabinWindow", Vector3(side_x, 2.33, window_z),
+				Vector3(0.035, 0.62, 0.74), Color("193540"))
+	PrimitiveFactory.box(rig, "RoofSolarPanel", Vector3(0.0, 3.84, 0.25),
+		Vector3(1.55, 0.07, 1.75), Color("294a55"))
+	PrimitiveFactory.cylinder(rig, "RearSpare", Vector3(0.0, 1.30, 3.18),
+		0.48, 0.24, Color("17191c"), false, Vector3(PI * 0.5, 0.0, 0.0), 18)
 
 func _build_scenery() -> void:
 	var tree_data := [
@@ -121,15 +122,24 @@ func _build_scenery() -> void:
 	for data: Array in tree_data:
 		var tree := PINE_SCENE.instantiate() as Node3D
 		tree.position = data[0]
-		tree.scale = Vector3.ONE * float(data[1])
+		tree.scale = Vector3.ONE * float(data[1]) * 3.45
 		add_child(tree)
 	for index in 11:
 		var rock := ROCK_SCENE.instantiate() as Node3D
 		var side := -1.0 if index % 2 == 0 else 1.0
 		rock.position = Vector3(side * (5.5 + index * 0.65), 0.0, -9.0 + index * 2.1)
-		rock.scale = Vector3(0.5 + (index % 3) * 0.22, 0.45 + (index % 2) * 0.18, 0.62)
+		rock.scale = Vector3(0.5 + (index % 3) * 0.22, 0.45 + (index % 2) * 0.18, 0.62) * 2.15
 		rock.rotation.y = index * 0.77
 		add_child(rock)
+	var tent := TENT_SCENE.instantiate() as Node3D
+	tent.position = Vector3(-5.3, 0.0, 1.8)
+	tent.rotation.y = 0.42
+	tent.scale = Vector3.ONE * 3.2
+	add_child(tent)
+	var fire_ring := CAMPFIRE_SCENE.instantiate() as Node3D
+	fire_ring.position = Vector3(-1.8, 0.02, 2.1)
+	fire_ring.scale = Vector3.ONE * 2.3
+	add_child(fire_ring)
 	var sign := SIGN_SCENE.instantiate() as Node3D
 	sign.position = Vector3(-2.7, 0.0, -4.6)
 	sign.rotation.y = 0.42

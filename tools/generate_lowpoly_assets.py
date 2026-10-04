@@ -351,17 +351,19 @@ rock.ellipsoid("CanyonRock", (0, .65, 0), (1.08, .74, .91), "Stone", 9, 5, .22, 
 rock.save()
 
 hands = Obj("first_person_hands")
-hands.ellipsoid("LeftForearm", (-.64, -.48, -.82), (.18, .17, .62), "CrewCloth", 9, 5)
-hands.ellipsoid("RightForearm", (.64, -.48, -.82), (.18, .17, .62), "CrewCloth", 9, 5)
-hands.ellipsoid("LeftHand", (-.55, -.39, -1.30), (.20, .16, .24), "Skin", 9, 5)
-hands.ellipsoid("RightHand", (.55, -.39, -1.30), (.20, .16, .24), "Skin", 9, 5)
+# Keep first-person arms low and peripheral so they frame gameplay instead of
+# obscuring the trail on a phone-sized screen.
+hands.ellipsoid("LeftForearm", (-.72, -.69, -.98), (.11, .12, .48), "CrewCloth", 14, 8)
+hands.ellipsoid("RightForearm", (.72, -.69, -.98), (.11, .12, .48), "CrewCloth", 14, 8)
+hands.ellipsoid("LeftHand", (-.67, -.62, -1.37), (.13, .10, .15), "Skin", 14, 8)
+hands.ellipsoid("RightHand", (.67, -.62, -1.37), (.13, .10, .15), "Skin", 14, 8)
 hands.save()
 
 cockpit = Obj("rv_cockpit")
 cockpit.box("Dashboard", (0, -.47, -1.08), (2.25, .38, .58), "DarkMetal")
 cockpit.box("DashTop", (0, -.27, -1.14), (2.28, .10, .70), "RV_Cream")
-cockpit.box("LeftPillar", (-1.04, .12, -1.35), (.14, 1.35, .14), "RV_Cream")
-cockpit.box("RightPillar", (1.04, .12, -1.35), (.14, 1.35, .14), "RV_Cream")
+# Windshield pillars are provided by the exterior/chase view; omitting the
+# chunky placeholders keeps the first-person road view open.
 cockpit.torus("SteeringWheel", (.48, -.36, -.74), .34, .045, "Rubber", "z", 14, 6)
 cockpit.cylinder("SteeringColumn", (.48, -.36, -.94), .055, .45, "LightMetal", 8, "z")
 for x in (-.52, -.22, .08): cockpit.cylinder("Gauge", (x, -.40, -1.385), .09, .025, "Lamp", 10, "z")
