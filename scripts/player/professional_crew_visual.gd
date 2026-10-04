@@ -105,26 +105,31 @@ func _build_head_accessories() -> void:
 	var charcoal := _material(Color("20262b"), 0.82)
 	var lens := _material(Color("10191e"), 0.12, 0.24)
 
-	var crown := CylinderMesh.new()
-	crown.top_radius = 0.125
-	crown.bottom_radius = 0.150
-	crown.height = 0.105
+	# A low rounded crown reads as a real expedition/baseball cap. The former
+	# flat cylinder looked like an oversized top hat in the phone close-up.
+	var crown := SphereMesh.new()
+	crown.radius = 0.138
+	crown.height = 0.276
 	crown.radial_segments = 32
-	_mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.185, 0.0), charcoal)
+	crown.rings = 12
+	var crown_instance := _mesh(accessory_root, "ExpeditionCapCrown", crown, Vector3(0.0, 0.173, 0.0), charcoal)
+	crown_instance.scale.y = 0.47
 	var brim := BoxMesh.new()
-	brim.size = Vector3(0.27, 0.022, 0.155)
-	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.140, 0.112), charcoal)
-	brim_instance.rotation.x = -0.08
+	brim.size = Vector3(0.238, 0.018, 0.128)
+	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.126, 0.105), charcoal)
+	brim_instance.rotation.x = -0.10
 
+	# Leave a visible nose bridge between compact lenses instead of one heavy
+	# black strip across the character's entire face.
 	for side in [-1.0, 1.0]:
 		var lens_mesh := BoxMesh.new()
-		lens_mesh.size = Vector3(0.088, 0.050, 0.012)
+		lens_mesh.size = Vector3(0.082, 0.041, 0.010)
 		var lens_instance := _mesh(accessory_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.050, 0.057, 0.161), lens)
+			Vector3(side * 0.060, 0.057, 0.150), lens)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
-	bridge.size = Vector3(0.024, 0.009, 0.014)
-	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.058, 0.164), charcoal)
+	bridge.size = Vector3(0.029, 0.007, 0.012)
+	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.058, 0.153), charcoal)
 
 func _resolve_clip(requested: String) -> StringName:
 	if not animation_player:

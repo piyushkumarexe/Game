@@ -443,9 +443,14 @@ func _run_expedition_smoke_test() -> void:
 			# movement test. Hide only its visual while documenting the physical entry.
 			var doorway_player := GameSession.local_player as ExpeditionPlayer
 			var doorway_player_was_visible := doorway_player.body_visual.visible
+			var doorway_hud_was_visible := active_hud.visible if active_hud else false
 			doorway_player.body_visual.visible = false
+			if active_hud:
+				active_hud.visible = false
 			await _save_staged_render(doorway_camera, "res://build/validation/rv-doorway-render.png")
 			doorway_player.body_visual.visible = doorway_player_was_visible
+			if active_hud:
+				active_hud.visible = doorway_hud_was_visible
 			doorway_camera.queue_free()
 			GameSession.local_player.camera.make_current()
 		smoke_rv.set_entry_door_open(false)
