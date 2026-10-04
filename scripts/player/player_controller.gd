@@ -6,9 +6,9 @@ const WALK_SPEED := 4.4
 const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
-const CREW_MESH: Mesh = preload("res://assets/models/crew_member.obj")
-const HANDS_MESH: Mesh = preload("res://assets/models/first_person_hands.obj")
-const COCKPIT_MESH: Mesh = preload("res://assets/models/rv_cockpit.obj")
+const CREW_SCENE: PackedScene = preload("res://assets/models/crew_member.gltf")
+const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
+const COCKPIT_SCENE: PackedScene = preload("res://assets/models/rv_cockpit.gltf")
 
 var peer_id := 1
 var player_name := "Rover"
@@ -22,10 +22,10 @@ var look_pitch := 0.0
 var head: Node3D
 var camera: Camera3D
 var interact_ray: RayCast3D
-var body_visual: MeshInstance3D
+var body_visual: Node3D
 var carried_visual: MeshInstance3D
-var hands_visual: MeshInstance3D
-var cockpit_visual: MeshInstance3D
+var hands_visual: Node3D
+var cockpit_visual: Node3D
 var nameplate: Label3D
 var voice: ProximityVoice
 
@@ -175,9 +175,8 @@ func _build_player() -> void:
 	collision.position.y = 0.9
 	add_child(collision)
 
-	body_visual = MeshInstance3D.new()
+	body_visual = CREW_SCENE.instantiate() as Node3D
 	body_visual.name = "TexturedCrewModel"
-	body_visual.mesh = CREW_MESH
 	body_visual.scale = Vector3.ONE * 0.82
 	body_visual.rotation.y = PI
 	add_child(body_visual)
@@ -191,16 +190,12 @@ func _build_player() -> void:
 	camera.near = 0.045
 	head.add_child(camera)
 
-	hands_visual = MeshInstance3D.new()
+	hands_visual = HANDS_SCENE.instantiate() as Node3D
 	hands_visual.name = "FirstPersonHands"
-	hands_visual.mesh = HANDS_MESH
-	hands_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	hands_visual.visible = false
 	camera.add_child(hands_visual)
-	cockpit_visual = MeshInstance3D.new()
+	cockpit_visual = COCKPIT_SCENE.instantiate() as Node3D
 	cockpit_visual.name = "DriverCockpit"
-	cockpit_visual.mesh = COCKPIT_MESH
-	cockpit_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	cockpit_visual.visible = false
 	camera.add_child(cockpit_visual)
 

@@ -8,7 +8,7 @@ const GEAR_RATIOS := [-0.62, 0.0, 0.68, 0.92, 1.16, 1.38, 1.55]
 const MAX_ENGINE_FORCE := 5200.0
 const MAX_STEER := 0.46
 const MAX_FUEL := 100.0
-const RV_EXTERIOR_MESH: Mesh = preload("res://assets/models/rv_exterior.obj")
+const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
 
 var prompt := "DRIVE THE RV"
 var health := 100.0
@@ -330,10 +330,8 @@ func _build_rv() -> void:
 	body_shell = Node3D.new()
 	body_shell.name = "OriginalRVBody"
 	add_child(body_shell)
-	var exterior := MeshInstance3D.new()
+	var exterior := RV_EXTERIOR_SCENE.instantiate()
 	exterior.name = "TexturedRVExterior"
-	exterior.mesh = RV_EXTERIOR_MESH
-	exterior.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	body_shell.add_child(exterior)
 
 	_add_wheel("FrontLeft", Vector3(-1.18, -0.62, -1.82), true, false)

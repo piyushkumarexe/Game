@@ -6,6 +6,8 @@ All geometry, palettes, and textures are original to this project.
 """
 from __future__ import annotations
 
+import base64
+import json
 import math
 import random
 import struct
@@ -103,7 +105,15 @@ class Obj:
         vt_start = len(self.uvs) + 1
         n_index = len(self.normals) + 1
         self.vertices.extend(points)
-        self.uvs.extend([(0, 0), (1, 0), (1, 1), (0, 1)][: len(points)])
+        if len(points) <= 4:
+            face_uvs = [(0, 0), (1, 0), (1, 1), (0, 1)][: len(points)]
+        else:
+            face_uvs = [
+                (0.5 + math.cos(math.tau * index / len(points)) * 0.5,
+                 0.5 + math.sin(math.tau * index / len(points)) * 0.5)
+                for index in range(len(points))
+            ]
+        self.uvs.extend(face_uvs)
         self.normals.append(normal)
         refs = [f"{v_start + index}/{vt_start + index}/{n_index}" for index in range(len(points))]
         self.lines.append("f " + " ".join(refs))
@@ -363,4 +373,159 @@ sign.box("SignBoard", (0, 2.18, 0), (1.65, .72, .14), "Wood")
 sign.box("PaintMark", (0, 2.18, -.08), (1.30, .12, .025), "Lamp")
 sign.save()
 
-print(f"Generated {len(list(MODEL_DIR.glob('*.obj')))} models and {len(list(TEXTURE_DIR.glob('*.png')))} textures.")
+# Convert the simple authoring OBJ files to portable glTF 2.0 scenes. Godot's
+# glTF importer is used for every target, avoiding platform-specific OBJ/MTL
+# behavior while keeping the generated source geometry easy to inspect.
+MATERIALS = {
+    "RV_Cream": ((0.84, 0.79, 0.65, 1.0), "rv_cream.png", 0.90),
+    "RV_Stripe": ((0.62, 0.25, 0.14, 1.0), "rv_stripe.png", 0.88),
+    "Window": ((0.10, 0.20, 0.23, 0.72), None, 0.18),
+    "DarkMetal": ((0.15, 0.16, 0.16, 1.0), None, 0.38),
+    "LightMetal": ((0.48, 0.50, 0.48, 1.0), None, 0.30),
+    "Lamp": ((1.00, 0.72, 0.22, 1.0), None, 0.45),
+    "Rubber": ((0.035, 0.04, 0.045, 1.0), None, 0.98),
+    "Wood": ((0.50, 0.30, 0.16, 1.0), "trail_wood.png", 0.92),
+    "Pine": ((0.16, 0.33, 0.22, 1.0), "pine_needles.png", 0.95),
+    "Stone": ((0.49, 0.30, 0.21, 1.0), "canyon_stone.png", 0.96),
+    "CrewCloth": ((0.68, 0.30, 0.15, 1.0), "crew_fabric.png", 0.90),
+    "Denim": ((0.15, 0.25, 0.34, 1.0), None, 0.92),
+    "Skin": ((0.78, 0.54, 0.38, 1.0), None, 0.86),
+    "Canvas": ((0.69, 0.60, 0.43, 1.0), None, 0.94),
+    "Tool": ((0.26, 0.31, 0.32, 1.0), None, 0.28),
+}
+
+
+def convert_obj_to_gltf(source: Path) -> None:
+    vertices: list[tuple[float, float, float]] = []
+    uvs: list[tuple[float, float]] = []
+    normals: list[tuple[float, float, float]] = []
+    groups: dict[str, list[list[tuple[int, int, int]]]] = {}
+    material = "Stone"
+    for raw in source.read_text(encoding="utf-8").splitlines():
+        parts = raw.split()
+        if not parts:
+            continue
+        if parts[0] == "v":
+            vertices.append(tuple(map(float, parts[1:4])))
+        elif parts[0] == "vt":
+            uvs.append(tuple(map(float, parts[1:3])))
+        elif parts[0] == "vn":
+            normals.append(tuple(map(float, parts[1:4])))
+        elif parts[0] == "usemtl":
+            material = parts[1]
+        elif parts[0] == "f":
+            face = []
+            for ref in parts[1:]:
+                indices = ref.split("/")
+                face.append((int(indices[0]) - 1, int(indices[1]) - 1, int(indices[2]) - 1))
+            groups.setdefault(material, []).append(face)
+
+    blob = bytearray()
+    buffer_views = []
+    accessors = []
+
+    def align() -> None:
+        while len(blob) % 4:
+            blob.append(0)
+
+    def add_data(data: bytes, target: int | None = None) -> int:
+        align()
+        offset = len(blob)
+        blob.extend(data)
+        view = {"buffer": 0, "byteOffset": offset, "byteLength": len(data)}
+        if target is not None:
+            view["target"] = target
+        buffer_views.append(view)
+        return len(buffer_views) - 1
+
+    def add_accessor(view: int, component: int, count: int, kind: str, minimum=None, maximum=None) -> int:
+        accessor = {"bufferView": view, "componentType": component, "count": count, "type": kind}
+        if minimum is not None:
+            accessor["min"] = minimum
+            accessor["max"] = maximum
+        accessors.append(accessor)
+        return len(accessors) - 1
+
+    used_materials = list(groups)
+    material_defs = []
+    images = []
+    textures = []
+    texture_lookup: dict[str, int] = {}
+    for name in used_materials:
+        color, texture_file, roughness = MATERIALS[name]
+        pbr = {"baseColorFactor": list(color), "roughnessFactor": roughness, "metallicFactor": 0.0}
+        if texture_file:
+            if texture_file not in texture_lookup:
+                images.append({"uri": f"../textures/{texture_file}"})
+                textures.append({"source": len(images) - 1, "sampler": 0})
+                texture_lookup[texture_file] = len(textures) - 1
+            pbr["baseColorTexture"] = {"index": texture_lookup[texture_file]}
+        definition = {"name": name, "pbrMetallicRoughness": pbr}
+        if color[3] < 1.0:
+            definition["alphaMode"] = "BLEND"
+            definition["doubleSided"] = True
+        if name == "Lamp":
+            definition["emissiveFactor"] = [0.35, 0.18, 0.04]
+        material_defs.append(definition)
+
+    primitives = []
+    for material_index, name in enumerate(used_materials):
+        local_map: dict[tuple[int, int, int], int] = {}
+        local_positions = []
+        local_normals = []
+        local_uvs = []
+        local_indices = []
+        for face in groups[name]:
+            face_indices = []
+            for ref in face:
+                if ref not in local_map:
+                    local_map[ref] = len(local_positions)
+                    local_positions.append(vertices[ref[0]])
+                    local_uvs.append((uvs[ref[1]][0], 1.0 - uvs[ref[1]][1]))
+                    local_normals.append(normals[ref[2]])
+                face_indices.append(local_map[ref])
+            for index in range(1, len(face_indices) - 1):
+                local_indices.extend((face_indices[0], face_indices[index], face_indices[index + 1]))
+        position_bytes = b"".join(struct.pack("<3f", *value) for value in local_positions)
+        normal_bytes = b"".join(struct.pack("<3f", *value) for value in local_normals)
+        uv_bytes = b"".join(struct.pack("<2f", *value) for value in local_uvs)
+        index_bytes = b"".join(struct.pack("<I", value) for value in local_indices)
+        position_view = add_data(position_bytes, 34962)
+        normal_view = add_data(normal_bytes, 34962)
+        uv_view = add_data(uv_bytes, 34962)
+        index_view = add_data(index_bytes, 34963)
+        mins = [min(value[axis] for value in local_positions) for axis in range(3)]
+        maxs = [max(value[axis] for value in local_positions) for axis in range(3)]
+        primitives.append({
+            "attributes": {
+                "POSITION": add_accessor(position_view, 5126, len(local_positions), "VEC3", mins, maxs),
+                "NORMAL": add_accessor(normal_view, 5126, len(local_normals), "VEC3"),
+                "TEXCOORD_0": add_accessor(uv_view, 5126, len(local_uvs), "VEC2"),
+            },
+            "indices": add_accessor(index_view, 5125, len(local_indices), "SCALAR"),
+            "material": material_index,
+            "mode": 4,
+        })
+
+    document = {
+        "asset": {"version": "2.0", "generator": "Dustbound original low-poly asset generator"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": source.stem, "mesh": 0}],
+        "meshes": [{"name": source.stem, "primitives": primitives}],
+        "materials": material_defs,
+        "samplers": [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 10497}],
+        "images": images,
+        "textures": textures,
+        "buffers": [{"byteLength": len(blob), "uri": "data:application/octet-stream;base64," + base64.b64encode(blob).decode("ascii")}],
+        "bufferViews": buffer_views,
+        "accessors": accessors,
+    }
+    (MODEL_DIR / f"{source.stem}.gltf").write_text(json.dumps(document, separators=(",", ":")), encoding="utf-8")
+
+
+for obj_path in sorted(MODEL_DIR.glob("*.obj")):
+    convert_obj_to_gltf(obj_path)
+    obj_path.unlink()
+(MODEL_DIR / "dustbound.mtl").unlink(missing_ok=True)
+print(f"Generated {len(list(MODEL_DIR.glob('*.gltf')))} glTF models and {len(list(TEXTURE_DIR.glob('*.png')))} textures.")

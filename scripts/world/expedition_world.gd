@@ -8,9 +8,9 @@ const InteractableScript = preload("res://scripts/gameplay/interactable.gd")
 const WildlifeScript = preload("res://scripts/gameplay/wildlife.gd")
 const RockfallScript = preload("res://scripts/gameplay/rockfall_hazard.gd")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
-const PINE_MESH: Mesh = preload("res://assets/models/pine_tree.obj")
-const ROCK_MESH: Mesh = preload("res://assets/models/canyon_rock.obj")
-const SIGN_MESH: Mesh = preload("res://assets/models/trail_sign.obj")
+const PINE_SCENE: PackedScene = preload("res://assets/models/pine_tree.gltf")
+const ROCK_SCENE: PackedScene = preload("res://assets/models/canyon_rock.gltf")
+const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
 const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
 
 const ROUTE: Array[Vector3] = [
@@ -75,9 +75,8 @@ func _build_bootstrap_view() -> void:
 	safety_floor.add_child(collision)
 	add_child(safety_floor)
 
-	var sign := MeshInstance3D.new()
+	var sign := SIGN_SCENE.instantiate() as Node3D
 	sign.name = "CampTrailSignModel"
-	sign.mesh = SIGN_MESH
 	sign.position = ROUTE[0] + Vector3(-7.0, 0.0, -3.0)
 	sign.rotation.y = -0.35
 	add_child(sign)
@@ -335,9 +334,7 @@ func _make_tree(position: Vector3, scale_factor: float, anchor: bool) -> void:
 	tree.rotation.y = random.randf_range(-PI, PI)
 	tree.scale = Vector3.ONE * scale_factor
 	props_root.add_child(tree)
-	var model := MeshInstance3D.new()
-	model.mesh = PINE_MESH
-	model.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var model := PINE_SCENE.instantiate()
 	tree.add_child(model)
 	if anchor:
 		var trunk_body := StaticBody3D.new()
@@ -358,9 +355,7 @@ func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collisio
 	rock_root.rotation.y = random.randf_range(-PI, PI)
 	rock_root.scale = shape_scale * radius
 	props_root.add_child(rock_root)
-	var model := MeshInstance3D.new()
-	model.mesh = ROCK_MESH
-	model.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var model := ROCK_SCENE.instantiate()
 	rock_root.add_child(model)
 	if collision_enabled:
 		var body := StaticBody3D.new()

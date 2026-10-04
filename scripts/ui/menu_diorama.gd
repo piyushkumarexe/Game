@@ -2,10 +2,10 @@ class_name MenuDiorama
 extends Node3D
 ## Live 3D title-screen campsite assembled from the same original models used in play.
 
-const RV_MESH: Mesh = preload("res://assets/models/rv_exterior.obj")
-const PINE_MESH: Mesh = preload("res://assets/models/pine_tree.obj")
-const ROCK_MESH: Mesh = preload("res://assets/models/canyon_rock.obj")
-const SIGN_MESH: Mesh = preload("res://assets/models/trail_sign.obj")
+const RV_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
+const PINE_SCENE: PackedScene = preload("res://assets/models/pine_tree.gltf")
+const ROCK_SCENE: PackedScene = preload("res://assets/models/canyon_rock.gltf")
+const SIGN_SCENE: PackedScene = preload("res://assets/models/trail_sign.gltf")
 const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
 
 var camera: Camera3D
@@ -97,8 +97,7 @@ func _build_rig() -> void:
 	rig.position = Vector3(2.0, 0.58, -1.2)
 	rig.rotation.y = -0.68
 	add_child(rig)
-	var exterior := MeshInstance3D.new()
-	exterior.mesh = RV_MESH
+	var exterior := RV_SCENE.instantiate()
 	rig.add_child(exterior)
 	for wheel_position in [Vector3(-1.2, 0.0, -1.82), Vector3(1.2, 0.0, -1.82), Vector3(-1.2, 0.0, 1.78), Vector3(1.2, 0.0, 1.78)]:
 		var wheel := MeshInstance3D.new()
@@ -120,21 +119,18 @@ func _build_scenery() -> void:
 		[Vector3(-12, 0, 2), 1.1], [Vector3(15, 0, 3), 1.25]
 	]
 	for data: Array in tree_data:
-		var tree := MeshInstance3D.new()
-		tree.mesh = PINE_MESH
+		var tree := PINE_SCENE.instantiate() as Node3D
 		tree.position = data[0]
 		tree.scale = Vector3.ONE * float(data[1])
 		add_child(tree)
 	for index in 11:
-		var rock := MeshInstance3D.new()
-		rock.mesh = ROCK_MESH
+		var rock := ROCK_SCENE.instantiate() as Node3D
 		var side := -1.0 if index % 2 == 0 else 1.0
 		rock.position = Vector3(side * (5.5 + index * 0.65), 0.0, -9.0 + index * 2.1)
 		rock.scale = Vector3(0.5 + (index % 3) * 0.22, 0.45 + (index % 2) * 0.18, 0.62)
 		rock.rotation.y = index * 0.77
 		add_child(rock)
-	var sign := MeshInstance3D.new()
-	sign.mesh = SIGN_MESH
+	var sign := SIGN_SCENE.instantiate() as Node3D
 	sign.position = Vector3(-2.7, 0.0, -4.6)
 	sign.rotation.y = 0.42
 	add_child(sign)

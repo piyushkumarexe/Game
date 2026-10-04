@@ -2,7 +2,7 @@ class_name TrailInteractable
 extends StaticBody3D
 ## Network-friendly world interaction: supplies, planks, repair bench and map props.
 
-const CRATE_MESH: Mesh = preload("res://assets/models/trail_crate.obj")
+const CRATE_SCENE: PackedScene = preload("res://assets/models/trail_crate.gltf")
 
 var kind := "supply"
 var prompt := "TAKE SUPPLY CRATE"
@@ -105,31 +105,35 @@ func _match_appearance() -> void:
 			display_color = Color("c4482e")
 
 func _build_visual() -> void:
-	var mesh_instance := MeshInstance3D.new()
+	var visual: Node3D
 	var shape_node := CollisionShape3D.new()
 	if kind == "supply":
-		mesh_instance.name = "TexturedSupplyCrate"
-		mesh_instance.mesh = CRATE_MESH
+		visual = CRATE_SCENE.instantiate() as Node3D
+		visual.name = "TexturedSupplyCrate"
 		var shape := BoxShape3D.new()
 		shape.size = Vector3(0.92, 0.76, 0.78)
 		shape_node.shape = shape
 	elif kind == "plank" or kind == "bridge_socket":
+		var mesh_instance := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(2.8, 0.18, 0.48)
 		mesh_instance.mesh = mesh
 		mesh_instance.material_override = PrimitiveFactory.material(display_color, 0.82, 0.05)
+		visual = mesh_instance
 		var shape := BoxShape3D.new()
 		shape.size = mesh.size
 		shape_node.shape = shape
 	else:
+		var mesh_instance := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(0.85, 0.72, 0.72)
 		mesh_instance.mesh = mesh
 		mesh_instance.material_override = PrimitiveFactory.material(display_color, 0.82, 0.05)
+		visual = mesh_instance
 		var shape := BoxShape3D.new()
 		shape.size = mesh.size
 		shape_node.shape = shape
-	add_child(mesh_instance)
+	add_child(visual)
 	add_child(shape_node)
 	if kind == "fuel":
 		var band := MeshInstance3D.new()
