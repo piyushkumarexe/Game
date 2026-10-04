@@ -273,6 +273,18 @@ func _run_expedition_smoke_test() -> void:
 				if local_player.body_rig:
 					if local_player.body_rig.skeletons.size() < 2:
 						failures.append("professional head/outfit skeletons did not import")
+					else:
+						var proof_skeleton := local_player.body_rig.skeletons[0]
+						var upperarm_index := proof_skeleton.find_bone("upperarm_l")
+						var lowerarm_index := proof_skeleton.find_bone("lowerarm_l")
+						if upperarm_index < 0 or lowerarm_index < 0:
+							failures.append("professional named arm bones missing")
+						else:
+							var upper_pose := proof_skeleton.get_bone_global_pose(upperarm_index).origin
+							var lower_pose := proof_skeleton.get_bone_global_pose(lowerarm_index).origin
+							var rest_upper := proof_skeleton.get_bone_global_rest(upperarm_index).origin
+							var rest_lower := proof_skeleton.get_bone_global_rest(lowerarm_index).origin
+							print("CREW_BONE_PROOF rest=%s pose=%s" % [rest_lower - rest_upper, lower_pose - upper_pose])
 					for accessory in ["ExpeditionCapCrown", "SunglassLens", "PaddedVestPanel"]:
 						if not local_player.body_rig.find_child(accessory, true, false):
 							failures.append("professional crew styling missing: %s" % accessory)
