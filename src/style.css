@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap');
+
+:root {
+  color-scheme: dark;
+  font-family: 'Nunito', system-ui, sans-serif;
+  background: #171a25;
+  font-synthesis: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  user-select: none;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #171a25;
+}
+
+canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+  touch-action: none;
+}
+
+#rotate-device {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: none;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px;
+  text-align: center;
+  color: #fff9e8;
+  background: radial-gradient(circle at 50% 30%, #3a4052 0, #171a25 62%);
+}
+
+#rotate-device strong {
+  font: 800 27px/1 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+#rotate-device small { color: #aeb3bd; font-weight: 700; }
+
+.phone-icon {
+  width: 72px;
+  height: 112px;
+  margin-bottom: 18px;
+  border: 5px solid #f8b84e;
+  border-radius: 13px;
+  transform: rotate(-90deg);
+  animation: rock 1.8s ease-in-out infinite;
+}
+
+.phone-icon span {
+  display: block;
+  width: 23px;
+  height: 4px;
+  margin: 8px auto;
+  border-radius: 5px;
+  background: #f8b84e;
+}
+
+@keyframes rock {
+  0%, 100% { transform: rotate(-90deg) scale(.95); }
+  50% { transform: rotate(0) scale(1); }
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  #rotate-device { display: grid; }
+}
+
+@media (display-mode: standalone) {
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+}
