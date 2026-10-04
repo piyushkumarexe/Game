@@ -8,7 +8,7 @@ This checklist is the release gate for the 0.10 correction line. A green export 
 - Exterior coach skin, living interior and cockpit frame are separate render batches. Driver-eye view culls only the opaque exterior skin while preserving the actual dashboard, frame, glazing and interior; it does not use a camera-attached overlay.
 - The continuous interior includes dashboard, gauges, navigation screen, movable steering wheel, physical animated gear gate/lever, pedals, driver/passenger seats, belts, cab trim, refrigerator, kitchen, sink, stove, cabinets, dinette, rear bed, storage, map and ceiling fixtures.
 - The passenger entry door is an independently modeled mechanism with a world-space hinge, animated open/close state and physical interaction target.
-- Chassis collision ends above the wheel contact region. CI releases the RV into physics and rejects any wheel centre that settles below the terrain clearance gate.
+- Chassis collision ends above the wheel contact region. Each tire has a solid inner contact core plus a damped per-wheel terrain spring fallback for missed first-frame VehicleWheel rays. CI releases the full 3.6-ton RV into physics and rejects any wheel centre that settles below the terrain-clearance gate.
 - Chase view stays centered behind the full vehicle at a non-overhead angle. Spring-arm collision excludes the occupied RV so it does not collapse into the shell.
 - Exterior, interior and cockpit are independently asserted in CI; chase and driver-eye screenshots are captured separately.
 

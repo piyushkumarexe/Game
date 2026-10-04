@@ -402,8 +402,16 @@ rv.box("FuelTank", (0.52, -0.36, 0.45), (0.64, 0.34, 1.05), "DarkMetal")
 rv.cylinder("ExhaustPipe", (-0.78, -0.44, 2.63), 0.055, 1.10, "LightMetal", 10, "z")
 rv.cylinder("ExhaustTip", (-0.78, -0.44, 3.18), 0.085, 0.14, "DarkMetal", 12, "z")
 
-# Coach shell and the tapered automotive cab make a recognizable RV profile.
-rv.box("CoachBody", (0.0, 0.98, 0.40), (2.56, 2.26, 5.45), "RV_Cream")
+# Coach shell is assembled as real wall/floor/roof panels instead of one solid
+# decorated box. The right side has a genuine doorway through to the interior.
+rv.box("CoachFloorShell", (0.0, -0.07, 0.40), (2.56, 0.16, 5.45), "RV_Cream")
+rv.box("CoachRoofShell", (0.0, 2.03, 0.40), (2.56, 0.18, 5.45), "RV_Cream")
+rv.box("CoachLeftWall", (-1.22, 0.98, 0.40), (0.12, 2.06, 5.45), "RV_Cream")
+# Door aperture spans z=.54..1.42 and y=-.01..1.83.
+rv.box("CoachRightFrontWall", (1.22, 0.98, -0.895), (0.12, 2.06, 2.86), "RV_Cream")
+rv.box("CoachRightRearWall", (1.22, 0.98, 2.285), (0.12, 2.06, 1.68), "RV_Cream")
+rv.box("CoachRightDoorHeader", (1.22, 1.96, 0.98), (0.12, 0.20, 0.88), "RV_Cream")
+rv.box("CoachRightDoorSill", (1.22, -0.02, 0.98), (0.12, 0.10, 0.88), "RV_Accent")
 rv.profile_prism("CabBody", -3.52, -1.82,
                  (-1.08, 1.08, -0.08, 1.43),
                  (-1.27, 1.27, -0.12, 1.63), "RV_Cream")
@@ -449,6 +457,10 @@ for side in (-1, 1):
                              [(side * 1.292, 0.66, -2.13), (side * 1.292, 0.66, -3.24),
                               (side * 1.292, 1.53, -3.08), (side * 1.292, 1.53, -2.03)], "Window")
     rv.box("CabWindowLowerTrim", (side * 1.31, 0.63, -2.68), (0.055, 0.09, 1.22), "DarkMetal")
+    rv.box("CabDoorInset", (side * 1.305, 0.27, -2.66), (0.045, 0.56, 1.12), "RV_Accent")
+    rv.box("CabDoorPanel", (side * 1.334, 0.29, -2.66), (0.022, 0.46, 1.02), "RV_Cream")
+    rv.box("CabDoorHandle", (side * 1.365, 0.70, -2.28), (0.035, 0.07, 0.25), "Chrome")
+    rv.box("CabRunningBoard", (side * 1.48, -0.29, -2.54), (0.42, 0.10, 1.46), "DarkMetal")
     rv.box("MirrorSupport", (side * 1.47, 1.02, -2.88), (0.42, 0.06, 0.06), "DarkMetal")
     rv.box("MirrorHousing", (side * 1.66, 1.04, -2.88), (0.11, 0.42, 0.30), "DarkMetal")
     rv.box("MirrorGlass", (side * 1.725, 1.04, -2.88), (0.018, 0.32, 0.21), "Mirror")
@@ -463,8 +475,11 @@ for side, z, width in window_layout:
     rv.box("CoachWindowCurtain", (x - side * 0.055, 1.36, z + width * 0.38),
            (0.025, 0.60, 0.13), "InteriorFabric")
 
-# Passenger entry door, hinges, handle, step and exterior service hatches.
-rv.box("EntryDoorFrame", (1.326, 0.91, 0.98), (0.085, 1.92, 0.96), "DarkMetal")
+# Passenger entry door, open frame, hinges, handle, step and service hatches.
+for z in (0.50, 1.46):
+    rv.box("EntryDoorFrameRail", (1.326, 0.91, z), (0.085, 1.92, 0.075), "DarkMetal")
+rv.box("EntryDoorFrameHeader", (1.326, 1.84, 0.98), (0.085, 0.075, 1.03), "DarkMetal")
+rv.box("EntryDoorFrameSill", (1.326, -0.02, 0.98), (0.085, 0.075, 1.03), "DarkMetal")
 rv.box("EntryDoor", (1.377, 0.91, 0.98), (0.035, 1.80, 0.84), "RV_Cream")
 rv.box("EntryDoorGlass", (1.401, 1.36, 0.98), (0.018, 0.60, 0.56), "Window")
 rv.box("EntryDoorHandle", (1.435, 0.91, 0.68), (0.04, 0.075, 0.22), "Chrome")
@@ -580,7 +595,9 @@ rv.box("RearViewMirror", (0.0, 1.54, -2.94), (0.48, 0.17, 0.07), "Mirror")
 rv.box("InteriorFloor", (0.0, 0.00, 0.82), (2.34, 0.10, 4.68), "InteriorWood")
 rv.box("InteriorCeiling", (0.0, 2.05, 0.66), (2.34, 0.08, 4.92), "InteriorVinyl")
 rv.box("InteriorWallLeft", (-1.20, 1.01, 0.75), (0.07, 1.96, 4.72), "InteriorWall")
-rv.box("InteriorWallRight", (1.20, 1.01, 0.75), (0.07, 1.96, 4.72), "InteriorWall")
+rv.box("InteriorWallRightFront", (1.20, 1.01, -0.49), (0.07, 1.96, 2.02), "InteriorWall")
+rv.box("InteriorWallRightRear", (1.20, 1.01, 2.30), (0.07, 1.96, 1.72), "InteriorWall")
+rv.box("InteriorDoorHeader", (1.20, 1.90, 0.98), (0.07, 0.18, 0.88), "InteriorWall")
 rv.box("CabDividerLeft", (-0.92, 1.24, -1.12), (0.48, 1.44, 0.10), "InteriorWood")
 rv.box("CabDividerRight", (0.92, 1.24, -1.12), (0.48, 1.44, 0.10), "InteriorWood")
 # Kitchen on the left.
