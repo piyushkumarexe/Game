@@ -421,8 +421,13 @@ func _run_expedition_smoke_test() -> void:
 			if absf(blocked_local.x) < 1.70 and absf(blocked_local.z) < 4.10:
 				failures.append("player can still stand underneath an RV overhang")
 
-	# Capture the 3D viewport without CanvasLayer UI. The resulting proof cannot
-	# pass merely because HUD elements rendered over an empty world.
+	# Capture the 3D viewport without CanvasLayer UI. Stage the already-working
+	# swipe-look camera at a rear three-quarter angle so the proof exposes side
+	# glazing, both axles and wheel stance instead of validating only a rear wall.
+	if GameSession.local_player and is_instance_valid(GameSession.local_player):
+		var render_player := GameSession.local_player as ExpeditionPlayer
+		if render_player.is_driving:
+			render_player.head.rotation.y = 0.30
 	if active_hud and is_instance_valid(active_hud):
 		active_hud.visible = false
 	await get_tree().process_frame
@@ -474,6 +479,8 @@ func _run_expedition_smoke_test() -> void:
 		var cockpit_player := GameSession.local_player as ExpeditionPlayer
 		var cockpit_rv := GameSession.rv as ExpeditionRV
 		if cockpit_player.is_driving:
+			cockpit_player.head.rotation = Vector3.ZERO
+			cockpit_player.look_pitch = 0.0
 			cockpit_player._apply_camera_mode(false)
 			await get_tree().process_frame
 			await RenderingServer.frame_post_draw
