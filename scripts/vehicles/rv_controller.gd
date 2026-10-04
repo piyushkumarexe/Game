@@ -118,7 +118,7 @@ func _request_driver(requested_peer: int) -> void:
 func _assign_driver(id: int) -> void:
 	driver_peer_id = id
 	engine_running = true
-	var player := Net.world.get_player(id) if Net.world else null
+	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.enter_driver(self)
 	if multiplayer.is_server() or not Net.is_online:
@@ -139,7 +139,7 @@ func _request_exit(requested_peer: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _release_driver(id: int) -> void:
-	var player := Net.world.get_player(id) if Net.world else null
+	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.leave_driver(exit_seat_transform())
 	driver_peer_id = 0

@@ -30,7 +30,7 @@ func interact(player: Node) -> void:
 func _request_interaction(peer_id: int) -> void:
 	if not multiplayer.is_server() or not Net.world:
 		return
-	var player := Net.world.get_player(peer_id)
+	var player: Node = Net.world.get_player(peer_id)
 	if player and global_position.distance_to(player.global_position) < 4.2:
 		_apply_interaction(player)
 
