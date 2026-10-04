@@ -363,7 +363,7 @@ func _apply_quality_profile() -> void:
 	viewport.use_debanding = quality == 2
 	if environment:
 		environment.glow_enabled = quality == 2
-		environment.ambient_light_energy = [0.72, 0.56, 0.46][quality]
+		environment.ambient_light_energy = [0.72, 0.62, 0.58][quality]
 		environment.fog_density = [0.0014, 0.0009, 0.00055][quality]
 		environment.fog_sky_affect = [0.38, 0.28, 0.18][quality]
 		environment.adjustment_enabled = quality == 2
@@ -449,7 +449,7 @@ func _build_terrain() -> void:
 	# baked vertex colors, so scenery can never appear to float over a void.
 	terrain_material = StandardMaterial3D.new()
 	terrain_material.albedo_texture = TERRAIN_DETAIL
-	terrain_material.albedo_color = Color(1.18, 1.16, 1.10, 1.0)
+	terrain_material.albedo_color = Color(1.48, 1.42, 1.30, 1.0)
 	terrain_material.vertex_color_use_as_albedo = true
 	terrain_material.roughness = 0.90
 	terrain_material.normal_enabled = GameSession.graphics_quality > 0

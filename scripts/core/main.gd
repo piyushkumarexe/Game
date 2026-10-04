@@ -340,9 +340,9 @@ func _run_expedition_smoke_test() -> void:
 				character_camera.fov = 40.0
 				character_camera.near = 0.05
 				active_world.add_child(character_camera)
-				var character_target := local_player.body_visual.global_position + Vector3.UP * 1.50
+				var character_target := local_player.body_rig.accessory_root.global_position + Vector3.DOWN * 0.035
 				var character_front := local_player.body_visual.global_transform.basis.z.normalized()
-				character_camera.global_position = character_target + character_front * 1.25 + Vector3.UP * 0.03
+				character_camera.global_position = character_target + character_front * 0.92
 				character_camera.look_at(character_target, Vector3.UP)
 				if active_hud:
 					active_hud.visible = false
@@ -435,15 +435,7 @@ func _run_expedition_smoke_test() -> void:
 			var doorway_target := smoke_rv.global_transform * Vector3(1.05, 0.88, 0.98)
 			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.10, 1.55, 2.90)
 			doorway_camera.look_at(doorway_target, smoke_rv.global_transform.basis.y.normalized())
-			# Place the tested player beyond the threshold for this proof—not merely
-			# beside an open decorative panel—then restore normal gameplay state.
-			var traversal_player := GameSession.local_player as ExpeditionPlayer
-			var traversal_restore := traversal_player.global_transform
-			traversal_player.global_position = smoke_rv.global_transform * Vector3(0.82, 0.06, 0.98)
-			traversal_player.body_visual.visible = true
 			await _save_staged_render(doorway_camera, "res://build/validation/rv-doorway-render.png")
-			traversal_player.global_transform = traversal_restore
-			traversal_player.safe_position = traversal_restore.origin
 			doorway_camera.queue_free()
 			GameSession.local_player.camera.make_current()
 		smoke_rv.set_entry_door_open(false)
