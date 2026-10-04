@@ -2,7 +2,7 @@
 
 A true 3D, first-/third-person single-player mobile physics adventure built with Godot 4.7.2.
 
-Version 0.5 is a **single-player stability build** with an original map, physical RV, missions, recovery tools, hazards, native touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
+Version 0.6 is a **single-player stability and rendering rebuild** with an original map, physical RV, missions, recovery tools, hazards, viewport-level multi-touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
 
 > This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
@@ -34,6 +34,8 @@ The handcrafted route contains:
 ### Single-player stability release
 
 - One local driver with networking and microphone services disabled
+- A unified viewport-level touch router for movement, look and every action button
+- End-to-end automated touch tests that physically move, rotate and jump the player
 - Terrain-aware camp spawning plus a guaranteed physical safety surface
 - Automatic on-foot recovery from invalid/falling states
 - Immediate RV recovery from out-of-bounds or prolonged upside-down states
@@ -57,8 +59,10 @@ The handcrafted route contains:
 - Collision-aware **VIEW 1P / 3P** switch for walking and driving
 - Context-sensitive touch actions for interaction, sprint, jump, gears and both winches
 - Mission, speed, gear, fuel and RV-integrity HUD
-- Android-safe `StandardMaterial3D` terrain with baked color variation, a flattened trail camp, and reduced mobile terrain density
-- Original proportioned crew, cockpit, first-person hands, signs and supply models combined with selected Kenney CC0 vehicle and nature models
+- Two-sided, occlusion-safe Android terrain with baked color variation, a flattened trail camp, and a canyon-basin fail-safe
+- A 512×512 seamless multi-scale ground texture with far less visible repetition
+- Textured and animated Quaternius CC0 survivor with idle, walk, run and jump locomotion
+- Original modeled RV coach, cockpit, signs and supply props combined with selected Kenney CC0 environment models
 - Painted terrain/model textures and a live 3D campsite home screen
 - Original generated app/key artwork, with no remote runtime assets
 
@@ -82,9 +86,9 @@ The handcrafted route contains:
 - GDScript only; no third-party runtime plugins
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
-- Multiplayer/voice implementation retained but disabled in the 0.5 stability UI and runtime
+- Multiplayer/voice implementation retained but disabled in the 0.6 stability UI and runtime
 
-Selected vehicle, tree, rock and campsite GLBs come from Kenney's CC0 asset packs. Their provenance and license are documented in [`assets/third_party/kenney/LICENSE.md`](assets/third_party/kenney/LICENSE.md). The player model and game-specific assets are original.
+Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. The animated survivor comes from Quaternius' CC0 Zombie Apocalypse Kit. Provenance is documented under [`assets/third_party`](assets/third_party). The RV, map and game-specific assets remain original.
 
 See [`docs/game-research.md`](docs/game-research.md) for the researched mechanic breakdown and the original-design boundary.
 
@@ -96,7 +100,7 @@ Install Godot 4.7.2 and open `project.godot`, or run:
 godot --editor --path .
 ```
 
-The 0.5 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION**.
+The 0.6 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION**.
 
 ## GitHub mobile builds
 

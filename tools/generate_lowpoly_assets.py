@@ -80,9 +80,30 @@ for args in [
     ("pine_needles.png", (45, 82, 62), 53, "pine"),
     ("canyon_stone.png", (126, 78, 54), 67, "rock"),
     ("crew_fabric.png", (174, 78, 42), 71, "fabric"),
-    ("ground_dirt.png", (126, 76, 48), 83, "rock"),
 ]:
     paint_texture(*args)
+
+
+def ground_pixel(x: int, y: int) -> tuple[int, int, int]:
+    """Seamless multi-scale sandstone soil without obvious checker bands."""
+    u = x / 512.0
+    v = y / 512.0
+    macro = (
+        math.sin(math.tau * (u + v)) * 10.0
+        + math.sin(math.tau * (u * 3.0 - v * 2.0)) * 6.0
+        + math.cos(math.tau * (u * 7.0 + v * 5.0)) * 3.5
+    )
+    cell_x, cell_y = x // 32, y // 32
+    cell_hash = (cell_x * 928371 + cell_y * 364479 + 83) & 0xFFFFFFFF
+    patch = ((cell_hash >> 9) % 15) - 7
+    grain_hash = (x * 73856093 ^ y * 19349663 ^ 83492791) & 0xFFFFFFFF
+    grain = (grain_hash % 13) - 6
+    pebble = -18 if grain_hash % 389 < 3 else (11 if grain_hash % 257 < 3 else 0)
+    value = macro + patch + grain * 0.45 + pebble
+    return (int(132 + value), int(82 + value * 0.72), int(52 + value * 0.48))
+
+
+write_png("ground_dirt.png", 512, 512, ground_pixel)
 
 
 class Obj:

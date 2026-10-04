@@ -2,7 +2,7 @@ class_name TrailInteractable
 extends StaticBody3D
 ## Network-friendly world interaction: supplies, planks, repair bench and map props.
 
-const CRATE_SCENE: PackedScene = preload("res://assets/models/trail_crate.gltf")
+const CRATE_SCENE: PackedScene = preload("res://assets/third_party/kenney/platformer-kit/crate-strong.glb")
 
 var kind := "supply"
 var prompt := "TAKE SUPPLY CRATE"

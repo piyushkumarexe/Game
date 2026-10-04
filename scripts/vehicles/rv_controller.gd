@@ -9,7 +9,7 @@ const MAX_ENGINE_FORCE := 4300.0
 const MAX_STEER := 0.43
 const MAX_FUEL := 100.0
 const MAX_SAFE_SPEED := 32.0
-const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/third_party/kenney/car-kit/ambulance.glb")
+const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
 
 var prompt := "DRIVE THE RV"
 var health := 100.0
@@ -385,25 +385,13 @@ func _build_rv() -> void:
 	body_shell.name = "ExpeditionRVBody"
 	add_child(body_shell)
 	var exterior := RV_EXTERIOR_SCENE.instantiate() as Node3D
-	exterior.name = "KenneyCC0ExpeditionBody"
-	exterior.scale = Vector3(1.72, 2.1, 2.1)
-	exterior.position.y = -1.18
-	exterior.rotation.y = PI
+	exterior.name = "DustboundExpeditionRV"
 	body_shell.add_child(exterior)
-	# VehicleWheel3D provides the animated wheels; hide the model's fixed wheels.
-	for model_wheel: Node in exterior.find_children("wheel-*", "Node3D", true, false):
-		if model_wheel is Node3D:
-			(model_wheel as Node3D).visible = false
-	# Expedition-camper details make the licensed response body read as an RV:
-	# side cabin windows, roof solar and a rear-mounted spare.
-	for side_x in [-1.30, 1.30]:
-		for window_z in [-0.58, 0.45]:
-			PrimitiveFactory.box(body_shell, "CabinWindow", Vector3(side_x, 1.15, window_z),
-				Vector3(0.035, 0.62, 0.74), Color("193540"))
-	roof_crate = PrimitiveFactory.box(body_shell, "RoofSolarPanel", Vector3(0.0, 2.66, 0.25),
-		Vector3(1.55, 0.07, 1.75), Color("294a55"))
-	PrimitiveFactory.cylinder(body_shell, "RearSpare", Vector3(0.0, 0.12, 3.18),
-		0.48, 0.24, Color("17191c"), false, Vector3(PI * 0.5, 0.0, 0.0), 18)
+	# The original camper model has a full coach, cab, windows, side door,
+	# bumpers, roof rack/cargo, rear ladder and spare instead of reading as an
+	# ambulance. VehicleWheel3D supplies the four animated wheels underneath it.
+	roof_crate = exterior.find_child("RoofCargo", true, false) as Node3D
+	bumper_visual = exterior.find_child("FrontBumper", true, false) as Node3D
 
 	_add_wheel("FrontLeft", Vector3(-1.18, -0.62, -2.08), true, false)
 	_add_wheel("FrontRight", Vector3(1.18, -0.62, -2.08), true, false)

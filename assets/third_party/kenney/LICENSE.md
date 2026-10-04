@@ -1,6 +1,6 @@
 # Kenney asset license
 
-The files under this directory are from Kenney's **Car Kit**, **Nature Kit**, and **Mini Characters** packs.
+The files under this directory are from Kenney's **Car Kit**, **Nature Kit**, **Mini Characters**, and **Platformer Kit** packs.
 
 - Creator: Kenney (`https://kenney.nl/`)
 - Distribution used by this repository: `https://github.com/Hidencod/tge-assets`

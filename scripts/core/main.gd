@@ -156,6 +156,26 @@ func _start_expedition() -> void:
 	active_hud = HUDScript.new()
 	add_child(active_hud)
 
+func _inject_screen_touch(pointer: int, position: Vector2, pressed: bool) -> void:
+	var event := InputEventScreenTouch.new()
+	event.index = pointer
+	event.position = position
+	event.pressed = pressed
+	Input.parse_input_event(event)
+
+func _inject_screen_drag(pointer: int, position: Vector2, relative: Vector2) -> void:
+	var event := InputEventScreenDrag.new()
+	event.index = pointer
+	event.position = position
+	event.relative = relative
+	event.screen_relative = relative
+	Input.parse_input_event(event)
+
+func _tap_control(control: Control, pointer: int) -> void:
+	var center := control.get_global_rect().get_center()
+	_inject_screen_touch(pointer, center, true)
+	_inject_screen_touch(pointer, center, false)
+
 func _run_expedition_smoke_test() -> void:
 	GameSession.player_name = "Render Scout"
 	GameSession.selected_role = GameSession.Role.DRIVER
@@ -190,33 +210,66 @@ func _run_expedition_smoke_test() -> void:
 		elif get_viewport().get_camera_3d() != local_player.first_camera:
 			failures.append("first-person camera was not initially current")
 		else:
-			local_player._apply_camera_mode(true)
-			await get_tree().process_frame
-			if not local_player.third_person or get_viewport().get_camera_3d() != local_player.third_camera:
-				failures.append("third-person camera toggle did not become current")
+			var view_button := active_hud.find_child("Touch_toggle_view", true, false) as Button if active_hud else null
+			if not view_button:
+				failures.append("touch first/third-person button missing")
+			else:
+				_tap_control(view_button, 6)
+				await get_tree().physics_frame
+				if not local_player.third_person or get_viewport().get_camera_3d() != local_player.third_camera:
+					failures.append("VIEW touch button did not activate third-person camera")
 			if not local_player.body_visual.visible:
 				failures.append("third-person crew model is hidden")
+
+			# Send a real right-side touch sequence through the same viewport router
+			# used on Android, then verify that controller yaw actually changes.
 			var yaw_before_swipe := local_player.rotation.y
-			# Send a real right-side touch sequence through Godot's input pipeline;
-			# this catches GUI focus/capture failures that direct state injection misses.
-			var touch_down := InputEventScreenTouch.new()
-			touch_down.index = 7
-			touch_down.position = Vector2(get_viewport().get_visible_rect().size.x * 0.72, 360.0)
-			touch_down.pressed = true
-			Input.parse_input_event(touch_down)
-			var touch_drag := InputEventScreenDrag.new()
-			touch_drag.index = 7
-			touch_drag.position = touch_down.position + Vector2(48.0, 0.0)
-			touch_drag.relative = Vector2(48.0, 0.0)
-			Input.parse_input_event(touch_drag)
-			var touch_up := InputEventScreenTouch.new()
-			touch_up.index = 7
-			touch_up.position = touch_drag.position
-			touch_up.pressed = false
-			Input.parse_input_event(touch_up)
+			var look_start := Vector2(get_viewport().get_visible_rect().size.x * 0.72, 330.0)
+			_inject_screen_touch(7, look_start, true)
+			_inject_screen_drag(7, look_start + Vector2(52.0, 0.0), Vector2(52.0, 0.0))
+			_inject_screen_touch(7, look_start + Vector2(52.0, 0.0), false)
 			await get_tree().physics_frame
 			if is_equal_approx(local_player.rotation.y, yaw_before_swipe):
 				failures.append("right-side touch drag did not rotate the player controller")
+
+			# Hold the real left stick for several physics ticks. Node existence is
+			# not enough: the player must physically travel and play locomotion.
+			var move_stick := active_hud.find_child("MoveStick", true, false) as Control if active_hud else null
+			if not move_stick:
+				failures.append("left movement stick missing")
+			else:
+				var move_center := move_stick.get_global_rect().get_center()
+				var move_point := move_center + Vector2(0.0, -68.0)
+				var position_before_move := local_player.global_position
+				_inject_screen_touch(8, move_point, true)
+				await get_tree().create_timer(0.45).timeout
+				_inject_screen_touch(8, move_point, false)
+				if local_player.global_position.distance_to(position_before_move) < 0.8:
+					failures.append("left touch stick did not move the player")
+				if not local_player.body_animation:
+					failures.append("animated third-person character missing")
+
+			var sprint_button := active_hud.find_child("Touch_sprint", true, false) as Button if active_hud else null
+			if sprint_button:
+				var sprint_center := sprint_button.get_global_rect().get_center()
+				_inject_screen_touch(9, sprint_center, true)
+				if not GameSession.touch_action("sprint"):
+					failures.append("SPRINT touch button did not hold its action")
+				_inject_screen_touch(9, sprint_center, false)
+				if GameSession.touch_action("sprint"):
+					failures.append("SPRINT touch action stuck after release")
+			else:
+				failures.append("SPRINT touch button missing")
+
+			var jump_button := active_hud.find_child("Touch_jump", true, false) as Button if active_hud else null
+			if jump_button:
+				_tap_control(jump_button, 10)
+				await get_tree().physics_frame
+				if local_player.velocity.y <= 0.5:
+					failures.append("JUMP touch button did not launch the grounded player")
+				await get_tree().create_timer(1.0).timeout
+			else:
+				failures.append("JUMP touch button missing")
 
 	# Guard the exact runaway/falling regression reported from the phone build.
 	if GameSession.rv and is_instance_valid(GameSession.rv):

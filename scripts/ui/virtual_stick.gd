@@ -10,7 +10,9 @@ var radius := 76.0
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(190, 190)
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# MobileInputRouter owns viewport-level touch routing. Keeping this visual
+	# passive avoids Android GUI focus swallowing one finger during multi-touch.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center = size * 0.5
 	queue_redraw()
 
@@ -58,6 +60,10 @@ func _push_value() -> void:
 		GameSession.add_touch_look(value * 9.0)
 	else:
 		GameSession.mobile_move = value
+
+func set_external_value(new_value: Vector2) -> void:
+	value = new_value.limit_length(1.0)
+	queue_redraw()
 
 func _draw() -> void:
 	draw_circle(center, radius + 13.0, Color(0.025, 0.035, 0.05, 0.48))

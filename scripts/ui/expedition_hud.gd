@@ -3,6 +3,7 @@ extends CanvasLayer
 ## Mission, vehicle and mobile co-op HUD.
 
 const TouchLookAreaScript = preload("res://scripts/ui/touch_look_area.gd")
+const MobileInputRouterScript = preload("res://scripts/ui/mobile_input_router.gd")
 
 var mission_title: Label
 var mission_detail: Label
@@ -19,6 +20,7 @@ var toast_detail: Label
 var crew_label: Label
 var toast_tween: Tween
 var touch_root: Control
+var input_router: MobileInputRouter
 
 func _ready() -> void:
 	layer = 20
@@ -213,24 +215,37 @@ func _build_touch_controls(root: Control) -> void:
 	look_area.anchor_right = 1.0
 	look_area.anchor_bottom = 1.0
 	touch_root.add_child(look_area)
-	_make_touch_button("VIEW\n1P / 3P", "toggle_view", Vector2(-112, -368), false)
-	_make_touch_button("USE", "interact", Vector2(-112, -190), false)
+	var action_buttons: Array[Button] = []
+	var view := _make_touch_button("VIEW\n1P / 3P", "toggle_view", Vector2(-112, -368), false)
+	action_buttons.append(view)
+	var use := _make_touch_button("USE", "interact", Vector2(-112, -190), false)
+	action_buttons.append(use)
 	var jump := _make_touch_button("JUMP", "jump", Vector2(-102, -100), false)
 	jump.set_meta("walking_only", true)
+	action_buttons.append(jump)
 	var sprint := _make_touch_button("SPRINT", "sprint", Vector2(-205, -94), true)
 	sprint.set_meta("walking_only", true)
+	action_buttons.append(sprint)
 	var front := _make_touch_button("FRONT\nWINCH", "winch_front", Vector2(-302, -95), false)
 	front.set_meta("driving_only", true)
 	front.visible = false
+	action_buttons.append(front)
 	var rear := _make_touch_button("REAR\nWINCH", "winch_rear", Vector2(-400, -95), false)
 	rear.set_meta("driving_only", true)
 	rear.visible = false
+	action_buttons.append(rear)
 	var up := _make_touch_button("GEAR +", "shift_up", Vector2(-105, -285), false)
 	up.set_meta("driving_only", true)
 	up.visible = false
+	action_buttons.append(up)
 	var down := _make_touch_button("GEAR −", "shift_down", Vector2(-205, -285), false)
 	down.set_meta("driving_only", true)
 	down.visible = false
+	action_buttons.append(down)
+	input_router = MobileInputRouterScript.new()
+	input_router.name = "MobileInputRouter"
+	add_child(input_router)
+	input_router.setup(move_stick, action_buttons)
 
 func _make_touch_button(text: String, action: StringName, bottom_right_offset: Vector2, hold: bool) -> Button:
 	var button := Button.new()
@@ -245,15 +260,13 @@ func _make_touch_button(text: String, action: StringName, bottom_right_offset: V
 	button.offset_right = bottom_right_offset.x + 88.0
 	button.offset_bottom = bottom_right_offset.y + 70.0
 	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.set_meta("input_action", action)
+	button.set_meta("hold_action", hold)
 	button.add_theme_font_size_override("font_size", 13)
 	button.add_theme_color_override("font_color", Color("fff2d5"))
 	button.add_theme_stylebox_override("normal", _panel_style(Color(0.04, 0.055, 0.07, 0.58), Color(0.94, 0.67, 0.28, 0.55), 24))
 	button.add_theme_stylebox_override("pressed", _panel_style(Color(0.85, 0.45, 0.16, 0.9), Color("ffe4ad"), 24))
-	if hold:
-		button.button_down.connect(GameSession.set_touch_action.bind(action, true))
-		button.button_up.connect(GameSession.set_touch_action.bind(action, false))
-	else:
-		button.button_down.connect(GameSession.pulse_touch_action.bind(action))
 	touch_root.add_child(button)
 	return button
 

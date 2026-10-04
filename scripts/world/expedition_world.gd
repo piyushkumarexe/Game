@@ -75,7 +75,8 @@ func _build_bootstrap_view() -> void:
 	floor_mesh.mesh = plane
 	var floor_material := StandardMaterial3D.new()
 	floor_material.albedo_texture = GROUND_TEXTURE
-	floor_material.uv1_scale = Vector3(18.0, 18.0, 18.0)
+	# Large-scale UVs avoid the obvious checkerboard visible in the phone shot.
+	floor_material.uv1_scale = Vector3(2.2, 2.2, 2.2)
 	floor_material.roughness = 0.96
 	floor_mesh.material_override = floor_material
 	safety_floor.add_child(floor_mesh)
@@ -85,6 +86,23 @@ func _build_bootstrap_view() -> void:
 	collision.shape = shape
 	safety_floor.add_child(collision)
 	add_child(safety_floor)
+
+	# A deep canyon basin is a visual fail-safe behind the sculpted terrain. It
+	# prevents clear-color voids on mobile even if a terrain chunk is culled.
+	var basin := MeshInstance3D.new()
+	basin.name = "CanyonBasinUnderlay"
+	var basin_mesh := BoxMesh.new()
+	basin_mesh.size = Vector3(300.0, 2.0, 410.0)
+	basin.mesh = basin_mesh
+	basin.position = Vector3(0.0, -10.5, -80.0)
+	var basin_material := StandardMaterial3D.new()
+	basin_material.albedo_texture = GROUND_TEXTURE
+	basin_material.albedo_color = Color("654535")
+	basin_material.uv1_scale = Vector3(12.0, 12.0, 12.0)
+	basin_material.roughness = 1.0
+	basin.material_override = basin_material
+	basin.ignore_occlusion_culling = true
+	add_child(basin)
 
 	var sign := SIGN_SCENE.instantiate() as Node3D
 	sign.name = "CampTrailSignModel"
@@ -188,21 +206,21 @@ func _build_environment() -> void:
 	sky.sky_material = sky_material
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.72
+	environment.ambient_light_energy = 0.48
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.glow_enabled = not GameSession.reduced_graphics
 	environment.fog_enabled = true
-	environment.fog_light_color = Color("be896a")
-	environment.fog_light_energy = 0.28
-	environment.fog_density = 0.0028
-	environment.fog_sky_affect = 0.62
+	environment.fog_light_color = Color("a97863")
+	environment.fog_light_energy = 0.16
+	environment.fog_density = 0.0018
+	environment.fog_sky_affect = 0.48
 	world_environment.environment = environment
 	add_child(world_environment)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48.0, -32.0, 0.0)
-	sun.light_color = Color("ffd69a")
-	sun.light_energy = 1.18
+	sun.light_color = Color("ffd4a3")
+	sun.light_energy = 0.92
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 135.0
 	add_child(sun)
@@ -237,7 +255,7 @@ func _build_terrain() -> void:
 			elif sin(x * 0.19 + z * 0.11) > 0.48:
 				terrain_tint = Color("936642")
 			colors.append(terrain_tint)
-			uvs.append(Vector2(x * 0.08, z * 0.08))
+			uvs.append(Vector2(x * 0.025, z * 0.025))
 	for z_index in z_count - 1:
 		for x_index in x_count - 1:
 			var current := z_index * x_count + x_index
@@ -265,7 +283,12 @@ func _build_terrain() -> void:
 	terrain_material.roughness = 0.97
 	terrain_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	terrain_material.texture_repeat = true
+	# Two-sided rendering plus explicit occlusion bypass fixes whole-terrain
+	# disappearance observed on Android compatibility drivers.
+	terrain_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	terrain.material_override = terrain_material
+	terrain.ignore_occlusion_culling = true
+	terrain.extra_cull_margin = 512.0
 	add_child(terrain)
 	terrain.create_trimesh_collision()
 
@@ -356,7 +379,7 @@ func _build_scenery() -> void:
 		var z := random.randf_range(-250.0, 103.0)
 		var x := random.randf_range(-118.0, 118.0)
 		var route_info := _nearest_route_data(Vector2(x, z))
-		if route_info.x < 7.2:
+		if route_info.x < 7.2 or route_info.x > 38.0:
 			continue
 		_make_tree(Vector3(x, terrain_height(x, z), z), 0.75 + random.randf() * 0.7, index % 5 == 0)
 	var rock_count := 54 if GameSession.reduced_graphics else 86
@@ -364,7 +387,7 @@ func _build_scenery() -> void:
 		var z := random.randf_range(-255.0, 106.0)
 		var x := random.randf_range(-122.0, 122.0)
 		var route_info := _nearest_route_data(Vector2(x, z))
-		if route_info.x < 5.4:
+		if route_info.x < 5.4 or route_info.x > 42.0:
 			continue
 		var radius := random.randf_range(0.45, 1.75)
 		_make_rock(Vector3(x, terrain_height(x, z), z), radius,
@@ -373,7 +396,8 @@ func _build_scenery() -> void:
 	for index in cover_count:
 		var z := random.randf_range(-252.0, 104.0)
 		var x := random.randf_range(-116.0, 116.0)
-		if _nearest_route_data(Vector2(x, z)).x < 5.0:
+		var route_distance := _nearest_route_data(Vector2(x, z)).x
+		if route_distance < 5.0 or route_distance > 32.0:
 			continue
 		var cover := (BUSH_SCENE if index % 6 == 0 else GRASS_SCENE).instantiate() as Node3D
 		cover.name = "TrailBush" if index % 6 == 0 else "TrailGrass"

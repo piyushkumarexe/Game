@@ -7,7 +7,7 @@ const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
 const TOUCH_LOOK_SENSITIVITY := 0.0042
-const CREW_SCENE: PackedScene = preload("res://assets/models/crew_member.gltf")
+const CREW_SCENE: PackedScene = preload("res://assets/third_party/quaternius/characters_matt.gltf")
 const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
 const COCKPIT_SCENE: PackedScene = preload("res://assets/models/rv_cockpit.gltf")
 
@@ -29,6 +29,8 @@ var third_person := false
 var spring_arm: SpringArm3D
 var interact_ray: RayCast3D
 var body_visual: Node3D
+var body_animation: AnimationPlayer
+var body_animation_name := ""
 var carried_visual: MeshInstance3D
 var hands_visual: Node3D
 var cockpit_visual: Node3D
@@ -91,6 +93,7 @@ func _physics_process(delta: float) -> void:
 		_drive_vehicle(delta)
 	else:
 		_move_on_foot(delta)
+	_update_body_animation()
 	_update_interaction()
 	if Net.is_online:
 		_sync_state.rpc(transform, velocity, is_driving)
@@ -144,6 +147,22 @@ func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
 		look_pitch = clampf(look_pitch - pitch_change, -1.15, 1.15)
 		head.rotation.x = look_pitch
 
+func _update_body_animation() -> void:
+	if not body_animation or is_driving:
+		return
+	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+	var target := "Idle"
+	if not is_on_floor():
+		target = "Jump_Idle"
+	elif horizontal_speed > 5.1:
+		target = "Run"
+	elif horizontal_speed > 0.25:
+		target = "Walk"
+	if target == body_animation_name or not body_animation.has_animation(target):
+		return
+	body_animation_name = target
+	body_animation.play(target, 0.14)
+
 func _toggle_camera_mode() -> void:
 	_apply_camera_mode(not third_person)
 	GameSession.toast_requested.emit("THIRD-PERSON CAMERA" if third_person else "FIRST-PERSON CAMERA",
@@ -156,16 +175,21 @@ func _apply_camera_mode(use_third_person: bool) -> void:
 	var local_player := peer_id == multiplayer.get_unique_id()
 	if local_player:
 		body_visual.visible = third_person and not is_driving
-		hands_visual.visible = not third_person and not is_driving and carried_item.is_empty()
+		# Idle placeholder arms stay hidden until a proper first-person animation
+		# rig is available; unobstructed gameplay is better than crude giant hands.
+		hands_visual.visible = false
 		cockpit_visual.visible = not third_person and is_driving
 		carried_visual.visible = not third_person and carried_item == "plank"
 		if driven_vehicle and driven_vehicle.has_method("set_local_driver_first_person"):
 			driven_vehicle.set_local_driver_first_person(is_driving and not third_person)
 
 func _update_interaction() -> void:
+	# Consume a touch pulse exactly once even when no target is present; otherwise
+	# a stale USE tap could trigger later when the player approached an object.
+	var interact_pressed := Input.is_action_just_pressed("interact") or GameSession.consume_touch_press("interact")
 	if is_driving:
 		interaction_text = "EXIT DRIVER SEAT"
-		if Input.is_action_just_pressed("interact") or GameSession.consume_touch_press("interact"):
+		if interact_pressed:
 			driven_vehicle.exit_driver(self)
 		return
 	interaction_text = ""
@@ -176,7 +200,7 @@ func _update_interaction() -> void:
 	if target and target.has_method("interact"):
 		var target_prompt = target.get("prompt")
 		interaction_text = str(target_prompt) if target_prompt != null else "INTERACT"
-		if Input.is_action_just_pressed("interact") or GameSession.consume_touch_press("interact"):
+		if interact_pressed:
 			target.interact(self)
 
 func enter_driver(vehicle: Node) -> void:
@@ -234,10 +258,21 @@ func _build_player() -> void:
 
 	body_visual = CREW_SCENE.instantiate() as Node3D
 	body_visual.name = "ExpeditionCrewModel"
-	# Original road-trip crew geometry has adult proportions, cap and backpack;
-	# it replaces the toy/chibi placeholder seen in the device screenshot.
-	body_visual.scale = Vector3.ONE * 0.78
+	# A textured, skinned, adult-proportioned survivor replaces the rigid
+	# mannequin placeholder. Quaternius' CC0 model includes real locomotion.
+	body_visual.rotation.y = PI
 	add_child(body_visual)
+	for hidden_prop in ["Axe", "Guitar", "Knife", "Pistol", "Rifle", "Shotgun", "SMG", "Spear", "WoodenBat_Barbed", "WoodenBat_Saw"]:
+		var prop := body_visual.find_child(hidden_prop, true, false)
+		if prop is Node3D:
+			(prop as Node3D).visible = false
+	body_animation = body_visual.find_child("*", "AnimationPlayer", true, false) as AnimationPlayer
+	if body_animation:
+		for looping_clip in ["Idle", "Walk", "Run", "Jump_Idle"]:
+			if body_animation.has_animation(looping_clip):
+				body_animation.get_animation(looping_clip).loop_mode = Animation.LOOP_LINEAR
+		body_animation.play("Idle")
+		body_animation_name = "Idle"
 
 	head = Node3D.new()
 	head.name = "Head"
