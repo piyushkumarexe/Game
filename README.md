@@ -101,6 +101,6 @@ For two local peers, start one instance with **HOST CREW**, then join `127.0.0.1
 
 1. imports the project and validates every GDScript;
 2. exports a debug-signed Android APK;
-3. exports an iOS Xcode project archive.
+3. exports an unsigned, build-ready iOS Xcode project archive.
 
-The iOS project still requires an Apple Developer team, certificate, and provisioning profile before installation on a physical iPhone or TestFlight submission.
+CI intentionally uses Godot's project-only iOS export so no Apple credentials are stored in the repository. Open the artifact in Xcode and select your Apple Developer team; a certificate and provisioning profile are required before installation on a physical iPhone or TestFlight submission.
