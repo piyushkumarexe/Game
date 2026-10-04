@@ -166,6 +166,12 @@ func _play_clip(requested: String, speed: float, blend := 0.14) -> void:
 func _copy_animation_pose() -> void:
 	if not animation_skeleton:
 		return
+	# The source's generic `Idle_No` clip looks sharply at the ground. That made
+	# the cap/scalp cover the face in normal third-person gameplay. Preserve the
+	# authored body motion but keep the head at its neutral rest orientation.
+	var source_head_index := animation_skeleton.find_bone("Head")
+	if source_head_index >= 0:
+		animation_skeleton.set_bone_pose_rotation(source_head_index, Quaternion.IDENTITY)
 	for target: Skeleton3D in skeletons:
 		for source_index in animation_skeleton.get_bone_count():
 			var target_index := target.find_bone(animation_skeleton.get_bone_name(source_index))
