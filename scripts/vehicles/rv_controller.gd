@@ -8,6 +8,7 @@ const GEAR_RATIOS := [-0.62, 0.0, 0.68, 0.92, 1.16, 1.38, 1.55]
 const MAX_ENGINE_FORCE := 5200.0
 const MAX_STEER := 0.46
 const MAX_FUEL := 100.0
+const RV_EXTERIOR_MESH: Mesh = preload("res://assets/models/rv_exterior.obj")
 
 var prompt := "DRIVE THE RV"
 var health := 100.0
@@ -146,7 +147,9 @@ func _release_driver(id: int) -> void:
 	brake = 55.0
 
 func driver_seat_transform() -> Transform3D:
-	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.58, 1.05, -1.65))
+	# The player camera is 1.62 m above its origin. Offset the character origin so
+	# the actual viewpoint sits behind the windshield instead of above the roof.
+	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.58, -0.48, -1.82))
 	return seat
 
 func exit_seat_transform() -> Transform3D:
@@ -327,21 +330,11 @@ func _build_rv() -> void:
 	body_shell = Node3D.new()
 	body_shell.name = "OriginalRVBody"
 	add_child(body_shell)
-	PrimitiveFactory.box(body_shell, "Coach", Vector3(0.0, 0.72, 0.22), Vector3(2.5, 2.05, 5.4), Color("e8dec1"))
-	PrimitiveFactory.box(body_shell, "OrangeStripe", Vector3(0.0, 0.55, -0.04), Vector3(2.55, 0.42, 5.46), Color("b95032"))
-	PrimitiveFactory.box(body_shell, "Cab", Vector3(0.0, 0.3, -2.65), Vector3(2.42, 1.25, 1.12), Color("ded5bb"))
-	PrimitiveFactory.box(body_shell, "Windshield", Vector3(0.0, 1.03, -2.735), Vector3(1.78, 0.62, 0.05), Color("263c44"))
-	PrimitiveFactory.box(body_shell, "LeftWindow", Vector3(-1.265, 1.05, -0.7), Vector3(0.04, 0.72, 1.04), Color("34535a"))
-	PrimitiveFactory.box(body_shell, "RightWindow", Vector3(1.265, 1.05, -0.7), Vector3(0.04, 0.72, 1.04), Color("34535a"))
-	PrimitiveFactory.box(body_shell, "SideWindowA", Vector3(-1.265, 1.02, 0.72), Vector3(0.04, 0.68, 0.78), Color("496970"))
-	PrimitiveFactory.box(body_shell, "SideWindowB", Vector3(-1.265, 1.02, 1.78), Vector3(0.04, 0.68, 0.78), Color("496970"))
-	PrimitiveFactory.box(body_shell, "Door", Vector3(1.27, 0.45, 1.25), Vector3(0.04, 1.55, 0.82), Color("d7ccb0"))
-	PrimitiveFactory.box(body_shell, "RoofRack", Vector3(0.0, 1.87, 0.5), Vector3(2.0, 0.08, 3.2), Color("35383a"))
-	roof_crate = PrimitiveFactory.box(body_shell, "RoofCargo", Vector3(-0.42, 2.08, 0.6), Vector3(0.85, 0.42, 1.15), Color("6f4132"))
-	bumper_visual = PrimitiveFactory.box(body_shell, "FrontBumper", Vector3(0.0, -0.08, -3.18), Vector3(2.6, 0.24, 0.28), Color("55595b"))
-	PrimitiveFactory.box(body_shell, "RearBumper", Vector3(0.0, -0.08, 3.02), Vector3(2.55, 0.24, 0.25), Color("55595b"))
-	PrimitiveFactory.box(body_shell, "HeadlightL", Vector3(-0.82, 0.28, -3.22), Vector3(0.34, 0.26, 0.08), Color("f7d47d"))
-	PrimitiveFactory.box(body_shell, "HeadlightR", Vector3(0.82, 0.28, -3.22), Vector3(0.34, 0.26, 0.08), Color("f7d47d"))
+	var exterior := MeshInstance3D.new()
+	exterior.name = "TexturedRVExterior"
+	exterior.mesh = RV_EXTERIOR_MESH
+	exterior.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	body_shell.add_child(exterior)
 
 	_add_wheel("FrontLeft", Vector3(-1.18, -0.62, -1.82), true, false)
 	_add_wheel("FrontRight", Vector3(1.18, -0.62, -1.82), true, false)

@@ -8,6 +8,10 @@ const InteractableScript = preload("res://scripts/gameplay/interactable.gd")
 const WildlifeScript = preload("res://scripts/gameplay/wildlife.gd")
 const RockfallScript = preload("res://scripts/gameplay/rockfall_hazard.gd")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
+const PINE_MESH: Mesh = preload("res://assets/models/pine_tree.obj")
+const ROCK_MESH: Mesh = preload("res://assets/models/canyon_rock.obj")
+const SIGN_MESH: Mesh = preload("res://assets/models/trail_sign.obj")
+const GROUND_TEXTURE: Texture2D = preload("res://assets/textures/ground_dirt.png")
 
 const ROUTE: Array[Vector3] = [
 	Vector3(0, 2.2, 85), Vector3(-8, 2.0, 55), Vector3(14, 1.2, 24),
@@ -23,26 +27,78 @@ var props_root: Node3D
 var last_checkpoint_transform := Transform3D.IDENTITY
 var bridge_planks: Array[Node3D] = []
 var random := RandomNumberGenerator.new()
+var bootstrap_camera: Camera3D
 
 func _ready() -> void:
 	name = "RedmesaValley"
 	random.seed = 17051991
 	GameSession.world = self
+	# Establish a lit 3D viewport and a safe floor before any expensive world
+	# generation. If a device stalls while building terrain, it still renders a
+	# real scene instead of the clear color behind the HUD.
 	_build_environment()
-	_build_terrain()
-	_build_road()
-	_build_landmarks()
-	_build_scenery()
-	_build_mission_props()
+	_build_bootstrap_view()
 	players_root = Node3D.new()
 	players_root.name = "Players"
 	add_child(players_root)
 	_spawn_rv()
 	last_checkpoint_transform = rv.global_transform
-	await get_tree().process_frame
 	Net.register_world(self)
+
+	_build_terrain()
+	_build_road()
+	_build_landmarks()
+	_build_scenery()
+	_build_mission_props()
+	call_deferred("_verify_playable_view")
 	if OS.has_feature("android"):
 		OS.request_permissions()
+
+func _build_bootstrap_view() -> void:
+	var safety_floor := StaticBody3D.new()
+	safety_floor.name = "CampSafetyFloor"
+	safety_floor.position = Vector3(0.0, ROUTE[0].y - 0.8, ROUTE[0].z)
+	var floor_mesh := MeshInstance3D.new()
+	var plane := BoxMesh.new()
+	plane.size = Vector3(58.0, 0.8, 58.0)
+	floor_mesh.mesh = plane
+	var floor_material := StandardMaterial3D.new()
+	floor_material.albedo_texture = GROUND_TEXTURE
+	floor_material.uv1_scale = Vector3(18.0, 18.0, 18.0)
+	floor_material.roughness = 0.96
+	floor_mesh.material_override = floor_material
+	safety_floor.add_child(floor_mesh)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = plane.size
+	collision.shape = shape
+	safety_floor.add_child(collision)
+	add_child(safety_floor)
+
+	var sign := MeshInstance3D.new()
+	sign.name = "CampTrailSignModel"
+	sign.mesh = SIGN_MESH
+	sign.position = ROUTE[0] + Vector3(-7.0, 0.0, -3.0)
+	sign.rotation.y = -0.35
+	add_child(sign)
+
+	bootstrap_camera = Camera3D.new()
+	bootstrap_camera.name = "BootstrapCamera"
+	bootstrap_camera.fov = 66.0
+	bootstrap_camera.position = ROUTE[0] + Vector3(12.0, 7.5, 14.0)
+	add_child(bootstrap_camera)
+	bootstrap_camera.look_at(ROUTE[0] + Vector3(0.0, 1.6, -3.0), Vector3.UP)
+	bootstrap_camera.make_current()
+
+func _verify_playable_view() -> void:
+	if not GameSession.local_player and not Net.is_online:
+		spawn_network_player(1, GameSession.player_name, GameSession.selected_role)
+	if GameSession.local_player and is_instance_valid(GameSession.local_player):
+		GameSession.local_player.camera.make_current()
+		GameSession.toast_requested.emit("REDMESA TRAIL CAMP", "Find the marked supply crates and tap USE to load them.")
+	elif is_instance_valid(bootstrap_camera):
+		bootstrap_camera.make_current()
+		push_error("Local expedition player was not created; bootstrap camera retained.")
 
 func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	if players.has(peer_id):
@@ -50,7 +106,7 @@ func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	var player: ExpeditionPlayer = PlayerScript.new()
 	players_root.add_child(player)
 	var index := players.size()
-	var spawn := ROUTE[0] + Vector3(-3.0 + index * 1.4, 1.0, 4.5)
+	var spawn := ROUTE[0] + Vector3(-3.0 + index * 1.4, 1.0, 8.5)
 	player.setup(peer_id, player_name, role, spawn)
 	players[peer_id] = player
 
@@ -171,6 +227,7 @@ func _build_terrain() -> void:
 	terrain.mesh = mesh
 	var shader_material := ShaderMaterial.new()
 	shader_material.shader = TERRAIN_SHADER
+	shader_material.set_shader_parameter("ground_texture", GROUND_TEXTURE)
 	terrain.material_override = shader_material
 	add_child(terrain)
 	terrain.create_trimesh_collision()
@@ -261,8 +318,8 @@ func _build_scenery() -> void:
 		if route_info.x < 5.4:
 			continue
 		var radius := random.randf_range(0.45, 1.75)
-		var rock := PrimitiveFactory.sphere(props_root, "TrailRock", Vector3(x, terrain_height(x, z) + radius * 0.45, z), radius, Color("4b403a"), index % 8 == 0)
-		rock.scale = Vector3(random.randf_range(0.8, 1.5), random.randf_range(0.55, 1.15), random.randf_range(0.8, 1.4))
+		_make_rock(Vector3(x, terrain_height(x, z), z), radius,
+			Vector3(random.randf_range(0.8, 1.5), random.randf_range(0.55, 1.15), random.randf_range(0.8, 1.4)), index % 8 == 0)
 	# Reliable cable anchors along challenge sections.
 	for anchor_position in [Vector3(18, 5, -8), Vector3(46, 6, -32), Vector3(-34, 7, -109), Vector3(-13, 11, -131), Vector3(22, 19, -169), Vector3(-24, 29, -199)]:
 		_make_winch_post(anchor_position)
@@ -273,24 +330,47 @@ func _build_scenery() -> void:
 
 func _make_tree(position: Vector3, scale_factor: float, anchor: bool) -> void:
 	var tree := Node3D.new()
-	tree.name = "CablePine" if anchor else "Pine"
+	tree.name = "CablePine" if anchor else "TexturedPine"
 	tree.position = position
+	tree.rotation.y = random.randf_range(-PI, PI)
 	tree.scale = Vector3.ONE * scale_factor
 	props_root.add_child(tree)
-	PrimitiveFactory.cylinder(tree, "Trunk", Vector3(0, 1.4, 0), 0.22, 2.8, Color("443127"), anchor)
-	for layer in 3:
-		var crown := MeshInstance3D.new()
-		var mesh := CylinderMesh.new()
-		mesh.top_radius = 0.05
-		mesh.bottom_radius = 1.45 - layer * 0.2
-		mesh.height = 2.7
-		mesh.radial_segments = 8
-		crown.mesh = mesh
-		crown.position.y = 2.7 + layer * 1.0
-		crown.material_override = PrimitiveFactory.material(Color("29483d").lightened(layer * 0.05))
-		tree.add_child(crown)
+	var model := MeshInstance3D.new()
+	model.mesh = PINE_MESH
+	model.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	tree.add_child(model)
 	if anchor:
+		var trunk_body := StaticBody3D.new()
+		var trunk_collision := CollisionShape3D.new()
+		var trunk_shape := CylinderShape3D.new()
+		trunk_shape.radius = 0.24
+		trunk_shape.height = 2.8
+		trunk_collision.shape = trunk_shape
+		trunk_collision.position.y = 1.4
+		trunk_body.add_child(trunk_collision)
+		tree.add_child(trunk_body)
 		tree.add_to_group("winch_anchor")
+
+func _make_rock(position: Vector3, radius: float, shape_scale: Vector3, collision_enabled: bool) -> void:
+	var rock_root := Node3D.new()
+	rock_root.name = "TexturedCanyonRock"
+	rock_root.position = position
+	rock_root.rotation.y = random.randf_range(-PI, PI)
+	rock_root.scale = shape_scale * radius
+	props_root.add_child(rock_root)
+	var model := MeshInstance3D.new()
+	model.mesh = ROCK_MESH
+	model.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	rock_root.add_child(model)
+	if collision_enabled:
+		var body := StaticBody3D.new()
+		var collision := CollisionShape3D.new()
+		var shape := SphereShape3D.new()
+		shape.radius = 0.78
+		collision.shape = shape
+		collision.position.y = 0.6
+		body.add_child(collision)
+		rock_root.add_child(body)
 
 func _make_winch_post(position: Vector3) -> void:
 	var post := PrimitiveFactory.cylinder(props_root, "SteelWinchPost", position, 0.18, 2.6, Color("626c6c"), true)

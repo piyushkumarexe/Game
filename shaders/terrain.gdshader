@@ -4,6 +4,7 @@ render_mode diffuse_burley, specular_schlick_ggx;
 uniform vec3 dirt_color : source_color = vec3(0.34, 0.19, 0.12);
 uniform vec3 sun_color : source_color = vec3(0.57, 0.32, 0.18);
 uniform vec3 stone_color : source_color = vec3(0.20, 0.22, 0.21);
+uniform sampler2D ground_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float texture_scale = 0.15;
 
 varying vec3 world_position;
@@ -30,7 +31,9 @@ void fragment() {
 	float broad = value_noise(world_position.xz * texture_scale);
 	float fine = value_noise(world_position.xz * texture_scale * 4.3);
 	float steepness = 1.0 - clamp(world_normal.y, 0.0, 1.0);
+	vec3 painted = texture(ground_texture, world_position.xz * 0.035).rgb;
 	vec3 ground = mix(dirt_color, sun_color, broad * 0.58 + fine * 0.15);
+	ground *= mix(vec3(0.74), painted * 1.42, 0.48);
 	ALBEDO = mix(ground, stone_color * (0.78 + broad * 0.3), smoothstep(0.30, 0.72, steepness));
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.12;

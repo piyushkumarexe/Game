@@ -20,16 +20,20 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
+window/size/resizable=false
 window/stretch/mode="canvas_items"
-window/handheld/orientation=6
+window/stretch/aspect="expand"
+window/handheld/orientation=0
 window/energy_saving/keep_screen_on=true
 
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+rendering_device/fallback_to_opengl3=true
+viewport/hdr_2d=false
 textures/default_filters/use_nearest_mipmap_filter=false
 textures/vram_compression/import_etc2_astc=true
-anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/msaa_3d=0
 occlusion_culling/use_occlusion_culling=true
 lights_and_shadows/directional_shadow/size=2048
 limits/time/time_rollover_secs=3600.0

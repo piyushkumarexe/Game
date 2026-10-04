@@ -6,6 +6,9 @@ const WALK_SPEED := 4.4
 const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
+const CREW_MESH: Mesh = preload("res://assets/models/crew_member.obj")
+const HANDS_MESH: Mesh = preload("res://assets/models/first_person_hands.obj")
+const COCKPIT_MESH: Mesh = preload("res://assets/models/rv_cockpit.obj")
 
 var peer_id := 1
 var player_name := "Rover"
@@ -21,6 +24,8 @@ var camera: Camera3D
 var interact_ray: RayCast3D
 var body_visual: MeshInstance3D
 var carried_visual: MeshInstance3D
+var hands_visual: MeshInstance3D
+var cockpit_visual: MeshInstance3D
 var nameplate: Label3D
 var voice: ProximityVoice
 
@@ -34,16 +39,28 @@ func setup(id: int, display_name: String, selected_role: int, spawn_position: Ve
 	set_multiplayer_authority(peer_id)
 	_build_player()
 	if peer_id == multiplayer.get_unique_id():
-		camera.current = true
+		camera.make_current()
 		body_visual.visible = false
 		nameplate.visible = false
+		hands_visual.visible = true
 		GameSession.register_local_player(self)
+		call_deferred("_ensure_local_camera")
 		if not OS.has_feature("mobile"):
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	voice = ProximityVoice.new()
 	voice.name = "ProximityVoice"
 	add_child(voice)
 	voice.setup(peer_id)
+
+func _ensure_local_camera() -> void:
+	if peer_id != multiplayer.get_unique_id() or not is_instance_valid(camera):
+		return
+	camera.make_current()
+	# Re-assert after scene construction. This avoids a later bootstrap camera
+	# taking ownership on slower mobile devices.
+	await get_tree().process_frame
+	if is_instance_valid(camera):
+		camera.make_current()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if peer_id != multiplayer.get_unique_id() or is_driving:
@@ -120,7 +137,9 @@ func enter_driver(vehicle: Node) -> void:
 	driven_vehicle = vehicle
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
-	GameSession.toast_requested.emit("DRIVER SEAT", "Manual gears: Z down / X up. Q front cable, R rear cable.")
+	hands_visual.visible = false
+	cockpit_visual.visible = true
+	GameSession.toast_requested.emit("DRIVER SEAT", "Use the left stick to steer and drive. Shift with GEAR − / GEAR +.")
 
 func leave_driver(exit_transform: Transform3D) -> void:
 	is_driving = false
@@ -130,9 +149,13 @@ func leave_driver(exit_transform: Transform3D) -> void:
 	head.rotation = Vector3.ZERO
 	look_pitch = 0.0
 	body_visual.visible = peer_id != multiplayer.get_unique_id()
+	hands_visual.visible = peer_id == multiplayer.get_unique_id()
+	cockpit_visual.visible = false
 
 func update_carried_visual() -> void:
 	carried_visual.visible = carried_item == "plank"
+	if peer_id == multiplayer.get_unique_id() and not is_driving:
+		hands_visual.visible = carried_item.is_empty()
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
 func _sync_state(new_transform: Transform3D, new_velocity: Vector3, driving: bool) -> void:
@@ -153,14 +176,10 @@ func _build_player() -> void:
 	add_child(collision)
 
 	body_visual = MeshInstance3D.new()
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = 0.38
-	body_mesh.height = 1.78
-	body_mesh.radial_segments = 12
-	body_visual.mesh = body_mesh
-	var role_colors := [Color("d9823b"), Color("4fa89a"), Color("7d9c65"), Color("6c82aa")]
-	body_visual.material_override = PrimitiveFactory.material(role_colors[role % role_colors.size()])
-	body_visual.position.y = 0.9
+	body_visual.name = "TexturedCrewModel"
+	body_visual.mesh = CREW_MESH
+	body_visual.scale = Vector3.ONE * 0.82
+	body_visual.rotation.y = PI
 	add_child(body_visual)
 
 	head = Node3D.new()
@@ -169,8 +188,22 @@ func _build_player() -> void:
 	add_child(head)
 	camera = Camera3D.new()
 	camera.fov = 76.0
-	camera.near = 0.06
+	camera.near = 0.045
 	head.add_child(camera)
+
+	hands_visual = MeshInstance3D.new()
+	hands_visual.name = "FirstPersonHands"
+	hands_visual.mesh = HANDS_MESH
+	hands_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hands_visual.visible = false
+	camera.add_child(hands_visual)
+	cockpit_visual = MeshInstance3D.new()
+	cockpit_visual.name = "DriverCockpit"
+	cockpit_visual.mesh = COCKPIT_MESH
+	cockpit_visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cockpit_visual.visible = false
+	camera.add_child(cockpit_visual)
+
 	interact_ray = RayCast3D.new()
 	interact_ray.target_position = Vector3(0.0, 0.0, -3.6)
 	interact_ray.collision_mask = 1 | 4 | 8

@@ -3,6 +3,7 @@ extends Node
 
 const WorldScript = preload("res://scripts/world/expedition_world.gd")
 const HUDScript = preload("res://scripts/ui/expedition_hud.gd")
+const MenuDioramaScript = preload("res://scripts/ui/menu_diorama.gd")
 
 var menu_layer: CanvasLayer
 var name_input: LineEdit
@@ -11,17 +12,28 @@ var role_picker: OptionButton
 var status_label: Label
 var active_world: ExpeditionWorld
 var active_hud: ExpeditionHUD
+var menu_world: MenuDiorama
 
 func _ready() -> void:
+	if OS.has_feature("mobile"):
+		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
 	Net.joined_server.connect(_on_joined_server)
 	Net.connection_failed.connect(_on_connection_failed)
 	Net.disconnected.connect(_on_disconnected)
 	GameSession.run_finished.connect(_show_results)
-	_show_main_menu()
+	if "--smoke-expedition" in OS.get_cmdline_user_args():
+		_run_expedition_smoke_test()
+	else:
+		_show_main_menu()
 
 func _show_main_menu() -> void:
 	_clear_game()
 	GameSession.mode = GameSession.Mode.MENU
+	if menu_world and is_instance_valid(menu_world):
+		menu_world.queue_free()
+	menu_world = MenuDioramaScript.new()
+	add_child(menu_world)
+
 	menu_layer = CanvasLayer.new()
 	menu_layer.layer = 50
 	add_child(menu_layer)
@@ -29,86 +41,99 @@ func _show_main_menu() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	menu_layer.add_child(root)
 
-	var backdrop := TextureRect.new()
-	backdrop.texture = load("res://assets/ui/roadtrip-hero.png")
-	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_child(backdrop)
-	var shade := ColorRect.new()
-	shade.color = Color(0.025, 0.035, 0.055, 0.42)
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_child(shade)
-	var left_shade := ColorRect.new()
-	left_shade.color = Color(0.025, 0.032, 0.045, 0.88)
-	left_shade.position = Vector2(0, 0)
-	left_shade.size = Vector2(570, 720)
-	root.add_child(left_shade)
+	var cinematic_shade := ColorRect.new()
+	cinematic_shade.color = Color(0.015, 0.022, 0.032, 0.24)
+	cinematic_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cinematic_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(cinematic_shade)
 
-	var title := _label("DUSTBOUND", 76, Color("fff0d1"), true)
-	title.position = Vector2(54, 38)
-	root.add_child(title)
-	var subtitle := _label("E X P E D I T I O N S", 25, Color("eea23b"), true)
-	subtitle.position = Vector2(60, 122)
-	root.add_child(subtitle)
-	var pitch := _label("ONE RIG. FOUR CREWMATES.\nA VERY BAD ROAD HOME.", 16, Color("d7d2c4"), true)
-	pitch.position = Vector2(60, 177)
-	root.add_child(pitch)
+	var panel := PanelContainer.new()
+	panel.anchor_left = 0.025
+	panel.anchor_top = 0.035
+	panel.anchor_right = 0.43
+	panel.anchor_bottom = 0.965
+	panel.add_theme_stylebox_override("panel", _style(Color(0.025, 0.032, 0.045, 0.93), Color(0.93, 0.62, 0.25, 0.34), 18))
+	root.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_top", 22)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	margin.add_child(content)
 
-	var profile_label := _label("CREW PROFILE", 13, Color("eea23b"), true)
-	profile_label.position = Vector2(60, 252)
-	root.add_child(profile_label)
+	var title := _label("DUSTBOUND", 49, Color("fff0d1"), true)
+	content.add_child(title)
+	var subtitle := _label("E X P E D I T I O N S", 17, Color("eea23b"), true)
+	content.add_child(subtitle)
+	var pitch := _label("ONE RIG. FOUR CREWMATES. A VERY BAD ROAD HOME.", 13, Color("d7d2c4"), true)
+	pitch.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(pitch)
+	var separator := HSeparator.new()
+	separator.modulate = Color(0.9, 0.59, 0.25, 0.45)
+	content.add_child(separator)
+
+	var profile_label := _label("CREW PROFILE", 12, Color("eea23b"), true)
+	content.add_child(profile_label)
+	var profile_row := HBoxContainer.new()
+	profile_row.add_theme_constant_override("separation", 10)
+	content.add_child(profile_row)
 	name_input = LineEdit.new()
 	name_input.placeholder_text = "Callsign"
 	name_input.text = GameSession.player_name
-	name_input.position = Vector2(60, 278)
-	name_input.size = Vector2(238, 47)
+	name_input.custom_minimum_size = Vector2(210, 44)
+	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_field(name_input)
-	root.add_child(name_input)
+	profile_row.add_child(name_input)
 	role_picker = OptionButton.new()
-	role_picker.position = Vector2(310, 278)
-	role_picker.size = Vector2(196, 47)
+	role_picker.custom_minimum_size = Vector2(165, 44)
 	for role_name in ["DRIVER", "MECHANIC", "SCOUT", "NAVIGATOR"]:
 		role_picker.add_item(role_name)
 	role_picker.select(GameSession.selected_role)
 	_style_field(role_picker)
-	root.add_child(role_picker)
+	profile_row.add_child(role_picker)
 
-	var solo := _button("SOLO EXPEDITION", Vector2(60, 348), Vector2(446, 62), Color("dd8f33"))
+	var solo := _button("START SOLO EXPEDITION", Vector2.ZERO, Vector2(0, 53), Color("dd8f33"))
+	solo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	solo.pressed.connect(_start_solo)
-	root.add_child(solo)
-	var host := _button("HOST CREW", Vector2(60, 422), Vector2(214, 54), Color("496e6d"))
+	content.add_child(solo)
+	var crew_row := HBoxContainer.new()
+	crew_row.add_theme_constant_override("separation", 10)
+	content.add_child(crew_row)
+	var host := _button("HOST CREW", Vector2.ZERO, Vector2(0, 48), Color("496e6d"))
+	host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	host.pressed.connect(_host_game)
-	root.add_child(host)
-	var join := _button("JOIN CREW", Vector2(292, 422), Vector2(214, 54), Color("496e6d"))
+	crew_row.add_child(host)
+	var join := _button("JOIN CREW", Vector2.ZERO, Vector2(0, 48), Color("496e6d"))
+	join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	join.pressed.connect(_join_game)
-	root.add_child(join)
+	crew_row.add_child(join)
 	address_input = LineEdit.new()
 	address_input.placeholder_text = "Host IP — e.g. 192.168.1.8"
-	address_input.position = Vector2(60, 489)
-	address_input.size = Vector2(446, 45)
+	address_input.custom_minimum_size.y = 43
 	_style_field(address_input)
-	root.add_child(address_input)
+	content.add_child(address_input)
 
-	status_label = _label("HOST + JOIN SUPPORTS 1–4 PLAYERS OVER LAN OR DIRECT IP", 11, Color("bcb9ae"), true)
-	status_label.position = Vector2(60, 550)
-	status_label.size = Vector2(450, 42)
+	status_label = _label("SOLO IS READY • HOST/JOIN USES LAN OR DIRECT IP", 11, Color("bcb9ae"), true)
+	status_label.custom_minimum_size.y = 34
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(status_label)
-
-	var feature := _label("3D PHYSICS  •  MANUAL GEARS  •  TWIN WINCHES\nREPAIRS  •  MISSIONS  •  PROXIMITY VOICE", 12, Color("f1d6a9"), true)
-	feature.position = Vector2(60, 618)
-	feature.add_theme_constant_override("line_spacing", 7)
-	root.add_child(feature)
+	content.add_child(status_label)
+	var feature := _label("FIRST-PERSON 3D  •  PHYSICS RV  •  MANUAL GEARS\nREPAIRS  •  MISSIONS  •  WINCHES  •  PROXIMITY VOICE", 11, Color("f1d6a9"), true)
+	feature.add_theme_constant_override("line_spacing", 5)
+	content.add_child(feature)
 
 	var badge := Label.new()
-	badge.text = "ORIGINAL MOBILE CO-OP ADVENTURE"
+	badge.text = "LIVE 3D CAMPSITE  •  ORIGINAL MOBILE CO-OP"
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge.position = Vector2(890, 646)
-	badge.size = Vector2(350, 35)
+	badge.anchor_left = 0.68
+	badge.anchor_top = 0.885
+	badge.anchor_right = 0.975
+	badge.anchor_bottom = 0.95
 	badge.add_theme_font_size_override("font_size", 12)
 	badge.add_theme_color_override("font_color", Color("fff0d1"))
-	badge.add_theme_stylebox_override("normal", _style(Color(0.03, 0.04, 0.055, 0.65), Color(1, 1, 1, 0.16), 14))
+	badge.add_theme_stylebox_override("normal", _style(Color(0.03, 0.04, 0.055, 0.72), Color(1, 1, 1, 0.16), 14))
 	root.add_child(badge)
 
 func _start_solo() -> void:
@@ -144,11 +169,53 @@ func _start_expedition() -> void:
 	if menu_layer:
 		menu_layer.queue_free()
 		menu_layer = null
+	if menu_world and is_instance_valid(menu_world):
+		menu_world.queue_free()
+		menu_world = null
 	GameSession.reset_run()
 	active_world = WorldScript.new()
 	add_child(active_world)
 	active_hud = HUDScript.new()
 	add_child(active_hud)
+
+func _run_expedition_smoke_test() -> void:
+	GameSession.player_name = "Render Scout"
+	GameSession.selected_role = GameSession.Role.DRIVER
+	Net.start_solo()
+	_start_expedition()
+	await get_tree().create_timer(3.0).timeout
+	await RenderingServer.frame_post_draw
+	var failures: Array[String] = []
+	if not active_world or not is_instance_valid(active_world):
+		failures.append("expedition world missing")
+	if not GameSession.local_player or not is_instance_valid(GameSession.local_player):
+		failures.append("local player missing")
+	if not GameSession.rv or not is_instance_valid(GameSession.rv):
+		failures.append("physics RV missing")
+	var current_camera := get_viewport().get_camera_3d()
+	if not current_camera:
+		failures.append("current 3D camera missing")
+	var mesh_count := get_tree().get_nodes_in_group("render_smoke_mesh").size()
+	if active_world:
+		mesh_count = active_world.find_children("*", "MeshInstance3D", true, false).size()
+	if mesh_count < 50:
+		failures.append("expected at least 50 world meshes, found %d" % mesh_count)
+	var image := get_viewport().get_texture().get_image()
+	if image.is_empty():
+		failures.append("viewport capture is empty")
+	else:
+		var colors := {}
+		var width := image.get_width()
+		var height := image.get_height()
+		for y in range(0, height, maxi(1, int(height / 18.0))):
+			for x in range(0, width, maxi(1, int(width / 24.0))):
+				colors[image.get_pixel(x, y).to_rgba32()] = true
+		if colors.size() < 18:
+			failures.append("viewport lacks visual variation (%d sampled colors)" % colors.size())
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build/validation"))
+		image.save_png("res://build/validation/expedition-render.png")
+	print("3D_RENDER_SMOKE camera=%s meshes=%d failures=%s" % [current_camera.name if current_camera else "none", mesh_count, failures])
+	get_tree().quit(0 if failures.is_empty() else 1)
 
 func _show_results(success: bool) -> void:
 	var results := CanvasLayer.new()
@@ -200,6 +267,7 @@ func _button(text: String, position: Vector2, size: Vector2, color: Color) -> Bu
 	button.text = text
 	button.position = position
 	button.size = size
+	button.custom_minimum_size = size
 	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_font_size_override("font_size", 18)
 	button.add_theme_color_override("font_color", Color("fff4dc"))

@@ -34,15 +34,21 @@ func _ready() -> void:
 	_update_roster(Net.roster)
 
 func _process(_delta: float) -> void:
-	if GameSession.local_player and is_instance_valid(GameSession.local_player):
+	var has_player := GameSession.local_player and is_instance_valid(GameSession.local_player)
+	var driving := false
+	if has_player:
 		var text: String = GameSession.local_player.interaction_text
 		prompt_panel.visible = not text.is_empty()
-		prompt_label.text = "  TAP • %s  " % text
-		if touch_root:
-			var driving: bool = GameSession.local_player.is_driving
-			for node: Node in touch_root.get_children():
-				if node.has_meta("driving_only"):
-					node.visible = driving
+		prompt_label.text = "TAP USE  •  %s" % text
+		driving = GameSession.local_player.is_driving
+	else:
+		prompt_panel.visible = false
+	if touch_root:
+		for node: Node in touch_root.get_children():
+			if node.has_meta("driving_only"):
+				node.visible = driving
+			elif node.has_meta("walking_only"):
+				node.visible = not driving
 
 func _build_hud() -> void:
 	var root := Control.new()
@@ -51,8 +57,14 @@ func _build_hud() -> void:
 	add_child(root)
 
 	var objective := PanelContainer.new()
-	objective.position = Vector2(28, 24)
-	objective.size = Vector2(470, 105)
+	objective.anchor_left = 0.0
+	objective.anchor_top = 0.0
+	objective.anchor_right = 0.0
+	objective.anchor_bottom = 0.0
+	objective.offset_left = 20.0
+	objective.offset_top = 18.0
+	objective.offset_right = 470.0
+	objective.offset_bottom = 118.0
 	objective.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.045, 0.06, 0.86), Color("d89138"), 16))
 	root.add_child(objective)
 	var objective_margin := MarginContainer.new()
@@ -73,8 +85,14 @@ func _build_hud() -> void:
 	objective_box.add_child(mission_detail)
 
 	var rig_panel := PanelContainer.new()
-	rig_panel.position = Vector2(518, 24)
-	rig_panel.size = Vector2(395, 88)
+	rig_panel.anchor_left = 0.5
+	rig_panel.anchor_top = 0.0
+	rig_panel.anchor_right = 0.5
+	rig_panel.anchor_bottom = 0.0
+	rig_panel.offset_left = -190.0
+	rig_panel.offset_top = 18.0
+	rig_panel.offset_right = 190.0
+	rig_panel.offset_bottom = 104.0
 	rig_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.045, 0.06, 0.86), Color(1, 1, 1, 0.08), 16))
 	root.add_child(rig_panel)
 	var rig_margin := MarginContainer.new()
@@ -102,13 +120,25 @@ func _build_hud() -> void:
 
 	crew_label = _label("SOLO RUN", 14, Color("d7d2c2"), true)
 	crew_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	crew_label.position = Vector2(935, 33)
-	crew_label.size = Vector2(310, 60)
+	crew_label.anchor_left = 1.0
+	crew_label.anchor_top = 0.0
+	crew_label.anchor_right = 1.0
+	crew_label.anchor_bottom = 0.0
+	crew_label.offset_left = -320.0
+	crew_label.offset_top = 27.0
+	crew_label.offset_right = -20.0
+	crew_label.offset_bottom = 88.0
 	root.add_child(crew_label)
 
 	prompt_panel = PanelContainer.new()
-	prompt_panel.position = Vector2(448, 598)
-	prompt_panel.size = Vector2(384, 54)
+	prompt_panel.anchor_left = 0.5
+	prompt_panel.anchor_top = 1.0
+	prompt_panel.anchor_right = 0.5
+	prompt_panel.anchor_bottom = 1.0
+	prompt_panel.offset_left = -205.0
+	prompt_panel.offset_top = -96.0
+	prompt_panel.offset_right = 205.0
+	prompt_panel.offset_bottom = -42.0
 	prompt_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.045, 0.06, 0.92), Color("e2a03b"), 18))
 	root.add_child(prompt_panel)
 	prompt_label = _label("INTERACT", 17, Color("fff2d5"), true)
@@ -118,8 +148,14 @@ func _build_hud() -> void:
 	prompt_panel.visible = false
 
 	toast_panel = PanelContainer.new()
-	toast_panel.position = Vector2(420, 152)
-	toast_panel.size = Vector2(440, 83)
+	toast_panel.anchor_left = 0.5
+	toast_panel.anchor_top = 0.0
+	toast_panel.anchor_right = 0.5
+	toast_panel.anchor_bottom = 0.0
+	toast_panel.offset_left = -220.0
+	toast_panel.offset_top = 142.0
+	toast_panel.offset_right = 220.0
+	toast_panel.offset_bottom = 225.0
 	toast_panel.modulate.a = 0.0
 	toast_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.045, 0.055, 0.07, 0.94), Color("d89138"), 18))
 	root.add_child(toast_panel)
@@ -133,7 +169,23 @@ func _build_hud() -> void:
 	toast_box.add_child(toast_title)
 	toast_box.add_child(toast_detail)
 
-	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+	var reticle := Label.new()
+	reticle.text = "+"
+	reticle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reticle.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	reticle.anchor_left = 0.5
+	reticle.anchor_top = 0.5
+	reticle.anchor_right = 0.5
+	reticle.anchor_bottom = 0.5
+	reticle.offset_left = -13.0
+	reticle.offset_top = -13.0
+	reticle.offset_right = 13.0
+	reticle.offset_bottom = 13.0
+	reticle.add_theme_font_size_override("font_size", 21)
+	reticle.add_theme_color_override("font_color", Color(1.0, 0.91, 0.74, 0.76))
+	root.add_child(reticle)
+
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available() or "--smoke-expedition" in OS.get_cmdline_user_args():
 		_build_touch_controls(root)
 
 func _build_touch_controls(root: Control) -> void:
@@ -142,36 +194,60 @@ func _build_touch_controls(root: Control) -> void:
 	touch_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(touch_root)
 	var move_stick := VirtualStick.new()
-	move_stick.position = Vector2(28, 490)
-	move_stick.size = Vector2(190, 190)
+	move_stick.anchor_left = 0.0
+	move_stick.anchor_top = 1.0
+	move_stick.anchor_right = 0.0
+	move_stick.anchor_bottom = 1.0
+	move_stick.offset_left = 18.0
+	move_stick.offset_top = -198.0
+	move_stick.offset_right = 198.0
+	move_stick.offset_bottom = -18.0
 	touch_root.add_child(move_stick)
 	var look_stick := VirtualStick.new()
 	look_stick.look_stick = true
-	look_stick.position = Vector2(835, 500)
-	look_stick.size = Vector2(180, 180)
+	look_stick.anchor_left = 1.0
+	look_stick.anchor_top = 1.0
+	look_stick.anchor_right = 1.0
+	look_stick.anchor_bottom = 1.0
+	look_stick.offset_left = -430.0
+	look_stick.offset_top = -194.0
+	look_stick.offset_right = -250.0
+	look_stick.offset_bottom = -14.0
 	touch_root.add_child(look_stick)
-	_make_touch_button("USE", "interact", Vector2(1110, 430), false)
-	_make_touch_button("JUMP", "jump", Vector2(1182, 548), false)
-	_make_touch_button("SPRINT", "sprint", Vector2(1055, 585), true)
-	var front := _make_touch_button("FRONT\nCABLE", "winch_front", Vector2(710, 570), false)
+	_make_touch_button("USE", "interact", Vector2(-112, -190), false)
+	var jump := _make_touch_button("JUMP", "jump", Vector2(-102, -100), false)
+	jump.set_meta("walking_only", true)
+	var sprint := _make_touch_button("SPRINT", "sprint", Vector2(-205, -94), true)
+	sprint.set_meta("walking_only", true)
+	var front := _make_touch_button("FRONT\nWINCH", "winch_front", Vector2(-302, -95), false)
 	front.set_meta("driving_only", true)
-	var rear := _make_touch_button("REAR\nCABLE", "winch_rear", Vector2(620, 596), false)
+	front.visible = false
+	var rear := _make_touch_button("REAR\nWINCH", "winch_rear", Vector2(-400, -95), false)
 	rear.set_meta("driving_only", true)
-	var up := _make_touch_button("GEAR +", "shift_up", Vector2(1130, 300), false)
+	rear.visible = false
+	var up := _make_touch_button("GEAR +", "shift_up", Vector2(-105, -285), false)
 	up.set_meta("driving_only", true)
-	var down := _make_touch_button("GEAR −", "shift_down", Vector2(1025, 320), false)
+	up.visible = false
+	var down := _make_touch_button("GEAR −", "shift_down", Vector2(-205, -285), false)
 	down.set_meta("driving_only", true)
+	down.visible = false
 
-func _make_touch_button(text: String, action: StringName, position: Vector2, hold: bool) -> Button:
+func _make_touch_button(text: String, action: StringName, bottom_right_offset: Vector2, hold: bool) -> Button:
 	var button := Button.new()
 	button.text = text
-	button.position = position
-	button.size = Vector2(92, 76)
+	button.anchor_left = 1.0
+	button.anchor_top = 1.0
+	button.anchor_right = 1.0
+	button.anchor_bottom = 1.0
+	button.offset_left = bottom_right_offset.x
+	button.offset_top = bottom_right_offset.y
+	button.offset_right = bottom_right_offset.x + 88.0
+	button.offset_bottom = bottom_right_offset.y + 70.0
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 14)
+	button.add_theme_font_size_override("font_size", 13)
 	button.add_theme_color_override("font_color", Color("fff2d5"))
-	button.add_theme_stylebox_override("normal", _panel_style(Color(0.05, 0.06, 0.08, 0.65), Color(0.94, 0.67, 0.28, 0.5), 28))
-	button.add_theme_stylebox_override("pressed", _panel_style(Color(0.85, 0.45, 0.16, 0.9), Color("ffe4ad"), 28))
+	button.add_theme_stylebox_override("normal", _panel_style(Color(0.04, 0.055, 0.07, 0.58), Color(0.94, 0.67, 0.28, 0.55), 24))
+	button.add_theme_stylebox_override("pressed", _panel_style(Color(0.85, 0.45, 0.16, 0.9), Color("ffe4ad"), 24))
 	if hold:
 		button.button_down.connect(GameSession.set_touch_action.bind(action, true))
 		button.button_up.connect(GameSession.set_touch_action.bind(action, false))
