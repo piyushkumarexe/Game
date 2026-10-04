@@ -183,7 +183,14 @@ func _copy_animation_pose() -> void:
 	if accessory_root:
 		var head_index := animation_skeleton.find_bone("Head")
 		if head_index >= 0:
-			accessory_root.transform = animation_skeleton.get_bone_global_pose(head_index)
+			var head_pose := animation_skeleton.get_bone_global_pose(head_index)
+			# Bone bases describe joint roll, not the mesh's facial forward axis.
+			# Applying that basis turned the brim and glasses ninety degrees across
+			# the face. Follow the animated head position while the neutral head and
+			# accessories retain the character model's +Z facial orientation.
+			accessory_root.position = head_pose.origin
+			accessory_root.rotation = Vector3.ZERO
+			accessory_root.scale = Vector3.ONE
 
 func set_locomotion(state: String, horizontal_speed: float, _vertical_speed: float, _delta: float) -> void:
 	current_state = state

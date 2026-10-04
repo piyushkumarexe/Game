@@ -23,6 +23,12 @@ const HERO_TREE_SCENES: Array[PackedScene] = [
 	preload("res://assets/third_party/quaternius/nature/CommonTree_3.gltf"),
 	preload("res://assets/third_party/quaternius/nature/CommonTree_4.gltf")
 ]
+const REALISTIC_PINE_SCENES: Array[PackedScene] = [
+	preload("res://assets/third_party/ez_tree/pine_realistic_a.glb"),
+	preload("res://assets/third_party/ez_tree/pine_realistic_b.glb")
+]
+const REALISTIC_BARK_TEXTURE: Texture2D = preload("res://assets/third_party/quaternius/nature/Bark_NormalTree.jpg")
+const REALISTIC_PINE_TEXTURE: Texture2D = preload("res://assets/third_party/quaternius/nature/Leaf_Pine_C.png")
 const FOREST_FLOOR_SCENES: Array[PackedScene] = [
 	preload("res://assets/third_party/quaternius/nature/Bush_Common.gltf"),
 	preload("res://assets/third_party/quaternius/nature/Fern_1.gltf"),
@@ -64,6 +70,8 @@ var environment: Environment
 var sun: DirectionalLight3D
 var terrain_material: StandardMaterial3D
 var road_material: StandardMaterial3D
+var realistic_bark_material: StandardMaterial3D
+var realistic_pine_material: StandardMaterial3D
 
 func _ready() -> void:
 	name = "RedmesaValley"
@@ -623,9 +631,44 @@ func _build_scenery() -> void:
 		add_child(wildlife)
 		wildlife.setup(Vector3(wildlife_position.x, terrain_height(wildlife_position.x, wildlife_position.z) + 0.2, wildlife_position.z))
 
+func _realistic_tree_materials() -> void:
+	if realistic_bark_material and realistic_pine_material:
+		return
+	realistic_bark_material = StandardMaterial3D.new()
+	realistic_bark_material.albedo_texture = REALISTIC_BARK_TEXTURE
+	realistic_bark_material.albedo_color = Color("9a8068")
+	realistic_bark_material.roughness = 0.96
+	realistic_bark_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	realistic_bark_material.texture_repeat = true
+	realistic_pine_material = StandardMaterial3D.new()
+	realistic_pine_material.albedo_texture = REALISTIC_PINE_TEXTURE
+	realistic_pine_material.albedo_color = Color("b4c6a5")
+	realistic_pine_material.roughness = 0.88
+	realistic_pine_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	realistic_pine_material.alpha_scissor_threshold = 0.28
+	realistic_pine_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	realistic_pine_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+
+func _make_realistic_pine(position: Vector3, index: int, tree_scale: float) -> Node3D:
+	_realistic_tree_materials()
+	var tree := REALISTIC_PINE_SCENES[index % REALISTIC_PINE_SCENES.size()].instantiate() as Node3D
+	tree.name = "HighRealismProceduralPine%02d" % index
+	tree.position = position
+	tree.rotation.y = random.randf_range(-PI, PI)
+	# EZ-Tree works in large authoring units; 0.13-0.18 yields mature 7-10 m
+	# conifers while preserving its detailed branch silhouette.
+	tree.scale = Vector3.ONE * tree_scale
+	props_root.add_child(tree)
+	for candidate: Node in tree.find_children("*", "MeshInstance3D", true, false):
+		var mesh := candidate as MeshInstance3D
+		mesh.material_override = realistic_bark_material if mesh.name.contains("Bark") else realistic_pine_material
+		mesh.cast_shadow = (GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			if GameSession.graphics_quality == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	return tree
+
 func _build_high_detail_forest() -> void:
-	# Hero foliage uses textured CC0 meshes close to the road while the cheaper
-	# Kenney/MultiMesh layers retain mobile-friendly mid and far coverage.
+	# HIGH adds MIT EZ-Tree generated branch geometry with alpha-cutout CC0
+	# foliage close to the player. Mid/far layers remain cheaper on mobile.
 	# Build a deliberate opening grove first; route-wide random distribution left
 	# the physical-phone campsite surrounded by large empty green hills.
 	var camp_hero_count: int = [8, 14, 28][GameSession.graphics_quality]
@@ -636,13 +679,17 @@ func _build_high_detail_forest() -> void:
 		if float(_nearest_route_data(Vector2(position.x, position.z)).x) < 8.5:
 			continue
 		position.y = terrain_height(position.x, position.z) + 0.12
-		var tree := HERO_TREE_SCENES[index % HERO_TREE_SCENES.size()].instantiate() as Node3D
+		var tree: Node3D
+		if GameSession.graphics_quality == 2:
+			tree = _make_realistic_pine(position, index, 0.135 + float(index % 4) * 0.012)
+		else:
+			tree = HERO_TREE_SCENES[index % HERO_TREE_SCENES.size()].instantiate() as Node3D
+			tree.position = position
+			tree.rotation.y = angle * 1.37
+			tree.scale = Vector3.ONE * (0.92 + float(index % 3) * 0.13)
+			props_root.add_child(tree)
+			_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
 		tree.name = "CampHeroTexturedTree%02d" % index
-		tree.position = position
-		tree.rotation.y = angle * 1.37
-		tree.scale = Vector3.ONE * (0.92 + float(index % 3) * 0.13)
-		props_root.add_child(tree)
-		_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
 		if GameSession.graphics_quality == 0:
 			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	var camp_floor_count: int = [20, 38, 92][GameSession.graphics_quality]
@@ -675,13 +722,17 @@ func _build_high_detail_forest() -> void:
 		var distance := random.randf_range(10.5, 25.0)
 		var position := center + side * distance * side_sign
 		position.y = terrain_height(position.x, position.z) + 0.12
-		var tree := HERO_TREE_SCENES[index % HERO_TREE_SCENES.size()].instantiate() as Node3D
+		var tree: Node3D
+		if GameSession.graphics_quality == 2:
+			tree = _make_realistic_pine(position, index + 100, random.randf_range(0.125, 0.175))
+		else:
+			tree = HERO_TREE_SCENES[index % HERO_TREE_SCENES.size()].instantiate() as Node3D
+			tree.position = position
+			tree.rotation.y = random.randf_range(-PI, PI)
+			tree.scale = Vector3.ONE * random.randf_range(0.88, 1.34)
+			props_root.add_child(tree)
+			_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
 		tree.name = "HeroTexturedForestTree"
-		tree.position = position
-		tree.rotation.y = random.randf_range(-PI, PI)
-		tree.scale = Vector3.ONE * random.randf_range(0.88, 1.34)
-		props_root.add_child(tree)
-		_tint_imported(tree, Color(0.72, 0.82, 0.70, 1.0))
 		if GameSession.graphics_quality == 0:
 			_set_shadow_mode(tree, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 

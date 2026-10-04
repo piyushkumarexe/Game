@@ -45,6 +45,9 @@ jobs:
           head = json.load(open('assets/third_party/quaternius_crew/crew_head.gltf', encoding='utf-8'))
           outfit = json.load(open('assets/third_party/quaternius_crew/ranger_outfit.gltf', encoding='utf-8'))
           assert __import__('os').path.getsize('assets/third_party/quaternius_crew/animations.glb') >= 8_000_000
+          for tree_asset in ('assets/third_party/ez_tree/pine_realistic_a.glb',
+                             'assets/third_party/ez_tree/pine_realistic_b.glb'):
+              assert __import__('os').path.getsize(tree_asset) >= 250_000, tree_asset
           motorhome_triangles = sum(motorhome['accessors'][primitive['indices']]['count'] // 3
                                     for mesh in motorhome['meshes'] for primitive in mesh['primitives'])
           wheel_triangles = wheel['accessors'][wheel['meshes'][0]['primitives'][0]['indices']]['count'] // 3
@@ -58,7 +61,9 @@ jobs:
           for notice in ('assets/third_party/gmc_motorhome/ATTRIBUTION.md',
                          'assets/third_party/quaternius_crew/base-license.txt',
                          'assets/third_party/quaternius_crew/outfits-license.txt',
-                         'assets/third_party/quaternius_crew/animations-license.txt'):
+                         'assets/third_party/quaternius_crew/animations-license.txt',
+                         'assets/third_party/ez_tree/LICENSE',
+                         'assets/third_party/ez_tree/SOURCE.md'):
               assert open(notice, encoding='utf-8').read().strip(), notice
           controller = open('scripts/vehicles/rv_controller.gd', encoding='utf-8').read()
           for required in ('RearForward%s', 'RearAft%s', 'wheel.wheel_radius = 0.43',

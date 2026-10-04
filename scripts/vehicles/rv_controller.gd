@@ -537,6 +537,7 @@ func _build_rv() -> void:
 	_build_scaled_cockpit_seats()
 	_build_entry_door(interior_source)
 	_build_entry_steps_and_frame()
+	_build_doorway_sightline()
 	_build_vehicle_lighting()
 
 	# Front steer axle plus a correctly spaced tandem rear bogie. Every wheel uses
@@ -627,6 +628,23 @@ func _build_entry_steps_and_frame() -> void:
 	PrimitiveFactory.box(body_shell, "EntryStepUpper", Vector3(1.57, -0.16, 0.98), Vector3(0.48, 0.12, 1.00), tread)
 	PrimitiveFactory.box(body_shell, "EntryStepMiddle", Vector3(1.78, -0.38, 0.98), Vector3(0.54, 0.12, 0.94), tread)
 	PrimitiveFactory.box(body_shell, "EntryStepLower", Vector3(2.00, -0.60, 0.98), Vector3(0.58, 0.12, 0.88), tread)
+
+func _build_doorway_sightline() -> void:
+	# Dress the far wall seen straight through the open passenger portal. A blank
+	# pale backing surface made the connected cabin look like a white obstruction
+	# in phone screenshots even though it was physically traversable. These thin
+	# wall-mounted pieces stay behind the walking aisle and expose real depth.
+	var warm_oak := Color("765039")
+	var cabinet_oak := Color("493328")
+	var window_glass := Color("1b3033")
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorWoodPanel", Vector3(-1.205, 0.91, 0.98),
+		Vector3(0.045, 1.66, 0.94), warm_oak)
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorWindow", Vector3(-1.177, 1.28, 0.98),
+		Vector3(0.018, 0.48, 0.62), window_glass)
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorLowerCabinet", Vector3(-1.165, 0.38, 0.98),
+		Vector3(0.10, 0.44, 0.78), cabinet_oak)
+	PrimitiveFactory.box(body_shell, "DoorwayInteriorCabinetHandle", Vector3(-1.106, 0.47, 0.98),
+		Vector3(0.025, 0.035, 0.22), Color("b8b1a0"))
 
 func toggle_entry_door() -> void:
 	set_entry_door_open(not entry_door_open)

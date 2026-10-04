@@ -67,7 +67,7 @@ The handcrafted route contains:
 - Professionally modeled and skinned Quaternius CC0 crew base/Ranger outfit with normal facial spacing, original cap, sunglasses and padded-vest styling, named-bone idle/walk/run/jump/landing motion, and travel-facing rotation
 - Karol Miklas' professionally shaped CC-BY vintage GMC motorhome hero mesh with curved coachwork, PBR paint/glazing, fascia, lamps, mirrors, trim, roof rack and six separated suspension-driven tire/rim assemblies
 - Genuinely opened passenger doorway with three exterior steps, unobstructed split shell collision, and a connected modeled cockpit/living interior containing movable steering, physical gear lever, dashboard, gauges, seats, refrigerator, kitchen, dinette, storage and bed—driver-eye view uses world geometry rather than an overlay
-- Layered near/mid/far forest using textured Quaternius CC0 hero trees, undergrowth and rocks alongside mobile-batched Kenney scenery
+- Layered near/mid/far forest with HIGH-only 5.8k-triangle EZ-Tree conifers, textured Quaternius CC0 undergrowth/rocks, and mobile-batched Kenney distance scenery
 - Centered non-overhead chase camera plus separate modeled-cockpit render validation
 - Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, batched RV materials, and throttled vehicle HUD updates for mobile performance
 - Coherent lit forest/campsite palette replacing cyan trees, pink canvas, and white unlit stones
@@ -99,7 +99,7 @@ The handcrafted route contains:
 - iOS 15+ Xcode export preset
 - Multiplayer/voice implementation retained but disabled in the 0.10 correction UI and runtime
 
-Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. Quaternius' CC0 work supplies the textured nature layer and the professionally rigged crew base/Ranger clothing. The hero exterior is based on Karol Miklas' “FREE GMC Motorhome reimagined low poly” under CC-BY-4.0. Dustbound's connected interior, functional doorway/steps, character accessories, map, mechanisms and game-specific assets are original. Exact provenance, modifications and preserved license notices are documented under [`assets/third_party`](assets/third_party).
+Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. Quaternius' CC0 work supplies the textured nature layer and the professionally rigged crew base/Ranger clothing. HIGH also uses deterministic mobile-detail conifer geometry generated with Daniel Greenheck's MIT-licensed EZ-Tree 1.1.0. The hero exterior is based on Karol Miklas' “FREE GMC Motorhome reimagined low poly” under CC-BY-4.0. Dustbound's connected interior, functional doorway/steps, character accessories, map, mechanisms and game-specific assets are original. Exact provenance, modifications and preserved license notices are documented under [`assets/third_party`](assets/third_party).
 
 See [`docs/game-research.md`](docs/game-research.md) for the researched mechanic breakdown and the original-design boundary.
 

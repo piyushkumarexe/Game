@@ -401,7 +401,7 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("rejected procedural slab exterior is still visible")
 		if not static_interior or not static_interior.mesh or static_interior.mesh.get_surface_count() < 8:
 			failures.append("connected modeled RV interior material surfaces missing")
-		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "DriverCockpitSeat", "PassengerCockpitSeat", "RoofCargo", "FrontBumper"]:
+		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "DriverCockpitSeat", "PassengerCockpitSeat", "DoorwayInteriorWoodPanel", "RoofCargo", "FrontBumper"]:
 			if not smoke_rv.body_shell or not smoke_rv.body_shell.find_child(component_name, true, false):
 				failures.append("modeled RV component missing: %s" % component_name)
 		smoke_rv.set_entry_door_open(true)
@@ -521,6 +521,8 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("optimized distant forest batch missing")
 		if active_world.find_children("CampHeroTexturedTree*", "Node3D", true, false).size() < 6:
 			failures.append("opening campsite still lacks textured hero-tree density")
+		if GameSession.graphics_quality == 2 and active_world.find_children("RealisticBarkBranches", "MeshInstance3D", true, false).size() < 8:
+			failures.append("HIGH is missing its detailed procedural conifer layer")
 		if active_world.rv:
 			var under_bumper := active_world.rv.global_transform * Vector3(0.0, 0.0, 3.85)
 			var blocked_position := active_world.constrain_player_position(under_bumper + Vector3.BACK, under_bumper)

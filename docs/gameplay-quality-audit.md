@@ -28,7 +28,7 @@ The `f781fe1` physical-phone captures failed release wholesale: the procedural c
 
 ## World, missions and performance
 
-- Terrain now uses layered near/mid/far vegetation: textured Quaternius CC0 hero trees, bushes, ferns, flowers, grasses and rocks near the route; mobile-light Kenney scenery at mid range; and batched distant forest coverage.
+- Terrain uses layered near/mid/far vegetation: HIGH adds deterministic 5.8k-triangle EZ-Tree conifers with cutout foliage; Quaternius CC0 bushes, ferns, flowers, grasses and rocks fill the route; mobile-light Kenney scenery and a batched forest cover distance.
 - Player spawn remains clamped to campsite terrain and deterministic terrain-following prevents the reported endless fall.
 - Parked RV static freeze, upright parking, finite-state recovery, speed caps, anti-roll torque and suspension remain active.
 - The bog changes vehicle traction and adds physical drag; winch force remains available to recover the rig.
