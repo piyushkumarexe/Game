@@ -632,7 +632,9 @@ for x, prefix in ((0.54, "Driver"), (-0.54, "Passenger")):
     for side in (-1, 1):
         rv.box(prefix + "SeatBolster", (x + side * 0.30, 0.55, -1.61), (0.10, 0.28, 0.72), "InteriorVinyl")
     rv.box(prefix + "SeatBelt", (x + (0.28 if x > 0 else -0.28), 1.00, -1.13), (0.045, 0.85, 0.035), "SeatBelt")
-rv.box("CabOverheadConsole", (0.0, 1.98, -2.35), (1.30, 0.13, 0.62), "InteriorVinyl")
+# Keep the overhead console behind the driver eye; placing it above the dash
+# projected a giant black slab across the upper third of the windshield.
+rv.box("CabOverheadConsole", (0.0, 2.00, -1.28), (1.04, 0.12, 0.38), "InteriorVinyl")
 rv.box("SunVisorDriver", (0.57, 1.69, -2.96), (0.62, 0.13, 0.045), "InteriorFabric")
 rv.box("SunVisorPassenger", (-0.57, 1.69, -2.96), (0.62, 0.13, 0.045), "InteriorFabric")
 rv.box("RearViewMirror", (0.0, 1.54, -2.94), (0.48, 0.17, 0.07), "Mirror")

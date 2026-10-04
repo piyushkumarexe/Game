@@ -279,7 +279,7 @@ func enter_driver(vehicle: Node) -> void:
 	spring_arm.position = Vector3(-0.53, 1.10, 1.10)
 	# A slightly elevated three-quarter chase view exposes wheel contact and the
 	# coach side instead of staring level into the full-height rear wall.
-	spring_arm.rotation = Vector3(-0.12, 0.10, 0.0)
+	spring_arm.rotation = Vector3(-0.12, 0.30, 0.0)
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
 	if peer_id == multiplayer.get_unique_id():

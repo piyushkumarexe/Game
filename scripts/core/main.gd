@@ -498,11 +498,22 @@ func _run_expedition_smoke_test() -> void:
 				var cockpit_colors := {}
 				var cockpit_width := cockpit_image.get_width()
 				var cockpit_height := cockpit_image.get_height()
+				var upper_samples := 0
+				var upper_dark_samples := 0
 				for y in range(0, cockpit_height, maxi(1, int(cockpit_height / 18.0))):
 					for x in range(0, cockpit_width, maxi(1, int(cockpit_width / 24.0))):
-						cockpit_colors[cockpit_image.get_pixel(x, y).to_rgba32()] = true
+						var cockpit_pixel := cockpit_image.get_pixel(x, y)
+						cockpit_colors[cockpit_pixel.to_rgba32()] = true
+						if y < int(cockpit_height * 0.35):
+							upper_samples += 1
+							var cockpit_luma := cockpit_pixel.r * 0.2126 + cockpit_pixel.g * 0.7152 + cockpit_pixel.b * 0.0722
+							if cockpit_luma < 0.09:
+								upper_dark_samples += 1
 				if cockpit_colors.size() < 18:
 					failures.append("modeled cockpit lacks visible structure (%d colors)" % cockpit_colors.size())
+				var upper_dark_ratio := float(upper_dark_samples) / maxf(float(upper_samples), 1.0)
+				if upper_dark_ratio > 0.32:
+					failures.append("cockpit roof/seat occludes the upper view (dark=%.2f)" % upper_dark_ratio)
 				cockpit_image.save_png("res://build/validation/rv-cockpit-render.png")
 	print("3D_RENDER_SMOKE camera=%s meshes=%d failures=%s" % [get_viewport().get_camera_3d().name if get_viewport().get_camera_3d() else "none", mesh_count, failures])
 	get_tree().quit(0 if failures.is_empty() else 1)
