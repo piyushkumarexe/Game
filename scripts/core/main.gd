@@ -245,11 +245,16 @@ func _run_expedition_smoke_test() -> void:
 				var position_before_move := local_player.global_position
 				_inject_screen_touch(8, move_point, true)
 				await get_tree().process_frame
+				var routed_move := GameSession.mobile_move
+				if routed_move.length() < 0.5:
+					failures.append("left stick touch was not routed (value=%s)" % routed_move)
 				await get_tree().create_timer(0.45).timeout
+				var travelled := local_player.global_position.distance_to(position_before_move)
+				var movement_velocity := local_player.velocity
 				_inject_screen_touch(8, move_point, false)
 				await get_tree().process_frame
-				if local_player.global_position.distance_to(position_before_move) < 0.8:
-					failures.append("left touch stick did not move the player")
+				if travelled < 0.8:
+					failures.append("left touch stick did not move player (distance=%.3f input=%s velocity=%s)" % [travelled, routed_move, movement_velocity])
 				if not local_player.body_animation:
 					failures.append("animated third-person character missing")
 
