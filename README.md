@@ -1,20 +1,26 @@
-# Dustbound RV
+# Dustbound RV — Android & iOS
 
-A mobile-first, physics-flavoured road-trip game for the web. Guide a tired old RV across ravines, pine passes, boulder fields, and one final ridge before sunset.
+An original physics road-trip game packaged as installable mobile apps. Guide a tired old RV across ravines, pine passes, boulder fields, and one final ridge before sunset.
 
-> Dustbound RV is an original game with original procedural/vector art. It takes inspiration from the *chaotic road-trip* genre, but does not copy another game's code, branding, models, textures, audio, or level design.
+**This repository now builds Android and iOS apps—not a GitHub Pages website or PWA.** The complete game renderer, fonts, art, sound system, and route are bundled inside each native package, so gameplay does not require a network connection.
 
-## Play
+> Dustbound RV has original branding, code, procedural art, generated mobile artwork, sounds, and level design. It is inspired by the chaotic road-trip genre without copying another game's protected textures, models, audio, or maps.
 
-The production build is configured for GitHub Pages at:
+## Download a GitHub build
 
-**https://piyushkumarexe.github.io/Game/**
+Open the latest **Android and iOS Builds** workflow run under the repository's **Actions** tab and download one of these artifacts:
 
-For the best experience, turn a phone sideways and add the game to the home screen. It is an installable PWA and works offline after its first load.
+- `dustbound-rv-android`
+  - `dustbound-rv.apk` — install directly on an Android phone for testing
+  - `dustbound-rv.aab` — Android App Bundle for build validation
+- `dustbound-rv-ios`
+  - `dustbound-rv-ios-simulator.zip` — compiled iPhone/iPad Simulator app
 
-### Controls
+Apple requires an Apple Developer signing identity and provisioning profile before an iOS app can be installed on a physical device or submitted to TestFlight. The included Xcode project is ready to be signed under your Apple team.
 
-| Touch | Keyboard | Action |
+## Controls
+
+| Touch control | Keyboard during development | Action |
 |---|---|---|
 | **Drive** | `W` / `↑` | Accelerate |
 | **Brake** | `S` / `↓` | Brake and reverse |
@@ -25,43 +31,74 @@ For the best experience, turn a phone sideways and add the game to the home scre
 
 Collect fuel cans and spare parts, stop at both trail camps, and manage the rig's health. Hard landings and boulders damage the RV.
 
-## Features
+## Mobile features
 
-- Responsive touch controls designed for landscape phones
-- Custom suspension, airborne rotation, terrain, and vehicle handling
-- A 14.4 km handcrafted procedural route with three distinct biomes
-- Fuel, damage, repair, recovery-cable, checkpoint, and best-run systems
-- Dynamic sky, parallax scenery, dust, screen shake, haptics, and synthesized Web Audio
-- No downloaded or copyrighted game assets — all visuals are generated from Phaser primitives and original SVGs
-- Installable, offline-capable PWA
-- Automated GitHub Actions build and GitHub Pages deployment
+- Android APK/AAB project targeting Android SDK 36, with Android 7.0 as the minimum
+- iOS Xcode project targeting iOS 15 and newer
+- Locked landscape orientation and immersive full-screen presentation
+- Native haptic feedback, status-bar handling, and screen-orientation integration
+- Original Android adaptive icon, iOS app icon, and native launch artwork
+- Responsive multi-touch controls and safe-area support
+- Locally bundled fonts, graphics, and synthesized Web Audio—no remote assets
+- Offline save data for best-distance progress
+- Automated Android and iOS builds on GitHub-hosted runners
 
-## Local development
+## Gameplay systems
 
-Requirements: Node.js 22 or newer.
+- Custom RV suspension, airborne rotation, traction, and terrain handling
+- A 14.4 km route across multiple biomes with dynamic lighting
+- Fuel, vehicle damage, field repairs, recovery cable, camps, and collectibles
+- Parallax scenery, dust, screen shake, audio, and mobile haptics
+
+## Technology
+
+- Phaser 4.2.1
+- Capacitor 8.5.2 with Android and iOS native projects
+- Vite 8.3.2
+- TypeScript 7.0.2 in strict mode
+- Android Gradle Plugin 8.13 / Gradle 8.14.3
+- Swift Package Manager for the iOS Capacitor runtime
+
+Direct dependency versions are pinned in `package.json` and `package-lock.json` for reproducible builds.
+
+## Development
+
+Requirements:
+
+- Node.js 22 or newer
+- Android Studio/JDK 21 for Android development
+- macOS with Xcode for iOS development
+
+Install and synchronize both native projects:
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run sync:native
 ```
 
-Open the URL shown by Vite. To verify the production bundle:
+### Android
 
 ```bash
-npm run build
-npm run preview
+npm run android:sync
+npm run android:open
 ```
 
-## Stack
+Or build from the command line:
 
-- [Phaser 4](https://phaser.io/) — game rendering and input
-- [Vite](https://vite.dev/) — development and production bundling
-- [TypeScript](https://www.typescriptlang.org/) — strict game code
-- [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) — manifest, service worker, and offline cache
+```bash
+cd android
+./gradlew assembleDebug bundleDebug
+```
 
-Dependency versions are pinned in `package.json` and `package-lock.json` for reproducible GitHub builds.
+### iOS
 
-## Deployment
+```bash
+npm run ios:sync
+npm run ios:open
+```
 
-- `.github/workflows/ci.yml` type-checks and builds every push and pull request.
-- `.github/workflows/deploy-pages.yml` publishes `dist/` to GitHub Pages after changes reach `main`, and also supports manual runs.
+Choose your signing team in Xcode before running on an iPhone or creating a TestFlight archive.
+
+## GitHub automation
+
+`.github/workflows/ci.yml` builds both platforms on pushes, pull requests, and manual workflow runs. Android produces installable APK and AAB artifacts; macOS compiles and packages the iOS Simulator app.

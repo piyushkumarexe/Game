@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS, FONT_BODY, FONT_HEAD, GAME_HEIGHT, GAME_WIDTH, ROUTE_LENGTH, type RunResult } from '../constants';
 import { audioBus } from '../systems/AudioBus';
+import { vibrate } from '../systems/NativeShell';
 import { biomeAt, buildTerrainPoints, routeNameAt, terrainHeight, terrainSlope } from '../systems/Terrain';
 
 type PickupType = 'fuel' | 'scrap';
@@ -492,7 +493,7 @@ export class GameScene extends Phaser.Scene {
           this.showToast('SPARE PART', 'Two parts can patch the rig.', 1200);
         }
         audioBus.pickup();
-        navigator.vibrate?.(35);
+        vibrate(35);
         this.tweens.add({ targets: pickup.sprite, scale: 1.2, alpha: 0, y: pickup.sprite.y - 55, duration: 260, onComplete: () => pickup.sprite.destroy() });
       }
     });
@@ -538,7 +539,7 @@ export class GameScene extends Phaser.Scene {
       this.fuel = Math.min(100, this.fuel + 18);
       this.nextCheckpoint += 1;
       audioBus.checkpoint();
-      navigator.vibrate?.([50, 40, 80]);
+      vibrate([50, 40, 80]);
       this.showToast('TRAIL CAMP', 'Rig patched. Tank topped. Take a breath.', 2400);
     }
   }
@@ -558,7 +559,7 @@ export class GameScene extends Phaser.Scene {
     this.lastDamageAt = this.elapsed;
     this.health = Math.max(0, this.health - amount);
     audioBus.crash(Math.min(1.25, amount / 10));
-    navigator.vibrate?.([45, 25, 70]);
+    vibrate([45, 25, 70]);
     this.cameras.main.shake(180, 0.005 + amount * 0.00022);
     this.cameras.main.flash(100, 177, 47, 37, false);
     this.showToast(reason, `Rig integrity -${Math.round(amount)}`, 1050);
@@ -586,7 +587,7 @@ export class GameScene extends Phaser.Scene {
     this.winchTimer = 1.65;
     this.winchCooldown = 9;
     audioBus.winch();
-    navigator.vibrate?.(45);
+    vibrate(45);
     this.showToast('CABLE SET', 'Pulling the rig forward.', 1100);
   }
 

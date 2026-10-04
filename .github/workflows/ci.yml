@@ -1,18 +1,65 @@
-name: Build
+name: Android and iOS Builds
 
 on:
   push:
     branches: ['main', 'arena/**']
   pull_request:
     branches: ['main']
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  android:
+    name: Android APK and AAB
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Use Java 21
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4.0.4
+      - name: Configure Gradle cache
+        uses: gradle/actions/setup-gradle@v6.4.0
+      - name: Install dependencies
+        run: npm ci
+      - name: Build and sync Android project
+        run: npm run android:sync
+      - name: Build installable APK and app bundle
+        working-directory: android
+        run: ./gradlew assembleDebug bundleDebug --stacktrace
+      - name: Name Android packages
+        run: |
+          mkdir -p mobile-artifacts/android
+          cp android/app/build/outputs/apk/debug/app-debug.apk mobile-artifacts/android/dustbound-rv.apk
+          cp android/app/build/outputs/bundle/debug/app-debug.aab mobile-artifacts/android/dustbound-rv.aab
+      - name: Upload Android packages
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dustbound-rv-android
+          path: mobile-artifacts/android
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: iOS Simulator App
+    runs-on: macos-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -23,12 +70,31 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Type-check and build
-        run: npm run build
-      - name: Upload production build
+      - name: Build and sync iOS project
+        run: npm run ios:sync
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
+      - name: Build iOS Simulator app
+        run: >-
+          xcodebuild
+          -project ios/App/App.xcodeproj
+          -scheme App
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath ios/build
+          CODE_SIGNING_ALLOWED=NO
+          build
+      - name: Package Simulator app
+        run: |
+          mkdir -p mobile-artifacts/ios
+          ditto -c -k --sequesterRsrc --keepParent \
+            ios/build/Build/Products/Debug-iphonesimulator/App.app \
+            mobile-artifacts/ios/dustbound-rv-ios-simulator.zip
+      - name: Upload iOS app
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: dustbound-rv-web
-          path: dist
+          name: dustbound-rv-ios
+          path: mobile-artifacts/ios
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30

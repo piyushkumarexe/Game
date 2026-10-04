@@ -1,12 +1,17 @@
 import Phaser from 'phaser';
-import { registerSW } from 'virtual:pwa-register';
+import '@fontsource/barlow-condensed/latin-500.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
+import '@fontsource/barlow-condensed/latin-800.css';
+import '@fontsource-variable/nunito/wght.css';
 import { BootScene } from './game/scenes/BootScene';
 import { MenuScene } from './game/scenes/MenuScene';
 import { GameScene } from './game/scenes/GameScene';
 import { ResultScene } from './game/scenes/ResultScene';
+import { initializeNativeShell } from './game/systems/NativeShell';
 import './style.css';
 
-registerSW({ immediate: true });
+initializeNativeShell();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
