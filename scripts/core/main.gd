@@ -338,10 +338,13 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("RV requires a 7-piece hollow shell collider, found %d" % shell_collision_count)
 		var static_exterior := smoke_rv.body_shell.find_child("StaticRVExterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
 		var static_interior := smoke_rv.body_shell.find_child("StaticRVInterior", true, false) as MeshInstance3D if smoke_rv.body_shell else null
-		if not static_exterior or not static_exterior.mesh or static_exterior.mesh.get_surface_count() < 18:
+		var static_cockpit := smoke_rv.body_shell.find_child("StaticCockpitFrame", true, false) as MeshInstance3D if smoke_rv.body_shell else null
+		if not static_exterior or not static_exterior.mesh or static_exterior.mesh.get_surface_count() < 17:
 			failures.append("detailed RV exterior material surfaces missing")
 		if not static_interior or not static_interior.mesh or static_interior.mesh.get_surface_count() < 8:
 			failures.append("modeled RV interior material surfaces missing")
+		if not static_cockpit or not static_cockpit.mesh or static_cockpit.mesh.get_surface_count() < 4:
+			failures.append("panoramic cockpit frame/glazing surfaces missing")
 		for component_name in ["CockpitSteeringWheel", "GearLever", "EntryDoor", "RoofCargo", "FrontBumper"]:
 			if not smoke_rv.body_shell or not smoke_rv.body_shell.find_child(component_name, true, false):
 				failures.append("modeled RV component missing: %s" % component_name)
