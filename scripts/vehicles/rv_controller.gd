@@ -588,6 +588,20 @@ func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: boo
 	wheel.use_as_steering = steering_wheel
 	wheel.use_as_traction = traction_wheel
 	add_child(wheel)
+	# VehicleWheel3D uses a suspension ray rather than a solid rolling shape.
+	# A small physical tire core prevents the heavy coach body from falling all
+	# the way to its chassis on devices where a newly unfrozen suspension misses
+	# its first terrain contact. It sits inside the visible 0.61 m tire, so the
+	# ray suspension remains the first contact in normal operation.
+	var tire_contact := CollisionShape3D.new()
+	tire_contact.name = "%sTireContact" % wheel_name
+	var tire_shape := CylinderShape3D.new()
+	tire_shape.radius = 0.50
+	tire_shape.height = 0.34
+	tire_contact.shape = tire_shape
+	tire_contact.position = wheel_position
+	tire_contact.rotation.z = PI * 0.5
+	add_child(tire_contact)
 	var assembly := RV_WHEEL_SCENE.instantiate() as Node3D
 	assembly.name = "%sDetailedAssembly" % wheel_name
 	wheel.add_child(assembly)

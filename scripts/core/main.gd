@@ -371,8 +371,9 @@ func _run_expedition_smoke_test() -> void:
 					if settled_child is VehicleWheel3D:
 						var settled_wheel := settled_child as VehicleWheel3D
 						var wheel_ground := active_world.terrain_height(settled_wheel.global_position.x, settled_wheel.global_position.z)
-						if settled_wheel.global_position.y - wheel_ground < 0.28:
-							failures.append("%s sank below terrain after physics release" % settled_wheel.name)
+						var wheel_clearance := settled_wheel.global_position.y - wheel_ground
+						if wheel_clearance < 0.28:
+							failures.append("%s sank below terrain after physics release (clearance %.2f m)" % [settled_wheel.name, wheel_clearance])
 
 	if active_hud and is_instance_valid(active_hud):
 		if not active_hud.find_child("MoveStick", true, false):
