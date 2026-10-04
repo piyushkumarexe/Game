@@ -200,6 +200,13 @@ func _push_player_outside(current: Vector3, candidate: Vector3, center: Vector2,
 	candidate.z = center.y + offset.y
 	return candidate
 
+func vehicle_traction_factor(world_position: Vector3) -> float:
+	# The dark bog is a physical challenge, not only a painted rectangle. Its
+	# elliptical falloff keeps entry readable and lets a winch meaningfully help.
+	var offset := world_position - ROUTE[6]
+	var normalized := Vector2(offset.x / 10.0, offset.z / 13.5)
+	return 0.48 if normalized.length_squared() < 1.0 else 1.0
+
 func terrain_height(x: float, z: float) -> float:
 	var broad := sin(x * 0.038) * 2.6 + cos(z * 0.031) * 3.2 + sin((x + z) * 0.065) * 1.3
 	var edge_rise := pow(absf(x) / 125.0, 2.2) * 35.0

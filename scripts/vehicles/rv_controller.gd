@@ -10,6 +10,7 @@ const MAX_STEER := 0.43
 const MAX_FUEL := 100.0
 const MAX_SAFE_SPEED := 32.0
 const RV_EXTERIOR_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
+const RV_WHEEL_SCENE: PackedScene = preload("res://assets/models/rv_wheel.gltf")
 
 var prompt := "DRIVE THE RV"
 var health := 100.0
@@ -36,6 +37,9 @@ var start_transform := Transform3D.IDENTITY
 var body_shell: Node3D
 var bumper_visual: Node3D
 var roof_crate: Node3D
+var steering_visual_root: Node3D
+var cabin_light: OmniLight3D
+var headlamps: Array[SpotLight3D] = []
 var stats_emit_accumulator := 0.0
 
 func setup(spawn_transform: Transform3D) -> void:
@@ -74,6 +78,7 @@ func _physics_process(delta: float) -> void:
 	_stabilize_motion()
 	_apply_grounded_stability(delta)
 	_simulate_driver(delta)
+	_update_vehicle_visuals()
 	_simulate_winch(front_winch, _front_hook_position(), delta)
 	_simulate_winch(rear_winch, _rear_hook_position(), delta)
 	_update_cable(front_cable, front_winch, _front_hook_position())
@@ -188,14 +193,17 @@ func _release_driver(id: int) -> void:
 	brake = 95.0
 	freeze = true
 
-func set_local_driver_first_person(active: bool) -> void:
+func set_local_driver_first_person(_active: bool) -> void:
+	# First person now looks through the same modeled cockpit used by the exterior.
+	# Never hide the shell: doing that turns the dashboard into a fake HUD overlay.
 	if body_shell:
-		body_shell.visible = not active
+		body_shell.visible = true
 
 func driver_seat_transform() -> Transform3D:
-	# The player camera is 1.62 m above its origin. Offset the character origin so
-	# the actual viewpoint sits naturally behind the windshield.
-	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.48, -0.52, -1.25))
+	# The player camera is 1.62 m above its origin. This places their eyes behind
+	# the modeled right-hand-drive steering wheel with dashboard and A-pillars in
+	# view, while keeping the near plane clear of the seat and roof.
+	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.34, -1.40))
 	return seat
 
 func exit_seat_transform() -> Transform3D:
@@ -259,7 +267,14 @@ func _simulate_driver(delta: float) -> void:
 	else:
 		var health_factor := lerpf(0.42, 1.0, health / 100.0)
 		var speed_factor := clampf((MAX_SAFE_SPEED - linear_velocity.length()) / 8.0, 0.0, 1.0)
-		engine_force = drive_throttle * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor
+		var traction_factor := 1.0
+		if Net.world and Net.world.has_method("vehicle_traction_factor"):
+			traction_factor = float(Net.world.vehicle_traction_factor(global_position))
+		engine_force = drive_throttle * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor * traction_factor
+		if traction_factor < 0.9:
+			var mud_drag := exp(-delta * 1.15)
+			linear_velocity.x *= mud_drag
+			linear_velocity.z *= mud_drag
 		fuel = maxf(0.0, fuel - drive_throttle * delta * 0.16)
 	var service_brake := throttle_input < -0.10
 	brake = 95.0 if parked else (82.0 if handbrake_input else (42.0 if service_brake else (24.0 if drive_throttle < 0.05 else 0.0)))
@@ -420,10 +435,11 @@ func _update_damage_visuals() -> void:
 
 func _build_rv() -> void:
 	var collision := CollisionShape3D.new()
+	collision.name = "RVMainCollision"
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(2.60, 3.20, 6.35)
+	shape.size = Vector3(2.64, 2.95, 7.02)
 	collision.shape = shape
-	collision.position = Vector3(0.0, 0.80, 0.0)
+	collision.position = Vector3(0.0, 0.98, -0.18)
 	add_child(collision)
 
 	body_shell = Node3D.new()
@@ -432,49 +448,75 @@ func _build_rv() -> void:
 	var exterior := RV_EXTERIOR_SCENE.instantiate() as Node3D
 	exterior.name = "DustboundExpeditionRV"
 	body_shell.add_child(exterior)
-	# The original camper model has a full coach, cab, windows, side door,
-	# bumpers, roof rack/cargo, rear ladder and spare instead of reading as an
-	# ambulance. VehicleWheel3D supplies the four animated wheels underneath it.
+	# This is one coherent exterior/interior scene: tapered cab, split windshield,
+	# mirrors, lights, service hatches, roof equipment, ladder, cockpit, seats,
+	# kitchen, dinette and rear bed. Named glTF nodes are retained for inspection.
 	roof_crate = exterior.find_child("RoofCargo", true, false) as Node3D
 	bumper_visual = exterior.find_child("FrontBumper", true, false) as Node3D
+	_build_steering_visual(exterior)
+	_build_vehicle_lighting()
 
-	_add_wheel("FrontLeft", Vector3(-1.18, -0.62, -2.08), true, false)
-	_add_wheel("FrontRight", Vector3(1.18, -0.62, -2.08), true, false)
-	_add_wheel("RearLeft", Vector3(-1.18, -0.62, 1.92), false, true)
-	_add_wheel("RearRight", Vector3(1.18, -0.62, 1.92), false, true)
+	_add_wheel("FrontLeft", Vector3(-1.24, -0.62, -2.10), true, false)
+	_add_wheel("FrontRight", Vector3(1.24, -0.62, -2.10), true, false)
+	_add_wheel("RearLeft", Vector3(-1.24, -0.62, 1.90), false, true)
+	_add_wheel("RearRight", Vector3(1.24, -0.62, 1.90), false, true)
+
+func _build_steering_visual(exterior: Node3D) -> void:
+	steering_visual_root = Node3D.new()
+	steering_visual_root.name = "SteeringWheelPivot"
+	steering_visual_root.position = Vector3(0.53, 0.79, -2.22)
+	body_shell.add_child(steering_visual_root)
+	for component_name in ["CockpitSteeringWheel", "SteeringHub", "SteeringSpokeHorizontal", "SteeringSpokeLower"]:
+		var component := exterior.find_child(component_name, true, false) as Node3D
+		if component:
+			component.reparent(steering_visual_root, true)
+
+func _build_vehicle_lighting() -> void:
+	for x in [-0.79, 0.79]:
+		var lamp := SpotLight3D.new()
+		lamp.name = "HeadlampBeam"
+		lamp.position = Vector3(x, 0.49, -3.84)
+		lamp.light_color = Color("ffe2a0")
+		lamp.light_energy = 2.2
+		lamp.spot_range = 28.0
+		lamp.spot_angle = 42.0
+		lamp.shadow_enabled = false
+		lamp.visible = false
+		body_shell.add_child(lamp)
+		headlamps.append(lamp)
+	cabin_light = OmniLight3D.new()
+	cabin_light.name = "ModeledCabinLight"
+	cabin_light.position = Vector3(0.0, 1.72, -0.55)
+	cabin_light.light_color = Color("ffd99b")
+	cabin_light.light_energy = 0.52
+	cabin_light.omni_range = 4.8
+	cabin_light.shadow_enabled = false
+	cabin_light.visible = false
+	body_shell.add_child(cabin_light)
+
+func _update_vehicle_visuals() -> void:
+	if steering_visual_root:
+		steering_visual_root.rotation.z = lerp_angle(steering_visual_root.rotation.z, -steering * 2.25, 0.24)
+	if cabin_light:
+		cabin_light.visible = engine_running
+	for lamp in headlamps:
+		lamp.visible = engine_running
 
 func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: bool, traction_wheel: bool) -> void:
 	var wheel := VehicleWheel3D.new()
 	wheel.name = wheel_name
 	wheel.position = wheel_position
-	wheel.wheel_radius = 0.56
-	wheel.wheel_rest_length = 0.32
-	wheel.suspension_travel = 0.35
-	wheel.suspension_stiffness = 22.0
-	wheel.suspension_max_force = 18000.0
-	wheel.damping_compression = 0.72
-	wheel.damping_relaxation = 0.88
-	wheel.wheel_friction_slip = 1.55
+	wheel.wheel_radius = 0.61
+	wheel.wheel_rest_length = 0.30
+	wheel.suspension_travel = 0.32
+	wheel.suspension_stiffness = 25.0
+	wheel.suspension_max_force = 20500.0
+	wheel.damping_compression = 0.78
+	wheel.damping_relaxation = 0.92
+	wheel.wheel_friction_slip = 1.72
 	wheel.use_as_steering = steering_wheel
 	wheel.use_as_traction = traction_wheel
 	add_child(wheel)
-	var tire := MeshInstance3D.new()
-	var tire_mesh := CylinderMesh.new()
-	tire_mesh.top_radius = 0.56
-	tire_mesh.bottom_radius = 0.56
-	tire_mesh.height = 0.34
-	tire_mesh.radial_segments = 16
-	tire.mesh = tire_mesh
-	tire.rotation.z = PI * 0.5
-	tire.material_override = PrimitiveFactory.material(Color("16181c"), 0.95)
-	wheel.add_child(tire)
-	var hub := MeshInstance3D.new()
-	var hub_mesh := CylinderMesh.new()
-	hub_mesh.top_radius = 0.21
-	hub_mesh.bottom_radius = 0.21
-	hub_mesh.height = 0.37
-	hub_mesh.radial_segments = 10
-	hub.mesh = hub_mesh
-	hub.rotation.z = PI * 0.5
-	hub.material_override = PrimitiveFactory.material(Color("a9a795"), 0.45, 0.6)
-	wheel.add_child(hub)
+	var assembly := RV_WHEEL_SCENE.instantiate() as Node3D
+	assembly.name = "%sDetailedAssembly" % wheel_name
+	wheel.add_child(assembly)

@@ -2,7 +2,7 @@
 
 A true 3D, first-/third-person single-player mobile physics adventure built with Godot 4.7.2.
 
-Version 0.8 is a **single-player mobile rendering, parked-vehicle stability, environment-art, performance, physics-camera, and control-customization rebuild** with an original map, physical RV, missions, recovery tools, hazards, viewport-level multi-touch controls, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
+Version 0.9 is a **single-player RV, cockpit, character-locomotion, mobile rendering, physics, performance, and control rebuild** with an original map, missions, recovery tools, hazards, viewport-level multi-touch controls, full gamepad mappings, and Android/iOS export configuration. Multiplayer and proximity voice are deliberately dormant until the core phone experience is stable.
 
 > This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
@@ -64,10 +64,11 @@ The handcrafted route contains:
 - A brighter live 3D campsite home screen and deliberately clustered opening forest
 - Fully draggable, persistent mobile control layout with adjustable size, opacity, swipe sensitivity, and FAST/BALANCED/HIGH quality profiles
 - Context-sensitive mobile BRAKE plus movement, use, sprint, jump, view, gears, and twin-winch controls
-- Textured and animated Quaternius CC0 survivor with idle, walk, run and jump locomotion
-- More detailed original camper with framed glazing, mirrors, awning, roof equipment, trim, ladder, spare and mobile chase-camera clearance
-- Lower-profile first-person dashboard and a longer, raised third-person driving chase camera
-- Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, and throttled vehicle HUD updates for mobile performance
+- Textured and animated Quaternius CC0 survivor that turns toward travel and blends idle, walk, run, takeoff, airborne and landing states
+- Original Class C RV with four suspension-driven all-terrain wheel assemblies, tapered cab, split windshield, mirrors, lamps, entry door, step, service panels, roof equipment, awning, ladder and spare
+- Continuous modeled cockpit/living interior with movable steering wheel, dashboard, gauges, seats, kitchen, dinette, storage and bed—driver-eye view no longer uses a dashboard overlay
+- Centered non-overhead chase camera plus separate modeled-cockpit render validation
+- Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, batched RV materials, and throttled vehicle HUD updates for mobile performance
 - Coherent lit forest/campsite palette replacing cyan trees, pink canvas, and white unlit stones
 - Collision-aware deterministic walking around the RV, tent, fire ring, and camp sign
 - Static parking state that prevents the unoccupied RV from settling or tipping before the player enters it
@@ -79,14 +80,14 @@ The handcrafted route contains:
 |---|---|---|
 | Walk / drive | Left stick | `WASD` / left stick |
 | Look | Swipe/drag the right side | Mouse / right stick |
-| First-/third-person view | **VIEW 1P / 3P** | `C` |
-| Interact / enter / exit | **USE** | `E` |
-| Jump | **JUMP** | `Space` |
-| Sprint | **SPRINT** | `Shift` |
-| Shift down / up | **GEAR − / +** | `Z / X` |
-| Brake / handbrake | **BRAKE** | `Space` |
-| Front cable | **FRONT CABLE** | `Q` |
-| Rear cable | **REAR CABLE** | `R` |
+| First-/third-person view | **VIEW 1P / 3P** | `C` / gamepad Y |
+| Interact / enter / exit | **USE** | `E` / gamepad X |
+| Jump | **JUMP** | `Space` / gamepad A |
+| Sprint | **SPRINT** | `Shift` / left-stick click |
+| Shift down / up | **GEAR − / +** | `Z / X` / left/right shoulder |
+| Brake / handbrake | **BRAKE** | `Space` / gamepad B |
+| Front cable | **FRONT CABLE** | `Q` / D-pad up |
+| Rear cable | **REAR CABLE** | `R` / D-pad down |
 | Customize layout | **LAYOUT**, then drag/save | Main-menu **CONTROLS & PERFORMANCE** |
 
 ## Engine
@@ -95,7 +96,7 @@ The handcrafted route contains:
 - GDScript only; no third-party runtime plugins
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
-- Multiplayer/voice implementation retained but disabled in the 0.8 stabilization UI and runtime
+- Multiplayer/voice implementation retained but disabled in the 0.9 stabilization UI and runtime
 
 Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. The animated survivor comes from Quaternius' CC0 Zombie Apocalypse Kit. Provenance is documented under [`assets/third_party`](assets/third_party). The RV, map and game-specific assets remain original.
 
@@ -109,14 +110,14 @@ Install Godot 4.7.2 and open `project.godot`, or run:
 godot --editor --path .
 ```
 
-The 0.8 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
+The 0.9 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
 
 ## GitHub mobile builds
 
 `.github/workflows/ci.yml`:
 
 1. imports the project and validates every GDScript;
-2. launches the actual expedition in a windowed OpenGL session, verifies its local player/current camera/RV/3D mesh count and saves a world-only render proof;
+2. launches the actual expedition in a windowed OpenGL session, drives the mobile controls, verifies locomotion/facing, the detailed RV and both cameras, then saves chase-view and modeled-cockpit render proofs;
 3. exports a debug-signed Android APK and verifies its manifest is locked to landscape;
 4. exports an unsigned, build-ready iOS Xcode project archive.
 

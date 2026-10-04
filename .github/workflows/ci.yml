@@ -25,6 +25,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+      - name: Verify generated RV assets
+        run: |
+          python3 tools/generate_lowpoly_assets.py
+          python3 - <<'PY'
+          import json
+          exterior = json.load(open('assets/models/rv_exterior.gltf', encoding='utf-8'))
+          wheel = json.load(open('assets/models/rv_wheel.gltf', encoding='utf-8'))
+          triangles = sum(exterior['accessors'][primitive['indices']]['count'] // 3
+                          for mesh in exterior['meshes'] for primitive in mesh['primitives'])
+          assert triangles >= 5500, triangles
+          assert len(exterior['materials']) >= 24, len(exterior['materials'])
+          assert {'StaticRVBody', 'CockpitSteeringWheel', 'RoofCargo'} <= {node.get('name') for node in exterior['nodes']}
+          assert any(node.get('name') == 'DetailedWheelAssembly' for node in wheel['nodes'])
+          print(f'RV asset verified: {triangles} triangles, {len(exterior["materials"])} materials')
+          PY
+          git diff --exit-code
       - name: Install Godot 4.7.2
         uses: chickensoft-games/setup-godot@v2.4.3
         with:
@@ -42,7 +58,7 @@ jobs:
           xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
-            test -s build/validation/expedition-render.png
+            test -s build/validation/expedition-render.png && test -s build/validation/rv-cockpit-render.png
             status=$?
           fi
           {
@@ -61,7 +77,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: dustbound-expedition-render-proof
-          path: build/validation/expedition-render.png
+          path: build/validation/
           if-no-files-found: error
           retention-days: 30
 

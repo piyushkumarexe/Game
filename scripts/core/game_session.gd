@@ -214,6 +214,18 @@ func _create_input_actions() -> void:
 	_add_joy_axis("look_right", JOY_AXIS_RIGHT_X, 1.0)
 	_add_joy_axis("look_up", JOY_AXIS_RIGHT_Y, -1.0)
 	_add_joy_axis("look_down", JOY_AXIS_RIGHT_Y, 1.0)
+	# Complete controller parity: face buttons cover locomotion/interaction and
+	# shoulders/D-pad handle the RV without requiring keyboard or touch fallback.
+	_bind_joy_button("jump", JOY_BUTTON_A)
+	_bind_joy_button("interact", JOY_BUTTON_X)
+	_bind_joy_button("toggle_view", JOY_BUTTON_Y)
+	_bind_joy_button("sprint", JOY_BUTTON_LEFT_STICK)
+	_bind_joy_button("handbrake", JOY_BUTTON_B)
+	_bind_joy_button("shift_up", JOY_BUTTON_RIGHT_SHOULDER)
+	_bind_joy_button("shift_down", JOY_BUTTON_LEFT_SHOULDER)
+	_bind_joy_button("winch_front", JOY_BUTTON_DPAD_UP)
+	_bind_joy_button("winch_rear", JOY_BUTTON_DPAD_DOWN)
+	_bind_joy_button("pause", JOY_BUTTON_START)
 
 func _bind_keys(action: StringName, keys: Array) -> void:
 	if not InputMap.has_action(action):
@@ -229,4 +241,11 @@ func _add_joy_axis(action: StringName, axis: JoyAxis, value: float) -> void:
 	var event := InputEventJoypadMotion.new()
 	event.axis = axis
 	event.axis_value = value
+	InputMap.action_add_event(action, event)
+
+func _bind_joy_button(action: StringName, button: JoyButton) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action, 0.2)
+	var event := InputEventJoypadButton.new()
+	event.button_index = button
 	InputMap.action_add_event(action, event)

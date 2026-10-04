@@ -3,6 +3,7 @@ extends Node3D
 ## Live 3D title-screen campsite assembled from the same models used in play.
 
 const RV_SCENE: PackedScene = preload("res://assets/models/rv_exterior.gltf")
+const RV_WHEEL_SCENE: PackedScene = preload("res://assets/models/rv_wheel.gltf")
 const PINE_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tree-pinetallb-detailed.glb")
 const ROCK_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/rock-largeb.glb")
 const TENT_SCENE: PackedScene = preload("res://assets/third_party/kenney/nature-kit/tent-detailedopen.glb")
@@ -110,33 +111,15 @@ func _build_rig() -> void:
 	exterior.name = "OriginalDustboundCamper"
 	exterior.position.y = 1.25
 	rig.add_child(exterior)
-	for x in [-1.18, 1.18]:
-		for z in [-2.08, 1.92]:
-			_add_menu_wheel(Vector3(x, 0.58, z))
+	for x in [-1.24, 1.24]:
+		for z in [-2.10, 1.90]:
+			_add_menu_wheel(Vector3(x, 0.63, z))
 
 func _add_menu_wheel(wheel_position: Vector3) -> void:
-	var tire := MeshInstance3D.new()
-	var tire_mesh := CylinderMesh.new()
-	tire_mesh.top_radius = 0.56
-	tire_mesh.bottom_radius = 0.56
-	tire_mesh.height = 0.34
-	tire_mesh.radial_segments = 16
-	tire.mesh = tire_mesh
-	tire.position = wheel_position
-	tire.rotation.z = PI * 0.5
-	tire.material_override = PrimitiveFactory.material(Color("17191c"), 0.96)
-	rig.add_child(tire)
-	var hub := MeshInstance3D.new()
-	var hub_mesh := CylinderMesh.new()
-	hub_mesh.top_radius = 0.22
-	hub_mesh.bottom_radius = 0.22
-	hub_mesh.height = 0.38
-	hub_mesh.radial_segments = 12
-	hub.mesh = hub_mesh
-	hub.position = wheel_position
-	hub.rotation.z = PI * 0.5
-	hub.material_override = PrimitiveFactory.material(Color("9ca59d"), 0.38, 0.45)
-	rig.add_child(hub)
+	var wheel := RV_WHEEL_SCENE.instantiate() as Node3D
+	wheel.name = "DetailedMenuWheel"
+	wheel.position = wheel_position
+	rig.add_child(wheel)
 
 func _build_scenery() -> void:
 	var tree_data := [

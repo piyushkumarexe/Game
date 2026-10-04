@@ -266,12 +266,19 @@ func _run_expedition_smoke_test() -> void:
 				await get_tree().create_timer(0.45).timeout
 				var travelled := local_player.global_position.distance_to(position_before_move)
 				var movement_velocity := local_player.velocity
+				if not local_player.body_animation:
+					failures.append("animated third-person character missing")
+				elif local_player.body_animation_name not in ["Walk", "Run"]:
+					failures.append("moving survivor did not enter walk/run animation (%s)" % local_player.body_animation_name)
+				if local_player.body_visual and Vector2(movement_velocity.x, movement_velocity.z).length() > 0.5:
+					var visual_forward := local_player.body_visual.global_transform.basis.z.normalized()
+					var travel_forward := Vector3(movement_velocity.x, 0.0, movement_velocity.z).normalized()
+					if visual_forward.dot(travel_forward) < 0.62:
+						failures.append("survivor model is sliding sideways instead of facing travel")
 				active_hud.input_router._end_touch(8)
 				await get_tree().process_frame
 				if travelled < 0.8:
 					failures.append("left touch stick did not move player (distance=%.3f input=%s velocity=%s)" % [travelled, routed_move, movement_velocity])
-				if not local_player.body_animation:
-					failures.append("animated third-person character missing")
 
 			var sprint_button := active_hud.find_child("Touch_sprint", true, false) as Button if active_hud else null
 			if sprint_button:
@@ -294,6 +301,8 @@ func _run_expedition_smoke_test() -> void:
 				await get_tree().physics_frame
 				if local_player.velocity.y <= 0.5:
 					failures.append("JUMP touch button did not launch the grounded player")
+				if local_player.body_animation and local_player.body_animation_name not in ["Jump", "Jump_Idle"]:
+					failures.append("jump did not activate a locomotion animation (%s)" % local_player.body_animation_name)
 				await get_tree().create_timer(1.0).timeout
 			else:
 				failures.append("JUMP touch button missing")
@@ -314,10 +323,41 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("parked RV tipped before entry (up=%.3f)" % parked_up)
 		if not smoke_rv.freeze:
 			failures.append("unoccupied RV is not in stable parking mode")
+		var wheel_count := 0
+		for child: Node in smoke_rv.get_children():
+			if child is VehicleWheel3D:
+				wheel_count += 1
+				if not child.find_child("DetailedWheelAssembly", true, false):
+					failures.append("%s lacks its modeled tire/rim assembly" % child.name)
+		if wheel_count != 4:
+			failures.append("detailed RV requires 4 physical wheels, found %d" % wheel_count)
+		var static_body := smoke_rv.body_shell.find_child("StaticRVBody", true, false) as MeshInstance3D if smoke_rv.body_shell else null
+		if not static_body or not static_body.mesh or static_body.mesh.get_surface_count() < 24:
+			failures.append("detailed RV exterior/interior material surfaces missing")
+		for component_name in ["CockpitSteeringWheel", "RoofCargo", "FrontBumper"]:
+			if not smoke_rv.body_shell or not smoke_rv.body_shell.find_child(component_name, true, false):
+				failures.append("modeled RV component missing: %s" % component_name)
 		if GameSession.local_player and is_instance_valid(GameSession.local_player):
 			smoke_rv.interact(GameSession.local_player)
 		if smoke_rv.driver_peer_id != 0:
 			failures.append("unpacked RV allowed a driver or started occupied")
+		# Pack and enter through the real interaction path. This proves the chase
+		# camera and driver-eye camera against the same intact modeled RV shell.
+		if GameSession.local_player and is_instance_valid(GameSession.local_player):
+			GameSession.supplies_loaded = 3
+			GameSession.complete_target("supplies")
+			smoke_rv.interact(GameSession.local_player)
+			await get_tree().process_frame
+			await get_tree().physics_frame
+			var smoke_player := GameSession.local_player as ExpeditionPlayer
+			if smoke_rv.driver_peer_id != smoke_player.peer_id or not smoke_player.is_driving:
+				failures.append("packed RV did not assign the physical driver seat")
+			else:
+				smoke_player._apply_camera_mode(true)
+				if get_viewport().get_camera_3d() != smoke_player.third_camera:
+					failures.append("RV chase camera did not become current")
+				if not smoke_rv.body_shell.visible:
+					failures.append("RV shell was hidden while driving")
 
 	if active_hud and is_instance_valid(active_hud):
 		if not active_hud.find_child("MoveStick", true, false):
@@ -384,7 +424,41 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("ground render is underexposed (luma=%.3f dark=%.2f)" % [average_luminance, dark_ratio])
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build/validation"))
 		image.save_png("res://build/validation/expedition-render.png")
-	print("3D_RENDER_SMOKE camera=%s meshes=%d failures=%s" % [current_camera.name if current_camera else "none", mesh_count, failures])
+
+	# A second render gate proves that first person is physically inside the same
+	# RV: steering wheel, dashboard, windshield frame and shell all remain in the
+	# 3D scene. A camera-attached dashboard overlay cannot satisfy these checks.
+	if GameSession.local_player and is_instance_valid(GameSession.local_player) and GameSession.rv:
+		var cockpit_player := GameSession.local_player as ExpeditionPlayer
+		var cockpit_rv := GameSession.rv as ExpeditionRV
+		if cockpit_player.is_driving:
+			cockpit_player._apply_camera_mode(false)
+			await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			if get_viewport().get_camera_3d() != cockpit_player.first_camera:
+				failures.append("driver-eye first-person camera did not become current")
+			if not cockpit_rv.body_shell.visible:
+				failures.append("first-person incorrectly hid the modeled RV shell")
+			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.28, -1.40)
+			if cockpit_player.first_camera.global_position.distance_to(expected_eye) > 0.24:
+				failures.append("driver camera is not located in the modeled cockpit")
+			for cockpit_part in ["CockpitSteeringWheel", "StaticRVBody"]:
+				if not cockpit_rv.body_shell.find_child(cockpit_part, true, false):
+					failures.append("first-person cockpit part missing: %s" % cockpit_part)
+			var cockpit_image := get_viewport().get_texture().get_image()
+			if cockpit_image.is_empty():
+				failures.append("modeled cockpit render is empty")
+			else:
+				var cockpit_colors := {}
+				var cockpit_width := cockpit_image.get_width()
+				var cockpit_height := cockpit_image.get_height()
+				for y in range(0, cockpit_height, maxi(1, int(cockpit_height / 18.0))):
+					for x in range(0, cockpit_width, maxi(1, int(cockpit_width / 24.0))):
+						cockpit_colors[cockpit_image.get_pixel(x, y).to_rgba32()] = true
+				if cockpit_colors.size() < 18:
+					failures.append("modeled cockpit lacks visible structure (%d colors)" % cockpit_colors.size())
+				cockpit_image.save_png("res://build/validation/rv-cockpit-render.png")
+	print("3D_RENDER_SMOKE camera=%s meshes=%d failures=%s" % [get_viewport().get_camera_3d().name if get_viewport().get_camera_3d() else "none", mesh_count, failures])
 	get_tree().quit(0 if failures.is_empty() else 1)
 
 func _show_results(success: bool) -> void:

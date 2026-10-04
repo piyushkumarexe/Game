@@ -9,7 +9,6 @@ const LOOK_SENSITIVITY := 0.0024
 const TOUCH_LOOK_SENSITIVITY := 0.0042
 const CREW_SCENE: PackedScene = preload("res://assets/third_party/quaternius/characters_matt.gltf")
 const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
-const COCKPIT_SCENE: PackedScene = preload("res://assets/models/rv_cockpit.gltf")
 
 var peer_id := 1
 var player_name := "Rover"
@@ -33,9 +32,13 @@ var interact_ray: RayCast3D
 var body_visual: Node3D
 var body_animation: AnimationPlayer
 var body_animation_name := ""
+var movement_direction := Vector3.ZERO
+var air_time := 0.0
+var landing_time := 0.0
+var just_jumped := false
+var just_landed := false
 var carried_visual: MeshInstance3D
 var hands_visual: Node3D
-var cockpit_visual: Node3D
 var nameplate: Label3D
 var voice: ProximityVoice
 
@@ -95,17 +98,28 @@ func _physics_process(delta: float) -> void:
 		_drive_vehicle(delta)
 	else:
 		_move_on_foot(delta)
-	_update_body_animation()
+	_update_body_animation(delta)
 	_update_interaction()
 	if Net.is_online:
 		_sync_state.rpc(transform, velocity, is_driving)
 
 func _move_on_foot(delta: float) -> void:
+	just_jumped = false
+	just_landed = false
 	var input := GameSession.movement_vector()
 	var direction := (global_transform.basis * Vector3(input.x, 0.0, input.y)).normalized()
+	movement_direction = direction
 	var speed := SPRINT_SPEED if GameSession.is_action_pressed("sprint") else WALK_SPEED
 	velocity.x = move_toward(velocity.x, direction.x * speed, 22.0 * delta)
 	velocity.z = move_toward(velocity.z, direction.z * speed, 22.0 * delta)
+
+	# Turn the visible survivor toward actual travel, including backpedal and
+	# strafe input. The camera/root can free-look independently, so the character
+	# no longer slides sideways in an unchanged pose.
+	if direction.length_squared() > 0.0025 and body_visual:
+		var world_facing := atan2(direction.x, direction.z)
+		var local_facing := wrapf(world_facing - global_rotation.y, -PI, PI)
+		body_visual.rotation.y = lerp_angle(body_visual.rotation.y, local_facing, minf(1.0, delta * 11.5))
 
 	# CharacterBody3D was being pinned or falling through overlapping generated
 	# trimesh/box contacts on Android. In the single-player build the procedural
@@ -121,16 +135,22 @@ func _move_on_foot(delta: float) -> void:
 	if grounded and jump_pressed:
 		grounded = false
 		vertical_velocity = JUMP_FORCE
+		air_time = 0.0
+		landing_time = 0.0
+		just_jumped = true
 	if grounded:
 		vertical_velocity = 0.0
 		next_position.y = floor_height
 	else:
+		air_time += delta
 		vertical_velocity -= 16.0 * delta
 		next_position.y = global_position.y + vertical_velocity * delta
 		if next_position.y <= floor_height:
 			next_position.y = floor_height
 			vertical_velocity = 0.0
 			grounded = true
+			just_landed = true
+			landing_time = 0.32
 	velocity.y = vertical_velocity
 	global_position = next_position
 	if grounded:
@@ -180,13 +200,22 @@ func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
 		look_pitch = clampf(look_pitch - pitch_change, -1.15, 1.15)
 		head.rotation.x = look_pitch
 
-func _update_body_animation() -> void:
+func _update_body_animation(delta: float) -> void:
 	if not body_animation or is_driving:
 		return
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
 	var target := "Idle"
-	if not grounded:
-		target = "Jump_Idle"
+	var blend := 0.14
+	if just_jumped:
+		target = "Jump"
+		blend = 0.06
+	elif not grounded:
+		target = "Jump" if air_time < 0.20 and vertical_velocity > 0.0 else "Jump_Idle"
+		blend = 0.08
+	elif just_landed or landing_time > 0.0:
+		target = "Jump_Land"
+		blend = 0.06
+		landing_time = maxf(0.0, landing_time - delta)
 	elif horizontal_speed > 5.1:
 		target = "Run"
 	elif horizontal_speed > 0.25:
@@ -194,7 +223,8 @@ func _update_body_animation() -> void:
 	if target == body_animation_name or not body_animation.has_animation(target):
 		return
 	body_animation_name = target
-	body_animation.play(target, 0.14)
+	body_animation.speed_scale = 1.0
+	body_animation.play(target, blend)
 
 func _toggle_camera_mode() -> void:
 	_apply_camera_mode(not third_person)
@@ -208,10 +238,9 @@ func _apply_camera_mode(use_third_person: bool) -> void:
 	var local_player := peer_id == multiplayer.get_unique_id()
 	if local_player:
 		body_visual.visible = third_person and not is_driving
-		# Idle placeholder arms stay hidden until a proper first-person animation
-		# rig is available; unobstructed gameplay is better than crude giant hands.
+		# On-foot first person stays unobstructed; driving uses the RV's actual
+		# cockpit geometry, while third person shows the complete animated survivor.
 		hands_visual.visible = false
-		cockpit_visual.visible = not third_person and is_driving
 		carried_visual.visible = not third_person and carried_item == "plank"
 		if driven_vehicle and driven_vehicle.has_method("set_local_driver_first_person"):
 			driven_vehicle.set_local_driver_first_person(is_driving and not third_person)
@@ -239,9 +268,11 @@ func _update_interaction() -> void:
 func enter_driver(vehicle: Node) -> void:
 	is_driving = true
 	driven_vehicle = vehicle
+	head.rotation = Vector3.ZERO
+	look_pitch = 0.0
 	spring_arm.add_excluded_object(vehicle.get_rid())
-	spring_arm.spring_length = 7.2
-	spring_arm.position = Vector3(0.0, 1.05, 0.0)
+	spring_arm.spring_length = 8.4
+	spring_arm.position = Vector3(-0.53, 1.10, 1.10)
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
 	if peer_id == multiplayer.get_unique_id():
@@ -345,15 +376,6 @@ func _build_player() -> void:
 	hands_visual.position = Vector3(0.0, -0.10, 0.08)
 	hands_visual.visible = false
 	camera.add_child(hands_visual)
-	cockpit_visual = COCKPIT_SCENE.instantiate() as Node3D
-	cockpit_visual.name = "DriverCockpit"
-	# Keep only a slim dashboard/steering-wheel frame. The previous scale filled
-	# the lower half of a phone screen with a cream rectangle.
-	cockpit_visual.scale = Vector3.ONE * 0.34
-	cockpit_visual.position = Vector3(0.0, -0.43, -0.12)
-	cockpit_visual.visible = false
-	camera.add_child(cockpit_visual)
-
 	interact_ray = RayCast3D.new()
 	interact_ray.target_position = Vector3(0.0, 0.0, -4.2)
 	interact_ray.collision_mask = 1 | 4 | 8
