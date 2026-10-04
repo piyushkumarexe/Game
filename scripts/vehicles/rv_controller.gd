@@ -31,6 +31,7 @@ var engine_playback: AudioStreamGeneratorPlayback
 var audio_phase := 0.0
 var last_impact_time := -10.0
 var safe_spawn_seconds := 2.5
+var upside_down_seconds := 0.0
 var start_transform := Transform3D.IDENTITY
 var body_shell: Node3D
 var bumper_visual: Node3D
@@ -112,6 +113,10 @@ func interact(player: Node) -> void:
 	if driver_peer_id != 0:
 		GameSession.toast_requested.emit("DRIVER SEAT OCCUPIED", "Someone is already wrestling the wheel.")
 		return
+	if GameSession.supplies_loaded < 3:
+		GameSession.toast_requested.emit("PACK BEFORE DEPARTURE",
+			"Load all 3 marked supply crates before starting the RV.")
+		return
 	if Net.is_online and not multiplayer.is_server():
 		_request_driver.rpc_id(1, player.peer_id)
 	else:
@@ -119,7 +124,10 @@ func interact(player: Node) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_driver(requested_peer: int) -> void:
-	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == requested_peer and driver_peer_id == 0:
+	if (multiplayer.is_server()
+			and multiplayer.get_remote_sender_id() == requested_peer
+			and driver_peer_id == 0
+			and GameSession.supplies_loaded >= 3):
 		_assign_driver.rpc(requested_peer)
 
 @rpc("authority", "call_local", "reliable")
@@ -177,10 +185,15 @@ func add_fuel(value: float) -> void:
 func respawn_at(new_transform: Transform3D) -> void:
 	global_transform = new_transform
 	linear_velocity = Vector3.ZERO
-	safe_spawn_seconds = 1.5
 	angular_velocity = Vector3.ZERO
+	steering = 0.0
+	engine_force = 0.0
+	brake = 95.0
+	safe_spawn_seconds = 1.5
+	upside_down_seconds = 0.0
 	health = maxf(health, 55.0)
 	fuel = maxf(fuel, 35.0)
+	reset_physics_interpolation()
 
 func damage(value: float, source := "IMPACT") -> void:
 	if safe_spawn_seconds > 0.0:
@@ -205,12 +218,18 @@ func _simulate_driver(delta: float) -> void:
 		engine_force = throttle_input * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor
 		fuel = maxf(0.0, fuel - absf(throttle_input) * delta * 0.16)
 	brake = 95.0 if parked else (82.0 if handbrake_input else (24.0 if absf(throttle_input) < 0.05 else 0.0))
-	if global_position.y < -24.0 or global_transform.basis.y.dot(Vector3.UP) < -0.55:
-		if linear_velocity.length() < 2.0 or global_position.y < -40.0:
-			respawn_at(Net.world.last_checkpoint_transform if Net.world else start_transform)
+	var up_alignment := global_transform.basis.orthonormalized().y.dot(Vector3.UP)
+	upside_down_seconds = upside_down_seconds + delta if up_alignment < -0.35 else 0.0
+	# Recover immediately once the RV leaves the playable basin. Waiting for a
+	# falling rigid body to slow down is impossible and caused runaway speed HUDs.
+	if global_position.y < -24.0 or upside_down_seconds > 2.0:
+		respawn_at(Net.world.last_checkpoint_transform if Net.world else start_transform)
 
 func _stabilize_motion() -> void:
-	if not linear_velocity.is_finite() or not angular_velocity.is_finite():
+	if (not global_position.is_finite()
+			or not global_transform.basis.is_finite()
+			or not linear_velocity.is_finite()
+			or not angular_velocity.is_finite()):
 		respawn_at(Net.world.last_checkpoint_transform if Net.world else start_transform)
 		return
 	if linear_velocity.length() > MAX_SAFE_SPEED:

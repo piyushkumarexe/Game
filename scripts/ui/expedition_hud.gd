@@ -196,6 +196,7 @@ func _build_touch_controls(root: Control) -> void:
 	touch_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(touch_root)
 	var move_stick := VirtualStick.new()
+	move_stick.name = "MoveStick"
 	move_stick.anchor_left = 0.0
 	move_stick.anchor_top = 1.0
 	move_stick.anchor_right = 0.0
@@ -206,6 +207,7 @@ func _build_touch_controls(root: Control) -> void:
 	move_stick.offset_bottom = -18.0
 	touch_root.add_child(move_stick)
 	var look_area := TouchLookAreaScript.new()
+	look_area.name = "SwipeLookArea"
 	look_area.anchor_left = 0.30
 	look_area.anchor_top = 0.18
 	look_area.anchor_right = 1.0
@@ -232,6 +234,7 @@ func _build_touch_controls(root: Control) -> void:
 
 func _make_touch_button(text: String, action: StringName, bottom_right_offset: Vector2, hold: bool) -> Button:
 	var button := Button.new()
+	button.name = "Touch_%s" % action
 	button.text = text
 	button.anchor_left = 1.0
 	button.anchor_top = 1.0

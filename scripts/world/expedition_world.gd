@@ -50,15 +50,17 @@ func _ready() -> void:
 	players_root = Node3D.new()
 	players_root.name = "Players"
 	add_child(players_root)
-	_spawn_rv()
-	last_checkpoint_transform = rv.global_transform
-	Net.register_world(self)
 
+	# Build the complete collision surface before adding the rigid vehicle. This
+	# prevents even one physics tick against an incomplete world on slower phones.
 	_build_terrain()
 	_build_road()
 	_build_landmarks()
 	_build_scenery()
 	_build_mission_props()
+	_spawn_rv()
+	last_checkpoint_transform = rv.global_transform
+	Net.register_world(self)
 	call_deferred("_verify_playable_view")
 	if OS.has_feature("android"):
 		OS.request_permissions()
@@ -114,7 +116,9 @@ func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	var player: ExpeditionPlayer = PlayerScript.new()
 	players_root.add_child(player)
 	var index := players.size()
-	var spawn := ROUTE[0] + Vector3(-3.0 + index * 1.4, 1.0, 8.5)
+	var spawn_x := ROUTE[0].x - 3.0 + index * 1.4
+	var spawn_z := ROUTE[0].z + 8.5
+	var spawn := Vector3(spawn_x, terrain_height(spawn_x, spawn_z) + 0.12, spawn_z)
 	player.setup(peer_id, player_name, role, spawn)
 	players[peer_id] = player
 
@@ -465,7 +469,9 @@ func _create_checkpoint(position: Vector3, index: int, title: String, size: Vect
 func _on_checkpoint_entered(body: Node, index: int, title: String, checkpoint_position: Vector3) -> void:
 	if body != rv or (Net.is_online and not multiplayer.is_server()):
 		return
-	last_checkpoint_transform = Transform3D(rv.global_transform.basis.orthonormalized(), checkpoint_position + Vector3.UP * 1.28)
+	var safe_height := terrain_height(checkpoint_position.x, checkpoint_position.z) + 1.25
+	last_checkpoint_transform = Transform3D(rv.global_transform.basis.orthonormalized(),
+		Vector3(checkpoint_position.x, safe_height, checkpoint_position.z))
 	GameSession.set_checkpoint(index, title)
 	if index == 4:
 		GameSession.complete_target("finish")
@@ -474,7 +480,10 @@ func _spawn_rv() -> void:
 	rv = RVScript.new()
 	add_child(rv)
 	var basis := Basis(Vector3.UP, PI)
-	rv.setup(Transform3D(basis, ROUTE[0] + Vector3(2.2, 1.28, -2.0)))
+	var spawn_x := ROUTE[0].x + 2.2
+	var spawn_z := ROUTE[0].z - 2.0
+	var spawn := Vector3(spawn_x, terrain_height(spawn_x, spawn_z) + 1.25, spawn_z)
+	rv.setup(Transform3D(basis, spawn))
 	GameSession.rv = rv
 
 func _nearest_route_data(point: Vector2) -> Vector3:

@@ -184,12 +184,6 @@ func _run_expedition_smoke_test() -> void:
 	Net.start_solo()
 	_start_expedition()
 	await get_tree().create_timer(3.0).timeout
-	# Capture the 3D viewport without CanvasLayer UI. The resulting proof cannot
-	# pass merely because HUD elements rendered over an empty world.
-	if active_hud and is_instance_valid(active_hud):
-		active_hud.visible = false
-	await get_tree().process_frame
-	await RenderingServer.frame_post_draw
 	var failures: Array[String] = []
 	if not active_world or not is_instance_valid(active_world):
 		failures.append("expedition world missing")
@@ -197,14 +191,67 @@ func _run_expedition_smoke_test() -> void:
 		failures.append("local player missing")
 	if not GameSession.rv or not is_instance_valid(GameSession.rv):
 		failures.append("physics RV missing")
-	if GameSession.local_player and (not GameSession.local_player.third_camera or not GameSession.local_player.spring_arm):
-		failures.append("first/third-person camera rig missing")
+
+	# Exercise both camera modes instead of merely checking that camera nodes
+	# exist. The screenshot is intentionally captured in third person so the
+	# player, detailed RV exterior and collision-aware chase framing are proven.
+	if GameSession.local_player and is_instance_valid(GameSession.local_player):
+		var local_player: ExpeditionPlayer = GameSession.local_player as ExpeditionPlayer
+		if not local_player.first_camera or not local_player.third_camera or not local_player.spring_arm:
+			failures.append("first/third-person camera rig missing")
+		elif get_viewport().get_camera_3d() != local_player.first_camera:
+			failures.append("first-person camera was not initially current")
+		else:
+			local_player._apply_camera_mode(true)
+			await get_tree().process_frame
+			if not local_player.third_person or get_viewport().get_camera_3d() != local_player.third_camera:
+				failures.append("third-person camera toggle did not become current")
+			if not local_player.body_visual.visible:
+				failures.append("third-person crew model is hidden")
+
+	# Guard the exact runaway/falling regression reported from the phone build.
+	if GameSession.rv and is_instance_valid(GameSession.rv):
+		var smoke_rv: ExpeditionRV = GameSession.rv as ExpeditionRV
+		var parked_speed := smoke_rv.linear_velocity.length()
+		var spawn_drift := smoke_rv.global_position.distance_to(smoke_rv.start_transform.origin)
+		if parked_speed > 3.5:
+			failures.append("parked RV is unstable (%.2f m/s)" % parked_speed)
+		if spawn_drift > 3.0:
+			failures.append("parked RV drifted %.2f m from spawn" % spawn_drift)
+		if smoke_rv.health < 99.0:
+			failures.append("RV took false spawn damage (%.1f health)" % smoke_rv.health)
+		if GameSession.local_player and is_instance_valid(GameSession.local_player):
+			smoke_rv.interact(GameSession.local_player)
+		if smoke_rv.driver_peer_id != 0:
+			failures.append("unpacked RV allowed a driver or started occupied")
+
+	if active_hud and is_instance_valid(active_hud):
+		if not active_hud.find_child("MoveStick", true, false):
+			failures.append("left movement stick missing")
+		if not active_hud.find_child("SwipeLookArea", true, false):
+			failures.append("swipe camera-look area missing")
+		if not active_hud.find_child("Touch_toggle_view", true, false):
+			failures.append("touch first/third-person button missing")
+	var test_swipe := Vector2(13.0, -7.0)
+	GameSession.add_touch_look(test_swipe)
+	if not GameSession.consume_touch_look().is_equal_approx(test_swipe):
+		failures.append("touch swipe delta was not delivered")
+	if not GameSession.consume_touch_look().is_zero_approx():
+		failures.append("touch swipe delta was not consumed exactly once")
+
 	if active_world:
 		var terrain := active_world.find_child("RedmesaTerrain", true, false) as MeshInstance3D
 		if not terrain:
 			failures.append("generated terrain missing")
 		elif not (terrain.material_override is StandardMaterial3D):
 			failures.append("terrain is not using the Android-safe standard material")
+
+	# Capture the 3D viewport without CanvasLayer UI. The resulting proof cannot
+	# pass merely because HUD elements rendered over an empty world.
+	if active_hud and is_instance_valid(active_hud):
+		active_hud.visible = false
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
 	var current_camera := get_viewport().get_camera_3d()
 	if not current_camera:
 		failures.append("current 3D camera missing")
