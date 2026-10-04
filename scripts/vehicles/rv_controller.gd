@@ -264,10 +264,27 @@ func damage(value: float, source := "IMPACT") -> void:
 
 func _apply_grounded_stability(_delta: float) -> void:
 	var contact_count := 0
+	var terrain_support_count := 0
 	for child: Node in get_children():
-		if child is VehicleWheel3D and (child as VehicleWheel3D).is_in_contact():
+		if not child is VehicleWheel3D:
+			continue
+		var wheel := child as VehicleWheel3D
+		if wheel.is_in_contact():
 			contact_count += 1
-	if contact_count < 2:
+		# Compatibility-renderer/mobile physics occasionally misses the first
+		# VehicleWheel suspension ray after unfreezing a heavy body. Apply a real
+		# spring force at each tire patch from the same analytic terrain surface;
+		# unlike a height teleport, this preserves weight transfer, roll and bumps.
+		if Net.world and Net.world.has_method("terrain_height"):
+			var ground_height := float(Net.world.terrain_height(wheel.global_position.x, wheel.global_position.z))
+			var clearance := wheel.global_position.y - ground_height
+			var compression := maxf(0.0, 0.68 - clearance)
+			if compression > 0.0:
+				var spring_force := compression * mass * 20.0 - linear_velocity.y * mass * 0.22
+				spring_force = clampf(spring_force, 0.0, mass * 7.0)
+				apply_force(Vector3.UP * spring_force, wheel.global_position - global_position)
+				terrain_support_count += 1
+	if maxi(contact_count, terrain_support_count) < 2:
 		return
 	# A tall camper needs anti-roll resistance, not teleporting orientation.
 	# Gentle torque keeps weight transfer and bumps while preventing the violent
