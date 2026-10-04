@@ -275,7 +275,7 @@ func _run_expedition_smoke_test() -> void:
 						failures.append("professional head/outfit skeletons did not import")
 					elif not local_player.body_rig.animation_skeleton or not local_player.body_rig.animation_player:
 						failures.append("authored Quaternius animation rig did not import")
-					elif local_player.body_rig.current_clip != "Walk_Carry_Loop":
+					elif local_player.body_rig.current_clip != "Walk_Carry":
 						failures.append("moving crew did not play an authored locomotion clip (%s)" % local_player.body_rig.current_clip)
 					else:
 						var source_skeleton := local_player.body_rig.animation_skeleton

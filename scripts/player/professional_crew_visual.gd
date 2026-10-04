@@ -55,7 +55,7 @@ func _build_character() -> void:
 
 	_build_head_accessories()
 	_configure_animation_loops()
-	_play_clip("Idle_No_Loop", 1.0, 0.0)
+	_play_clip("Idle_No", 1.0, 0.0)
 	_copy_animation_pose()
 
 func _find_skeleton(node: Node) -> Skeleton3D:
@@ -144,7 +144,7 @@ func _resolve_clip(requested: String) -> StringName:
 func _configure_animation_loops() -> void:
 	if not animation_player:
 		return
-	for requested in ["Idle_No_Loop", "Walk_Carry_Loop", "NinjaJump_Idle_Loop"]:
+	for requested in ["Idle_No", "Walk_Carry", "NinjaJump_Idle"]:
 		var clip := _resolve_clip(requested)
 		if not clip.is_empty():
 			animation_player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
@@ -180,15 +180,15 @@ func set_locomotion(state: String, horizontal_speed: float, _vertical_speed: flo
 	current_state = state
 	match state:
 		"Walk":
-			_play_clip("Walk_Carry_Loop", clampf(horizontal_speed / 4.4, 0.75, 1.25))
+			_play_clip("Walk_Carry", clampf(horizontal_speed / 4.4, 0.75, 1.25))
 		"Run":
-			_play_clip("Walk_Carry_Loop", clampf(horizontal_speed / 4.4, 1.35, 1.85), 0.10)
+			_play_clip("Walk_Carry", clampf(horizontal_speed / 4.4, 1.35, 1.85), 0.10)
 		"Jump":
 			_play_clip("NinjaJump_Start", 1.0, 0.08)
 		"Jump_Idle":
-			_play_clip("NinjaJump_Idle_Loop", 1.0, 0.08)
+			_play_clip("NinjaJump_Idle", 1.0, 0.08)
 		"Jump_Land":
 			_play_clip("NinjaJump_Land", 1.0, 0.06)
 		_:
-			_play_clip("Idle_No_Loop", 1.0)
+			_play_clip("Idle_No", 1.0)
 	_copy_animation_pose()
