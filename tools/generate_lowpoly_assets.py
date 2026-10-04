@@ -816,14 +816,16 @@ def convert_obj_to_gltf(source: Path) -> None:
                     "EntryDoor", "EntryDoorGlass", "EntryDoorHandle",
                     "GearLever", "GearKnob",
                 }
-                interior_prefixes = (
+                cockpit_interior_prefixes = (
                     "CabInterior", "Dashboard", "Instrument", "Gauge", "CenterConsole",
                     "Navigation", "ConsoleControl", "Pedal", "Driver", "Passenger",
-                    "CabOverhead", "SunVisor", "RearView", "Interior", "CabDivider",
-                    "Kitchen", "Stove", "Dinette", "RearBed", "RearMattress",
-                    "RearBlanket", "RearOverhead", "RearCabinet", "RouteMap",
-                    "FireExtinguisher", "Extinguisher", "Refrigerator", "Fridge",
-                    "GearGate",
+                    "CabOverhead", "SunVisor", "RearView", "GearGate",
+                )
+                interior_prefixes = (
+                    "Interior", "CabDivider", "Kitchen", "Stove", "Dinette",
+                    "RearBed", "RearMattress", "RearBlanket", "RearOverhead",
+                    "RearCabinet", "RouteMap", "FireExtinguisher", "Extinguisher",
+                    "Refrigerator", "Fridge",
                 )
                 cockpit_frame_prefixes = (
                     "Windshield", "CabSideGlass", "CabWindowLowerTrim",
@@ -832,6 +834,8 @@ def convert_obj_to_gltf(source: Path) -> None:
                 )
                 if authored_name in dynamic_components:
                     object_name = authored_name
+                elif authored_name.startswith(cockpit_interior_prefixes):
+                    object_name = "StaticCockpitInterior"
                 elif authored_name.startswith(interior_prefixes):
                     object_name = "StaticRVInterior"
                 elif authored_name.startswith(cockpit_frame_prefixes):

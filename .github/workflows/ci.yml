@@ -50,7 +50,7 @@ jobs:
           assert motorhome_triangles >= 42000, motorhome_triangles
           assert wheel_triangles >= 1500, wheel_triangles
           assert not {17, 19, 21} & set(motorhome['nodes'][2]['children']), 'baked axle pairs still render'
-          assert {'StaticRVInterior', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor'} <= {node.get('name') for node in interior['nodes']}
+          assert {'StaticRVInterior', 'StaticCockpitInterior', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor'} <= {node.get('name') for node in interior['nodes']}
           assert len(head.get('skins', [])) == 1 and len(outfit.get('skins', [])) == 1
           assert 72 not in outfit['nodes'][74]['children'], 'Ranger hood intersects expedition cap'
           assert head['accessors'][head['meshes'][2]['primitives'][0]['indices']]['count'] // 3 >= 3000
@@ -82,7 +82,10 @@ jobs:
           xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
-            test -s build/validation/expedition-render.png && test -s build/validation/rv-cockpit-render.png
+            test -s build/validation/expedition-render.png \
+              && test -s build/validation/rv-cockpit-render.png \
+              && test -s build/validation/rv-doorway-render.png \
+              && test -s build/validation/character-face-render.png
             status=$?
           fi
           {
@@ -101,7 +104,8 @@ jobs:
         if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
-          for source in build/validation/expedition-render.png build/validation/rv-cockpit-render.png; do
+          for source in build/validation/expedition-render.png build/validation/rv-cockpit-render.png \
+                        build/validation/rv-doorway-render.png build/validation/character-face-render.png; do
             label=$(basename "$source" .png)
             convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
             encoded=$(base64 -w0 "/tmp/${label}.jpg")

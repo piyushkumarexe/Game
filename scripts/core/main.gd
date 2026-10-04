@@ -313,6 +313,23 @@ func _run_expedition_smoke_test() -> void:
 			else:
 				failures.append("JUMP touch button missing")
 
+			# Dedicated front-facing proof catches facial proportion, eye spacing,
+			# accessory placement and accidental bind/A-pose regressions that a rear
+			# gameplay camera cannot reveal.
+			if local_player.body_visual and local_player.body_visual.visible:
+				var character_camera := Camera3D.new()
+				character_camera.name = "CharacterAcceptanceCamera"
+				character_camera.fov = 46.0
+				character_camera.near = 0.05
+				active_world.add_child(character_camera)
+				var character_target := local_player.body_visual.global_position + Vector3.UP * 1.22
+				var character_front := local_player.body_visual.global_transform.basis.z.normalized()
+				character_camera.global_position = character_target + character_front * 2.65 + Vector3.UP * 0.14
+				character_camera.look_at(character_target, Vector3.UP)
+				await _save_staged_render(character_camera, "res://build/validation/character-face-render.png")
+				character_camera.queue_free()
+				local_player.third_camera.make_current()
+
 	# Guard the exact runaway/falling regression reported from the phone build.
 	if GameSession.rv and is_instance_valid(GameSession.rv):
 		var smoke_rv: ExpeditionRV = GameSession.rv as ExpeditionRV
@@ -365,6 +382,19 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("open RV door does not provide a physical cabin path")
 			if active_world.constrain_player_position(cabin_probe, cabin_probe).distance_to(cabin_probe) > 0.05:
 				failures.append("connected RV living interior rejects an upright player")
+			# Side-on acceptance frame must visibly show the open panel, all three
+			# steps, unobstructed threshold and connected modeled living space.
+			var doorway_camera := Camera3D.new()
+			doorway_camera.name = "DoorwayAcceptanceCamera"
+			doorway_camera.fov = 55.0
+			doorway_camera.near = 0.05
+			active_world.add_child(doorway_camera)
+			var doorway_target := smoke_rv.global_transform * Vector3(1.05, 0.88, 0.98)
+			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.10, 1.55, 2.90)
+			doorway_camera.look_at(doorway_target, smoke_rv.global_transform.basis.y.normalized())
+			await _save_staged_render(doorway_camera, "res://build/validation/rv-doorway-render.png")
+			doorway_camera.queue_free()
+			GameSession.local_player.camera.make_current()
 		smoke_rv.set_entry_door_open(false)
 		if GameSession.local_player and is_instance_valid(GameSession.local_player):
 			smoke_rv.interact(GameSession.local_player)
@@ -494,7 +524,7 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("driver-eye first-person camera did not become current")
 			if not cockpit_rv.body_shell.visible:
 				failures.append("first-person incorrectly hid the world-space RV model")
-			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.30, -2.30)
+			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.30, -2.85)
 			if cockpit_player.first_camera.global_position.distance_to(expected_eye) > 0.24:
 				failures.append("driver camera is not located in the modeled cockpit")
 			for cockpit_part in ["CockpitSteeringWheel", "StaticRVInterior", "GearLever"]:
@@ -530,6 +560,15 @@ func _run_expedition_smoke_test() -> void:
 				cockpit_image.save_png("res://build/validation/rv-cockpit-render.png")
 	print("3D_RENDER_SMOKE camera=%s meshes=%d failures=%s" % [get_viewport().get_camera_3d().name if get_viewport().get_camera_3d() else "none", mesh_count, failures])
 	get_tree().quit(0 if failures.is_empty() else 1)
+
+func _save_staged_render(staged_camera: Camera3D, output_path: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build/validation"))
+	staged_camera.make_current()
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	var staged_image := get_viewport().get_texture().get_image()
+	if not staged_image.is_empty():
+		staged_image.save_png(output_path)
 
 func _show_results(success: bool) -> void:
 	var results := CanvasLayer.new()

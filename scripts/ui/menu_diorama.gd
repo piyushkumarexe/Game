@@ -121,6 +121,9 @@ func _build_rig() -> void:
 	var old_shell := interior.find_child("StaticRVExterior", true, false) as Node3D
 	if old_shell:
 		old_shell.visible = false
+	var old_cockpit := interior.find_child("StaticCockpitInterior", true, false) as Node3D
+	if old_cockpit:
+		old_cockpit.visible = false
 	var old_frame := interior.find_child("StaticCockpitFrame", true, false) as Node3D
 	if old_frame:
 		old_frame.visible = false

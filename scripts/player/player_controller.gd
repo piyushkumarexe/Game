@@ -278,7 +278,7 @@ func enter_driver(vehicle: Node) -> void:
 	# Gamer-facing rear three-quarter view: the pivot stays near window height and
 	# the arm trails just beyond the eight-metre coach. The previous high pivot
 	# turned the physical phone view into an unusable roof inspection camera.
-	spring_arm.spring_length = 7.6
+	spring_arm.spring_length = 10.8
 	spring_arm.position = Vector3(-0.40, -0.05, 0.30)
 	spring_arm.rotation = Vector3(-0.08, 0.22, 0.0)
 	third_camera.fov = 68.0

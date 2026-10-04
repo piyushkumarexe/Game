@@ -225,7 +225,7 @@ func driver_seat_transform() -> Transform3D:
 	# Camera eye = origin + 1.62 m. This puts the physical-device eye at 1.30 m,
 	# behind the modeled dashboard and centered in the GMC panoramic windshield,
 	# with clear distance from the seat back, header, steering rim and console.
-	return global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.32, -2.30))
+	return global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.32, -2.85))
 
 func exit_seat_transform() -> Transform3D:
 	# Exit beside the real passenger doorway rather than through the opposite wall.
@@ -518,6 +518,9 @@ func _build_rv() -> void:
 	if old_exterior:
 		old_exterior.visible = false
 	interior_shell = interior_source.find_child("StaticRVInterior", true, false) as Node3D
+	var rejected_cockpit_blocks := interior_source.find_child("StaticCockpitInterior", true, false) as Node3D
+	if rejected_cockpit_blocks:
+		rejected_cockpit_blocks.visible = false
 	cockpit_frame = interior_source.find_child("StaticCockpitFrame", true, false) as Node3D
 	if cockpit_frame:
 		cockpit_frame.visible = false

@@ -118,7 +118,7 @@ The 0.10 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus
 `.github/workflows/ci.yml`:
 
 1. imports the project and validates every GDScript;
-2. launches the actual expedition in a windowed OpenGL session, drives the mobile controls, verifies locomotion/facing, the detailed RV and both cameras, then saves chase-view and modeled-cockpit render proofs;
+2. launches the actual expedition in a windowed OpenGL session, drives the mobile controls, verifies locomotion/facing, the detailed RV and both cameras, then saves full-coach chase, open-doorway, modeled-cockpit and front-facing character proofs;
 3. exports a debug-signed Android APK and verifies its manifest is locked to landscape;
 4. exports an unsigned, build-ready iOS Xcode project archive.
 
