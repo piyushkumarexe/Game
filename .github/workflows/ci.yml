@@ -94,6 +94,10 @@ jobs:
             tail -120 render-smoke.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          bone_proof=$(grep 'CREW_BONE_PROOF' render-smoke.log | tail -1 || true)
+          if [ -n "$bone_proof" ]; then
+            echo "::notice title=Imported crew bone pose::$bone_proof"
+          fi
           if [ "$status" -ne 0 ]; then
             detail=$(tail -100 render-smoke.log | tr '\n' '|' | cut -c 1-7000)
             detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
