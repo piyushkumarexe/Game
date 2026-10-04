@@ -33,6 +33,8 @@ func _build_character() -> void:
 	motion_root.add_child(animation_rig)
 	animation_skeleton = _find_skeleton(animation_rig)
 	animation_player = _find_animation_player(animation_rig)
+	if animation_player:
+		print("CREW_AVAILABLE_ANIMATIONS %s" % [animation_player.get_animation_list()])
 	# The animation file includes a neutral preview mannequin. Only its skeleton
 	# is used; the textured Ranger outfit and retained professional head render.
 	for candidate: Node in animation_rig.find_children("*", "GeometryInstance3D", true, false):
@@ -66,13 +68,12 @@ func _find_skeleton(node: Node) -> Skeleton3D:
 	return null
 
 func _find_animation_player(node: Node) -> AnimationPlayer:
-	if node is AnimationPlayer:
-		return node as AnimationPlayer
+	var best := node as AnimationPlayer if node is AnimationPlayer else null
 	for child: Node in node.get_children():
 		var found := _find_animation_player(child)
-		if found:
-			return found
-	return null
+		if found and (not best or found.get_animation_list().size() > best.get_animation_list().size()):
+			best = found
+	return best
 
 func _collect_target_skeletons(node: Node) -> void:
 	if node is Skeleton3D:
