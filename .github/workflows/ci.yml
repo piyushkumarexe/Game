@@ -83,10 +83,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
-            grep -Ei 'error|failed|missing|invalid|preset' android-export.log | tail -20 | while IFS= read -r line; do
-              line=${line//'%'/'%25'}; line=${line//$'\n'/'%0A'}; line=${line//$'\r'/'%0D'}
-              echo "::error file=export_presets.cfg,title=Godot Android export::$line"
-            done
+            detail=$(tail -80 android-export.log | tr '\n' '|' | cut -c 1-7000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=export_presets.cfg,title=Godot Android full log::$detail"
           fi
           exit $status
       - name: Upload Android game
@@ -126,10 +125,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
-            grep -Ei 'error|failed|missing|invalid|preset' ios-export.log | tail -20 | while IFS= read -r line; do
-              line=${line//'%'/'%25'}; line=${line//$'\n'/'%0A'}; line=${line//$'\r'/'%0D'}
-              echo "::error file=export_presets.cfg,title=Godot iOS export::$line"
-            done
+            detail=$(tail -80 ios-export.log | tr '\n' '|' | cut -c 1-7000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=export_presets.cfg,title=Godot iOS full log::$detail"
           fi
           exit $status
       - name: Upload iOS project
