@@ -121,10 +121,12 @@ func _apply_pose(stride: float, arm_swing: float, crouch: float, weight: float) 
 	# Local Z lowers the authored A-pose arms; local X supplies opposing natural
 	# gait swing. Knees flex on every planted half-cycle instead of remaining rigid.
 	for skeleton in skeletons:
+		# Lower first, then swing the hanging arm around local X. Reversing this
+		# multiplication order twisted the imported arms outward into a T-pose.
 		_set_bone(skeleton, "upperarm_l",
-			Quaternion(Vector3.FORWARD, 1.42) * Quaternion(Vector3.RIGHT, -arm_swing), weight)
+			Quaternion(Vector3.RIGHT, -arm_swing) * Quaternion(Vector3.FORWARD, 1.50), weight)
 		_set_bone(skeleton, "upperarm_r",
-			Quaternion(Vector3.FORWARD, -1.42) * Quaternion(Vector3.RIGHT, arm_swing), weight)
+			Quaternion(Vector3.RIGHT, arm_swing) * Quaternion(Vector3.FORWARD, -1.50), weight)
 		_set_bone(skeleton, "lowerarm_l", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
 		_set_bone(skeleton, "lowerarm_r", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
 		_set_bone(skeleton, "thigh_l", Quaternion(Vector3.RIGHT, stride + crouch), weight)
