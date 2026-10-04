@@ -277,6 +277,9 @@ func enter_driver(vehicle: Node) -> void:
 	spring_arm.add_excluded_object(vehicle.get_rid())
 	spring_arm.spring_length = 8.4
 	spring_arm.position = Vector3(-0.53, 1.10, 1.10)
+	# A slightly elevated three-quarter chase view exposes wheel contact and the
+	# coach side instead of staring level into the full-height rear wall.
+	spring_arm.rotation = Vector3(-0.12, 0.10, 0.0)
 	$CollisionShape3D.set_deferred("disabled", true)
 	body_visual.visible = false
 	if peer_id == multiplayer.get_unique_id():
@@ -292,6 +295,7 @@ func leave_driver(exit_transform: Transform3D) -> void:
 	spring_arm.add_excluded_object(get_rid())
 	spring_arm.spring_length = 4.2
 	spring_arm.position = Vector3(0.0, 0.30, 0.0)
+	spring_arm.rotation = Vector3.ZERO
 	global_transform = exit_transform
 	$CollisionShape3D.set_deferred("disabled", false)
 	head.rotation = Vector3.ZERO

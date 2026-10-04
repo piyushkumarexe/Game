@@ -481,7 +481,7 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("driver-eye first-person camera did not become current")
 			if not cockpit_rv.body_shell.visible:
 				failures.append("first-person incorrectly hid the world-space RV model")
-			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.38, -1.15)
+			var expected_eye: Vector3 = cockpit_rv.global_transform * Vector3(0.53, 1.48, -1.55)
 			if cockpit_player.first_camera.global_position.distance_to(expected_eye) > 0.24:
 				failures.append("driver camera is not located in the modeled cockpit")
 			for cockpit_part in ["CockpitSteeringWheel", "StaticRVInterior", "StaticCockpitFrame", "GearLever"]:

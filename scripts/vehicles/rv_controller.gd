@@ -220,10 +220,11 @@ func set_local_driver_first_person(active: bool) -> void:
 		cockpit_frame.visible = true
 
 func driver_seat_transform() -> Transform3D:
-	# The player camera is 1.62 m above its origin. This places their eyes behind
-	# the modeled right-hand-drive steering wheel with dashboard and A-pillars in
-	# view, while keeping the near plane clear of the seat and roof.
-	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.24, -1.15))
+	# The player camera is 1.62 m above its origin. Keep the eye ahead of the seat
+	# back/headrest (front is negative Z), above the wheel, and below the roof.
+	# The previous -1.15 Z position sat on the seat-back surface and rendered the
+	# upholstery as giant upper/lower slabs instead of a usable cockpit.
+	var seat := global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.14, -1.55))
 	return seat
 
 func exit_seat_transform() -> Transform3D:

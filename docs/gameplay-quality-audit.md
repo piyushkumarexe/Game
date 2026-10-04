@@ -12,7 +12,8 @@ The first 0.10 phone capture improved the character and made the cockpit readabl
 - The continuous interior includes dashboard, gauges, navigation screen, movable steering wheel, physical animated gear gate/lever, pedals, driver/passenger seats, belts, cab trim, refrigerator, kitchen, sink, stove, cabinets, dinette, rear bed, storage, map and ceiling fixtures.
 - The passenger entry door is an independently modeled mechanism with a world-space hinge, animated open/close state and physical interaction target. The coach uses a seven-piece hollow compound collider with a split passenger wall, so opening the door provides a real path into the connected cabin instead of exposing a solid invisible box.
 - Chassis/floor collision ends above the wheel contact region. Each tire has a solid inner contact core plus a damped per-wheel terrain spring fallback for missed first-frame VehicleWheel rays. CI releases the full 3.6-ton RV into physics and rejects any wheel centre that settles below the terrain-clearance gate.
-- Chase view stays centered behind the full vehicle at a non-overhead angle. Spring-arm collision excludes the occupied RV so it does not collapse into the shell.
+- Chase view uses a slightly elevated three-quarter angle that exposes the wheel contact and coach side instead of staring level into the full-height rear wall. Spring-arm collision excludes the occupied RV so it does not collapse into the shell.
+- The driver eye sits ahead of the seat back/headrest at `(0.53, 1.48, -1.55)` in coach space; seat upholstery must not appear as giant screen-covering slabs.
 - Exterior, interior and cockpit are independently asserted in CI; chase and driver-eye screenshots are captured separately.
 
 ## Character and controls
