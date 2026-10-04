@@ -68,64 +68,42 @@ func _show_main_menu() -> void:
 	content.add_child(title)
 	var subtitle := _label("E X P E D I T I O N S", 17, Color("eea23b"), true)
 	content.add_child(subtitle)
-	var pitch := _label("ONE RIG. FOUR CREWMATES. A VERY BAD ROAD HOME.", 13, Color("d7d2c4"), true)
+	var pitch := _label("ONE DRIVER. ONE RIG. A VERY BAD ROAD HOME.", 13, Color("d7d2c4"), true)
 	pitch.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(pitch)
 	var separator := HSeparator.new()
 	separator.modulate = Color(0.9, 0.59, 0.25, 0.45)
 	content.add_child(separator)
 
-	var profile_label := _label("CREW PROFILE", 12, Color("eea23b"), true)
+	var profile_label := _label("SINGLE-PLAYER PROFILE", 12, Color("eea23b"), true)
 	content.add_child(profile_label)
-	var profile_row := HBoxContainer.new()
-	profile_row.add_theme_constant_override("separation", 10)
-	content.add_child(profile_row)
 	name_input = LineEdit.new()
 	name_input.placeholder_text = "Callsign"
 	name_input.text = GameSession.player_name
-	name_input.custom_minimum_size = Vector2(210, 44)
+	name_input.custom_minimum_size = Vector2(210, 46)
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_field(name_input)
-	profile_row.add_child(name_input)
+	content.add_child(name_input)
+	# Keep a driver-only picker object for the existing profile API, but do not
+	# expose unfinished co-op roles in this stabilization release.
 	role_picker = OptionButton.new()
-	role_picker.custom_minimum_size = Vector2(165, 44)
-	for role_name in ["DRIVER", "MECHANIC", "SCOUT", "NAVIGATOR"]:
-		role_picker.add_item(role_name)
-	role_picker.select(GameSession.selected_role)
-	_style_field(role_picker)
-	profile_row.add_child(role_picker)
+	role_picker.add_item("DRIVER")
 
-	var solo := _button("START SOLO EXPEDITION", Vector2.ZERO, Vector2(0, 53), Color("dd8f33"))
+	var solo := _button("START SINGLE-PLAYER EXPEDITION", Vector2.ZERO, Vector2(0, 58), Color("dd8f33"))
 	solo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	solo.pressed.connect(_start_solo)
 	content.add_child(solo)
-	var crew_row := HBoxContainer.new()
-	crew_row.add_theme_constant_override("separation", 10)
-	content.add_child(crew_row)
-	var host := _button("HOST CREW", Vector2.ZERO, Vector2(0, 48), Color("496e6d"))
-	host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	host.pressed.connect(_host_game)
-	crew_row.add_child(host)
-	var join := _button("JOIN CREW", Vector2.ZERO, Vector2(0, 48), Color("496e6d"))
-	join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	join.pressed.connect(_join_game)
-	crew_row.add_child(join)
-	address_input = LineEdit.new()
-	address_input.placeholder_text = "Host IP — e.g. 192.168.1.8"
-	address_input.custom_minimum_size.y = 43
-	_style_field(address_input)
-	content.add_child(address_input)
 
-	status_label = _label("SOLO IS READY • HOST/JOIN USES LAN OR DIRECT IP", 11, Color("bcb9ae"), true)
+	status_label = _label("STABILITY BUILD • MULTIPLAYER TEMPORARILY DISABLED", 11, Color("bcb9ae"), true)
 	status_label.custom_minimum_size.y = 34
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status_label)
-	var feature := _label("FIRST-PERSON 3D  •  PHYSICS RV  •  MANUAL GEARS\nREPAIRS  •  MISSIONS  •  WINCHES  •  PROXIMITY VOICE", 11, Color("f1d6a9"), true)
+	var feature := _label("SWIPE FREE-LOOK  •  FIRST/THIRD PERSON  •  PHYSICS RV\nMANUAL GEARS  •  REPAIRS  •  MISSIONS  •  WINCHES", 11, Color("f1d6a9"), true)
 	feature.add_theme_constant_override("line_spacing", 5)
 	content.add_child(feature)
 
 	var badge := Label.new()
-	badge.text = "LIVE 3D CAMPSITE  •  ORIGINAL MOBILE CO-OP"
+	badge.text = "LIVE 3D CAMPSITE  •  SINGLE-PLAYER STABILITY BUILD"
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	badge.anchor_left = 0.68
 	badge.anchor_top = 0.885
@@ -191,12 +169,22 @@ func _run_expedition_smoke_test() -> void:
 		failures.append("local player missing")
 	if not GameSession.rv or not is_instance_valid(GameSession.rv):
 		failures.append("physics RV missing")
+	if Net.is_online:
+		failures.append("single-player stability build unexpectedly enabled networking")
 
 	# Exercise both camera modes instead of merely checking that camera nodes
 	# exist. The screenshot is intentionally captured in third person so the
 	# player, detailed RV exterior and collision-aware chase framing are proven.
 	if GameSession.local_player and is_instance_valid(GameSession.local_player):
 		var local_player: ExpeditionPlayer = GameSession.local_player as ExpeditionPlayer
+		if not local_player.global_position.is_finite() or local_player.global_position.y < 1.0:
+			failures.append("player fell below the campsite (y=%.2f)" % local_player.global_position.y)
+		if not local_player.is_on_floor():
+			failures.append("player is not grounded after campsite spawn")
+		if local_player.velocity.length() > 1.5:
+			failures.append("idle player is unstable (%.2f m/s)" % local_player.velocity.length())
+		if local_player.find_child("ProximityVoice", true, false):
+			failures.append("single-player spawned a voice/network component")
 		if not local_player.first_camera or not local_player.third_camera or not local_player.spring_arm:
 			failures.append("first/third-person camera rig missing")
 		elif get_viewport().get_camera_3d() != local_player.first_camera:
@@ -208,6 +196,27 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("third-person camera toggle did not become current")
 			if not local_player.body_visual.visible:
 				failures.append("third-person crew model is hidden")
+			var yaw_before_swipe := local_player.rotation.y
+			# Send a real right-side touch sequence through Godot's input pipeline;
+			# this catches GUI focus/capture failures that direct state injection misses.
+			var touch_down := InputEventScreenTouch.new()
+			touch_down.index = 7
+			touch_down.position = Vector2(get_viewport().get_visible_rect().size.x * 0.72, 360.0)
+			touch_down.pressed = true
+			Input.parse_input_event(touch_down)
+			var touch_drag := InputEventScreenDrag.new()
+			touch_drag.index = 7
+			touch_drag.position = touch_down.position + Vector2(48.0, 0.0)
+			touch_drag.relative = Vector2(48.0, 0.0)
+			Input.parse_input_event(touch_drag)
+			var touch_up := InputEventScreenTouch.new()
+			touch_up.index = 7
+			touch_up.position = touch_drag.position
+			touch_up.pressed = false
+			Input.parse_input_event(touch_up)
+			await get_tree().physics_frame
+			if is_equal_approx(local_player.rotation.y, yaw_before_swipe):
+				failures.append("right-side touch drag did not rotate the player controller")
 
 	# Guard the exact runaway/falling regression reported from the phone build.
 	if GameSession.rv and is_instance_valid(GameSession.rv):
@@ -232,13 +241,6 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("swipe camera-look area missing")
 		if not active_hud.find_child("Touch_toggle_view", true, false):
 			failures.append("touch first/third-person button missing")
-	var test_swipe := Vector2(13.0, -7.0)
-	GameSession.add_touch_look(test_swipe)
-	if not GameSession.consume_touch_look().is_equal_approx(test_swipe):
-		failures.append("touch swipe delta was not delivered")
-	if not GameSession.consume_touch_look().is_zero_approx():
-		failures.append("touch swipe delta was not consumed exactly once")
-
 	if active_world:
 		var terrain := active_world.find_child("RedmesaTerrain", true, false) as MeshInstance3D
 		if not terrain:
@@ -290,7 +292,7 @@ func _show_results(success: bool) -> void:
 	title.position = Vector2(300, 180)
 	title.size = Vector2(680, 90)
 	results.add_child(title)
-	var detail := _label("The rig and crew made it out together." if success else "Recover the rig and try a better line.", 18, Color("c9c4b7"))
+	var detail := _label("You brought the rig home." if success else "Recover the rig and try a better line.", 18, Color("c9c4b7"))
 	detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	detail.position = Vector2(300, 276)
 	detail.size = Vector2(680, 45)
@@ -320,7 +322,7 @@ func _clear_game() -> void:
 
 func _save_profile() -> void:
 	GameSession.player_name = name_input.text.strip_edges().left(18) if not name_input.text.strip_edges().is_empty() else "Rover"
-	GameSession.selected_role = role_picker.selected
+	GameSession.selected_role = GameSession.Role.DRIVER
 
 func _button(text: String, position: Vector2, size: Vector2, color: Color) -> Button:
 	var button := Button.new()

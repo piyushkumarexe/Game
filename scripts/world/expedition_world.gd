@@ -62,16 +62,16 @@ func _ready() -> void:
 	last_checkpoint_transform = rv.global_transform
 	Net.register_world(self)
 	call_deferred("_verify_playable_view")
-	if OS.has_feature("android"):
-		OS.request_permissions()
 
 func _build_bootstrap_view() -> void:
 	var safety_floor := StaticBody3D.new()
 	safety_floor.name = "CampSafetyFloor"
-	safety_floor.position = Vector3(0.0, ROUTE[0].y - 0.8, ROUTE[0].z)
+	# A compact, hidden-under-terrain solid pad guarantees a valid starting
+	# surface even when a mobile GPU needs extra frames to finish terrain setup.
+	safety_floor.position = Vector3(0.0, ROUTE[0].y - 0.5, ROUTE[0].z)
 	var floor_mesh := MeshInstance3D.new()
 	var plane := BoxMesh.new()
-	plane.size = Vector3(58.0, 0.8, 58.0)
+	plane.size = Vector3(26.0, 0.8, 26.0)
 	floor_mesh.mesh = plane
 	var floor_material := StandardMaterial3D.new()
 	floor_material.albedo_texture = GROUND_TEXTURE
@@ -118,7 +118,10 @@ func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	var index := players.size()
 	var spawn_x := ROUTE[0].x - 3.0 + index * 1.4
 	var spawn_z := ROUTE[0].z + 8.5
-	var spawn := Vector3(spawn_x, terrain_height(spawn_x, spawn_z) + 0.12, spawn_z)
+	# Never place a character under the physical safety pad. This exact mistake
+	# caused the device screenshots where the player fell forever below camp.
+	var camp_height := maxf(terrain_height(spawn_x, spawn_z), ROUTE[0].y)
+	var spawn := Vector3(spawn_x, camp_height + 0.35, spawn_z)
 	player.setup(peer_id, player_name, role, spawn)
 	players[peer_id] = player
 
@@ -163,7 +166,12 @@ func terrain_height(x: float, z: float) -> float:
 	if z < -11.0 and z > -30.0 and x > 20.0 and x < 45.0:
 		var chasm_edge := minf(minf(absf(z + 11.0), absf(z + 30.0)), minf(absf(x - 20.0), absf(x - 45.0)))
 		result -= smoothstep(0.0, 5.0, chasm_edge) * 14.0
-	return result
+	# The route polyline points south from camp, so points just behind its first
+	# endpoint previously dropped almost six metres. Flatten a generous campsite
+	# apron to keep the player, supplies and RV on one coherent starting surface.
+	var camp_distance := Vector2(x, z).distance_to(Vector2(ROUTE[0].x, ROUTE[0].z))
+	var camp_blend := smoothstep(26.0, 16.0, camp_distance)
+	return lerpf(result, ROUTE[0].y, camp_blend)
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()

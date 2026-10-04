@@ -284,14 +284,8 @@ func _show_toast(title: String, detail: String) -> void:
 func _on_checkpoint(_index: int, title: String) -> void:
 	_show_toast("CHECKPOINT SECURED", title)
 
-func _update_roster(roster: Dictionary) -> void:
-	if roster.is_empty():
-		crew_label.text = "SOLO EXPEDITION"
-		return
-	var names: Array[String] = []
-	for id: int in roster:
-		names.append(str(roster[id]["name"]))
-	crew_label.text = "CREW %d/4\n%s" % [roster.size(), "  •  ".join(names)]
+func _update_roster(_roster: Dictionary) -> void:
+	crew_label.text = "SINGLE PLAYER\n%s" % GameSession.player_name
 
 func _status_bar(title: String, color: Color) -> ProgressBar:
 	var bar := ProgressBar.new()

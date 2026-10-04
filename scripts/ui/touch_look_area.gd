@@ -1,13 +1,17 @@
 class_name TouchLookArea
 extends Control
-## Drag-anywhere camera control for mobile. Unlike a virtual look joystick,
-## relative swipes provide direct, familiar first/third-person camera aiming.
+## Direct mobile free-look. Screen drags are observed at the viewport input
+## level so Android GUI focus/capture cannot swallow camera motion. The left
+## portion is reserved for the movement stick and taps still reach buttons.
+
+const LOOK_ZONE_START := 0.30
 
 var pointer_id := -1
 var hint_alpha := 0.72
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	set_process_input(true)
 	queue_redraw()
 	var tween := create_tween()
 	tween.tween_interval(2.2)
@@ -18,21 +22,20 @@ func _process(_delta: float) -> void:
 	if hint_alpha > 0.0:
 		queue_redraw()
 
-func _gui_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
-		if event.pressed and pointer_id < 0:
+		if event.pressed and pointer_id < 0 and _inside_look_zone(event.position):
 			pointer_id = event.index
-			accept_event()
 		elif not event.pressed and event.index == pointer_id:
 			pointer_id = -1
-			accept_event()
 	elif event is InputEventScreenDrag and event.index == pointer_id:
-		GameSession.add_touch_look(event.relative)
-		accept_event()
-	elif event is InputEventMouseButton:
-		pointer_id = 99 if event.pressed else -1
-	elif event is InputEventMouseMotion and pointer_id == 99:
-		GameSession.add_touch_look(event.relative)
+		# Do not mark the event handled: USE/VIEW/JUMP buttons must continue to
+		# receive taps, while a genuine drag still controls the camera.
+		GameSession.add_touch_look(event.relative.limit_length(150.0))
+
+func _inside_look_zone(screen_position: Vector2) -> bool:
+	var viewport_width := get_viewport_rect().size.x
+	return viewport_width > 0.0 and screen_position.x >= viewport_width * LOOK_ZONE_START
 
 func _draw() -> void:
 	if hint_alpha <= 0.01:

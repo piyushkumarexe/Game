@@ -46,7 +46,7 @@ common/physics_jitter_fix=0.5
 
 [audio]
 default_bus_layout="res://default_bus_layout.tres"
-driver/enable_input=true
+driver/enable_input=false
 
 [network]
 limits/debugger/max_queued_messages=2048

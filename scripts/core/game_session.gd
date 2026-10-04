@@ -14,12 +14,12 @@ enum Role { DRIVER, MECHANIC, SCOUT, NAVIGATOR }
 const MISSIONS: Array[Dictionary] = [
 	{"title": "PACK FOR THE DETOUR", "detail": "Load 3 supply crates into the RV.", "target": "supplies"},
 	{"title": "WAKE THE OLD RIG", "detail": "Get in the driver seat and start the engine.", "target": "engine"},
-	{"title": "CROSS DRY CREEK", "detail": "Reach the first trail marker with the whole crew.", "target": "checkpoint_1"},
+	{"title": "CROSS DRY CREEK", "detail": "Reach the first trail marker with the RV.", "target": "checkpoint_1"},
 	{"title": "THE BROKEN SPAN", "detail": "Place 2 planks, then drive over the washout.", "target": "bridge"},
 	{"title": "REPAIR AT LANTERN POST", "detail": "Use scrap to restore the RV at the ranger garage.", "target": "repair"},
 	{"title": "MUDWATER BOG", "detail": "Attach a winch and pull the RV through the mud.", "target": "winch"},
 	{"title": "LAST LIGHT PASS", "detail": "Climb the switchbacks and survive the rockfall.", "target": "checkpoint_3"},
-	{"title": "FIND ROUTE 17", "detail": "Bring the RV and every surviving crewmate home.", "target": "finish"}
+	{"title": "FIND ROUTE 17", "detail": "Bring the RV safely home.", "target": "finish"}
 ]
 
 var mode: Mode = Mode.MENU

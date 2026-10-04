@@ -1,13 +1,13 @@
 class_name ExpeditionPlayer
 extends CharacterBody3D
-## First-person co-op explorer with physical interaction and mobile controls.
+## Stable single-player explorer with first/third-person mobile controls.
 
 const WALK_SPEED := 4.4
 const SPRINT_SPEED := 7.2
 const JUMP_FORCE := 6.2
 const LOOK_SENSITIVITY := 0.0024
 const TOUCH_LOOK_SENSITIVITY := 0.0042
-const CREW_SCENE: PackedScene = preload("res://assets/third_party/kenney/mini-characters/character-male-a.glb")
+const CREW_SCENE: PackedScene = preload("res://assets/models/crew_member.gltf")
 const HANDS_SCENE: PackedScene = preload("res://assets/models/first_person_hands.gltf")
 const COCKPIT_SCENE: PackedScene = preload("res://assets/models/rv_cockpit.gltf")
 
@@ -19,6 +19,7 @@ var driven_vehicle: Node
 var carried_item := ""
 var interaction_text := ""
 var remote_target := Transform3D.IDENTITY
+var safe_position := Vector3.ZERO
 var look_pitch := 0.0
 var head: Node3D
 var camera: Camera3D
@@ -40,6 +41,7 @@ func setup(id: int, display_name: String, selected_role: int, spawn_position: Ve
 	role = selected_role
 	name = "Player_%d" % peer_id
 	position = spawn_position
+	safe_position = spawn_position
 	remote_target = transform
 	set_multiplayer_authority(peer_id)
 	_build_player()
@@ -50,10 +52,13 @@ func setup(id: int, display_name: String, selected_role: int, spawn_position: Ve
 		call_deferred("_ensure_local_camera")
 		if not OS.has_feature("mobile"):
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	voice = ProximityVoice.new()
-	voice.name = "ProximityVoice"
-	add_child(voice)
-	voice.setup(peer_id)
+	# Voice/network services stay dormant in the single-player stabilization
+	# build. The code path remains available for a later multiplayer pass.
+	if Net.is_online:
+		voice = ProximityVoice.new()
+		voice.name = "ProximityVoice"
+		add_child(voice)
+		voice.setup(peer_id)
 
 func _ensure_local_camera() -> void:
 	if peer_id != multiplayer.get_unique_id() or not is_instance_valid(camera):
@@ -87,7 +92,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		_move_on_foot(delta)
 	_update_interaction()
-	_sync_state.rpc(transform, velocity, is_driving)
+	if Net.is_online:
+		_sync_state.rpc(transform, velocity, is_driving)
 
 func _move_on_foot(delta: float) -> void:
 	var input := GameSession.movement_vector()
@@ -100,7 +106,17 @@ func _move_on_foot(delta: float) -> void:
 	elif Input.is_action_just_pressed("jump") or GameSession.consume_touch_press("jump"):
 		velocity.y = JUMP_FORCE
 	move_and_slide()
+	if is_on_floor() and global_position.y > -18.0:
+		safe_position = global_position
+	if not global_position.is_finite() or global_position.y < -18.0:
+		_recover_on_foot()
 	_apply_mobile_and_gamepad_look(delta, false)
+
+func _recover_on_foot() -> void:
+	global_position = safe_position + Vector3.UP * 0.45
+	velocity = Vector3.ZERO
+	reset_physics_interpolation()
+	GameSession.toast_requested.emit("BACK ON THE TRAIL", "Recovered at the last safe footing.")
 
 func _drive_vehicle(delta: float) -> void:
 	global_transform = driven_vehicle.driver_seat_transform()
@@ -204,6 +220,9 @@ func _sync_state(new_transform: Transform3D, new_velocity: Vector3, driving: boo
 func _build_player() -> void:
 	collision_layer = 2
 	collision_mask = 1 | 4
+	floor_snap_length = 0.42
+	floor_max_angle = deg_to_rad(52.0)
+	floor_stop_on_slope = true
 	var collision := CollisionShape3D.new()
 	collision.name = "CollisionShape3D"
 	var capsule := CapsuleShape3D.new()
@@ -214,9 +233,10 @@ func _build_player() -> void:
 	add_child(collision)
 
 	body_visual = CREW_SCENE.instantiate() as Node3D
-	body_visual.name = "TexturedCrewModel"
-	body_visual.scale = Vector3.ONE * 2.65
-	body_visual.rotation.y = PI
+	body_visual.name = "ExpeditionCrewModel"
+	# Original road-trip crew geometry has adult proportions, cap and backpack;
+	# it replaces the toy/chibi placeholder seen in the device screenshot.
+	body_visual.scale = Vector3.ONE * 0.78
 	add_child(body_visual)
 
 	head = Node3D.new()
@@ -246,6 +266,10 @@ func _build_player() -> void:
 
 	hands_visual = HANDS_SCENE.instantiate() as Node3D
 	hands_visual.name = "FirstPersonHands"
+	# Keep hands as a subtle lower-screen frame rather than the giant forearms
+	# that obscured most of the phone display.
+	hands_visual.scale = Vector3.ONE * 0.46
+	hands_visual.position = Vector3(0.0, -0.10, 0.08)
 	hands_visual.visible = false
 	camera.add_child(hands_visual)
 	cockpit_visual = COCKPIT_SCENE.instantiate() as Node3D
