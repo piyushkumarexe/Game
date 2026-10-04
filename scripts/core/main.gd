@@ -335,14 +335,18 @@ func _run_expedition_smoke_test() -> void:
 			# accessory placement and accidental bind/A-pose regressions that a rear
 			# gameplay camera cannot reveal.
 			if local_player.body_visual and local_player.body_visual.visible:
+				# Capture a settled neutral pose rather than a single-frame landing crouch;
+				# close-up proportions must represent normal gameplay presentation.
+				local_player.body_rig.set_locomotion("Idle", 0.0, 0.0, 0.0)
+				await get_tree().create_timer(0.20).timeout
 				var character_camera := Camera3D.new()
 				character_camera.name = "CharacterAcceptanceCamera"
-				character_camera.fov = 40.0
+				character_camera.fov = 38.0
 				character_camera.near = 0.05
 				active_world.add_child(character_camera)
-				var character_target := local_player.body_rig.accessory_root.global_position + Vector3.DOWN * 0.035
+				var character_target := local_player.body_rig.accessory_root.global_position + Vector3.UP * 0.07
 				var character_front := local_player.body_visual.global_transform.basis.z.normalized()
-				character_camera.global_position = character_target + character_front * 0.92
+				character_camera.global_position = character_target + character_front * 1.30
 				character_camera.look_at(character_target, Vector3.UP)
 				if active_hud:
 					active_hud.visible = false
@@ -432,10 +436,16 @@ func _run_expedition_smoke_test() -> void:
 			doorway_camera.fov = 55.0
 			doorway_camera.near = 0.05
 			active_world.add_child(doorway_camera)
-			var doorway_target := smoke_rv.global_transform * Vector3(1.05, 0.88, 0.98)
-			doorway_camera.global_position = smoke_rv.global_transform * Vector3(4.10, 1.55, 2.90)
+			var doorway_target := smoke_rv.global_transform * Vector3(1.05, 0.82, 0.98)
+			doorway_camera.global_position = smoke_rv.global_transform * Vector3(3.65, 1.68, 2.55)
 			doorway_camera.look_at(doorway_target, smoke_rv.global_transform.basis.y.normalized())
+			# The gameplay character can stand directly on this sightline after the
+			# movement test. Hide only its visual while documenting the physical entry.
+			var doorway_player := GameSession.local_player as ExpeditionPlayer
+			var doorway_player_was_visible := doorway_player.body_visual.visible
+			doorway_player.body_visual.visible = false
 			await _save_staged_render(doorway_camera, "res://build/validation/rv-doorway-render.png")
+			doorway_player.body_visual.visible = doorway_player_was_visible
 			doorway_camera.queue_free()
 			GameSession.local_player.camera.make_current()
 		smoke_rv.set_entry_door_open(false)
