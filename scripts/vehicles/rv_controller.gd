@@ -225,7 +225,7 @@ func driver_seat_transform() -> Transform3D:
 	# Camera eye = origin + 1.62 m. This puts the physical-device eye at 1.30 m,
 	# behind the modeled dashboard and centered in the GMC panoramic windshield,
 	# with clear distance from the seat back, header, steering rim and console.
-	return global_transform * Transform3D(Basis.IDENTITY, Vector3(0.53, -0.32, -2.85))
+	return global_transform * Transform3D(Basis.IDENTITY, Vector3(-0.72, -0.32, -2.85))
 
 func exit_seat_transform() -> Transform3D:
 	# Exit beside the real passenger doorway rather than through the opposite wall.
@@ -544,23 +544,29 @@ func _build_rv() -> void:
 		_add_wheel("RearAft%s" % side_name, Vector3(side * 1.16, -0.43, 2.14), false, true)
 
 func _build_steering_visual(exterior: Node3D) -> void:
+	var source_pivot := Vector3(0.53, 0.79, -2.22)
+	var target_pivot := Vector3(-0.70, 0.76, -3.02)
 	steering_visual_root = Node3D.new()
 	steering_visual_root.name = "SteeringWheelPivot"
-	steering_visual_root.position = Vector3(0.53, 0.79, -2.22)
+	steering_visual_root.position = target_pivot
 	body_shell.add_child(steering_visual_root)
 	for component_name in ["CockpitSteeringWheel", "SteeringHub", "SteeringSpokeHorizontal", "SteeringSpokeLower"]:
 		var component := exterior.find_child(component_name, true, false) as Node3D
 		if component:
+			component.position += target_pivot - source_pivot
 			component.reparent(steering_visual_root, true)
 
 func _build_gear_visual(exterior: Node3D) -> void:
+	var source_pivot := Vector3(0.10, 0.43, -2.19)
+	var target_pivot := Vector3(-0.08, 0.43, -2.62)
 	gear_visual_root = Node3D.new()
 	gear_visual_root.name = "GearLeverPivot"
-	gear_visual_root.position = Vector3(0.10, 0.43, -2.19)
+	gear_visual_root.position = target_pivot
 	body_shell.add_child(gear_visual_root)
 	for component_name in ["GearLever", "GearKnob"]:
 		var component := exterior.find_child(component_name, true, false) as Node3D
 		if component:
+			component.position += target_pivot - source_pivot
 			component.reparent(gear_visual_root, true)
 
 func _build_entry_door(exterior: Node3D) -> void:
@@ -572,6 +578,12 @@ func _build_entry_door(exterior: Node3D) -> void:
 		var component := exterior.find_child(component_name, true, false) as Node3D
 		if component:
 			component.reparent(entry_door_pivot, true)
+			if component is MeshInstance3D:
+				var door_mesh := component as MeshInstance3D
+				if component_name == "EntryDoor":
+					door_mesh.material_override = PrimitiveFactory.material(Color("c98b32"), 0.78, 0.08)
+				elif component_name == "EntryDoorHandle":
+					door_mesh.material_override = PrimitiveFactory.material(Color("c7c5bb"), 0.28, 0.82)
 	entry_door_interactable = RVDoorInteractableScript.new()
 	entry_door_interactable.name = "FunctionalEntryDoor"
 	entry_door_interactable.position = Vector3(1.58, 0.91, 0.98)

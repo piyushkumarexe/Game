@@ -13,7 +13,7 @@ The `f781fe1` physical-phone captures failed release wholesale: the procedural c
 - The source side panel/glazing is physically opened at the passenger entry. An independently modeled door uses a world-space hinge, three visible exterior treads bridge terrain to the threshold, and the seven-piece hollow collider splits around the same aperture so the route continues directly onto the modeled floor.
 - Chassis/floor collision ends above the wheel contact region. Each tire has a smaller hidden contact core plus a damped per-wheel terrain spring fallback for missed first-frame VehicleWheel rays. CI releases the full 3.6-ton RV into physics and rejects centres outside the new 0.32–0.62 m clearance envelope.
 - Chase view trails 10.8 m from a window-height, rear-right three-quarter pivot; it must frame the complete coach side and wheel contact rather than crop the rear or reproduce the roof-dominated physical screenshot. Spring-arm collision excludes the occupied RV so it does not collapse into the shell.
-- The driver eye sits at `(0.53, 1.30, -2.85)` in coach space, behind the dashboard and within the panoramic windshield, with clearance from seat back, header, steering rim and console.
+- The driver eye sits at `(-0.72, 1.30, -2.85)` in coach space, aligned to the imported left-hand driving position behind the dashboard and within the panoramic windshield, with clearance from seat back, header, steering rim and console.
 - Exterior, interior and cockpit are independently asserted in CI; chase and driver-eye screenshots are captured separately.
 
 ## Character and controls

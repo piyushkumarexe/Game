@@ -105,7 +105,7 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
           for source in build/validation/expedition-render.png build/validation/rv-cockpit-render.png \
-                        build/validation/rv-doorway-render.png build/validation/character-face-render.png; do
+                        build/validation/rv-doorway-render.png; do
             label=$(basename "$source" .png)
             convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
             encoded=$(base64 -w0 "/tmp/${label}.jpg")
@@ -117,6 +117,21 @@ jobs:
               echo "::notice title=${label}_BASE64_${part_label}::${piece}"
               part=$((part + 1))
             done
+          done
+      - name: Emit character face preview
+        if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
+        run: |
+          source=build/validation/character-face-render.png
+          label=character-face-render
+          convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
+          encoded=$(base64 -w0 "/tmp/${label}.jpg")
+          part=0
+          while [ -n "$encoded" ]; do
+            piece=${encoded:0:3500}
+            encoded=${encoded:3500}
+            printf -v part_label '%03d' "$part"
+            echo "::notice title=${label}_BASE64_${part_label}::${piece}"
+            part=$((part + 1))
           done
       - name: Upload 3D render proof
         uses: actions/upload-artifact@v7.0.1
