@@ -1,0 +1,155 @@
+extends Node
+## Shared run state and mobile input bridge.
+
+signal mission_changed(title: String, detail: String, index: int, total: int)
+signal checkpoint_reached(index: int, title: String)
+signal toast_requested(title: String, detail: String)
+signal run_finished(success: bool)
+signal local_player_ready(player: Node)
+signal touch_input_changed
+
+enum Mode { MENU, LOBBY, PLAYING, RESULTS }
+enum Role { DRIVER, MECHANIC, SCOUT, NAVIGATOR }
+
+const MISSIONS: Array[Dictionary] = [
+	{"title": "PACK FOR THE DETOUR", "detail": "Load 3 supply crates into the RV.", "target": "supplies"},
+	{"title": "WAKE THE OLD RIG", "detail": "Get in the driver seat and start the engine.", "target": "engine"},
+	{"title": "CROSS DRY CREEK", "detail": "Reach the first trail marker with the whole crew.", "target": "checkpoint_1"},
+	{"title": "THE BROKEN SPAN", "detail": "Place 2 planks, then drive over the washout.", "target": "bridge"},
+	{"title": "REPAIR AT LANTERN POST", "detail": "Use scrap to restore the RV at the ranger garage.", "target": "repair"},
+	{"title": "MUDWATER BOG", "detail": "Attach a winch and pull the RV through the mud.", "target": "winch"},
+	{"title": "LAST LIGHT PASS", "detail": "Climb the switchbacks and survive the rockfall.", "target": "checkpoint_3"},
+	{"title": "FIND ROUTE 17", "detail": "Bring the RV and every surviving crewmate home.", "target": "finish"}
+]
+
+var mode: Mode = Mode.MENU
+var mission_index: int = 0
+var checkpoint_index: int = 0
+var supplies_loaded: int = 0
+var planks_placed: int = 0
+var local_player: Node
+var rv: Node
+var world: Node
+var mobile_move := Vector2.ZERO
+var mobile_look := Vector2.ZERO
+var mobile_actions: Dictionary = {}
+var player_name: String = "Rover"
+var selected_role: Role = Role.DRIVER
+var reduced_graphics: bool = false
+
+func _ready() -> void:
+	_create_input_actions()
+	reduced_graphics = OS.has_feature("mobile")
+
+func reset_run() -> void:
+	mission_index = 0
+	checkpoint_index = 0
+	supplies_loaded = 0
+	planks_placed = 0
+	local_player = null
+	rv = null
+	world = null
+	mode = Mode.PLAYING
+	_emit_mission()
+
+func complete_target(target: String) -> bool:
+	if mission_index >= MISSIONS.size():
+		return false
+	if str(MISSIONS[mission_index]["target"]) != target:
+		return false
+	mission_index += 1
+	if mission_index >= MISSIONS.size():
+		run_finished.emit(true)
+	else:
+		_emit_mission()
+	Net.broadcast_progress()
+	return true
+
+func set_checkpoint(index: int, title: String) -> void:
+	if index <= checkpoint_index:
+		return
+	checkpoint_index = index
+	checkpoint_reached.emit(index, title)
+	toast_requested.emit("CHECKPOINT SECURED", title + " — run state saved")
+	if not complete_target("checkpoint_%d" % index):
+		Net.broadcast_progress()
+
+func register_local_player(player: Node) -> void:
+	local_player = player
+	local_player_ready.emit(player)
+
+func set_touch_action(action: StringName, pressed: bool) -> void:
+	mobile_actions[action] = pressed
+	touch_input_changed.emit()
+
+func touch_action(action: StringName) -> bool:
+	return bool(mobile_actions.get(action, false))
+
+func movement_vector() -> Vector2:
+	var keyboard := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	return mobile_move if mobile_move.length_squared() > keyboard.length_squared() else keyboard
+
+func look_vector() -> Vector2:
+	var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+	return mobile_look if mobile_look.length_squared() > stick.length_squared() else stick
+
+func is_action_pressed(action: StringName) -> bool:
+	return Input.is_action_pressed(action) or touch_action(action)
+
+func is_action_just_pressed(action: StringName) -> bool:
+	return Input.is_action_just_pressed(action) or bool(mobile_actions.get(StringName("just_" + str(action)), false))
+
+func consume_touch_press(action: StringName) -> bool:
+	var key := StringName("just_" + str(action))
+	if not bool(mobile_actions.get(key, false)):
+		return false
+	mobile_actions[key] = false
+	return true
+
+func pulse_touch_action(action: StringName) -> void:
+	mobile_actions[StringName("just_" + str(action))] = true
+
+func _emit_mission() -> void:
+	var mission: Dictionary = MISSIONS[mission_index]
+	mission_changed.emit(str(mission["title"]), str(mission["detail"]), mission_index + 1, MISSIONS.size())
+	toast_requested.emit(str(mission["title"]), str(mission["detail"]))
+
+func _create_input_actions() -> void:
+	_bind_keys("move_forward", [KEY_W, KEY_UP])
+	_bind_keys("move_back", [KEY_S, KEY_DOWN])
+	_bind_keys("move_left", [KEY_A, KEY_LEFT])
+	_bind_keys("move_right", [KEY_D, KEY_RIGHT])
+	_bind_keys("jump", [KEY_SPACE])
+	_bind_keys("interact", [KEY_E])
+	_bind_keys("sprint", [KEY_SHIFT])
+	_bind_keys("primary", [KEY_F])
+	_bind_keys("winch_front", [KEY_Q])
+	_bind_keys("winch_rear", [KEY_R])
+	_bind_keys("shift_up", [KEY_X])
+	_bind_keys("shift_down", [KEY_Z])
+	_bind_keys("handbrake", [KEY_SPACE])
+	_bind_keys("pause", [KEY_ESCAPE])
+	_add_joy_axis("move_left", JOY_AXIS_LEFT_X, -1.0)
+	_add_joy_axis("move_right", JOY_AXIS_LEFT_X, 1.0)
+	_add_joy_axis("move_forward", JOY_AXIS_LEFT_Y, -1.0)
+	_add_joy_axis("move_back", JOY_AXIS_LEFT_Y, 1.0)
+	_add_joy_axis("look_left", JOY_AXIS_RIGHT_X, -1.0)
+	_add_joy_axis("look_right", JOY_AXIS_RIGHT_X, 1.0)
+	_add_joy_axis("look_up", JOY_AXIS_RIGHT_Y, -1.0)
+	_add_joy_axis("look_down", JOY_AXIS_RIGHT_Y, 1.0)
+
+func _bind_keys(action: StringName, keys: Array) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action, 0.2)
+	for key_code: Key in keys:
+		var event := InputEventKey.new()
+		event.physical_keycode = key_code
+		InputMap.action_add_event(action, event)
+
+func _add_joy_axis(action: StringName, axis: JoyAxis, value: float) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action, 0.2)
+	var event := InputEventJoypadMotion.new()
+	event.axis = axis
+	event.axis_value = value
+	InputMap.action_add_event(action, event)

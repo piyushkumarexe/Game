@@ -1,104 +1,106 @@
-# Dustbound RV — Android & iOS
+# Dustbound Expeditions
 
-An original physics road-trip game packaged as installable mobile apps. Guide a tired old RV across ravines, pine passes, boulder fields, and one final ridge before sunset.
+A true 3D, first-person, 1–4 player mobile co-op physics adventure built with Godot 4.7.2.
 
-**This repository now builds Android and iOS apps—not a GitHub Pages website or PWA.** The complete game renderer, fonts, art, sound system, and route are bundled inside each native package, so gameplay does not require a network connection.
+This branch replaces the earlier 2D prototype. The current project is a playable **3D vertical slice** with an original map, physical RV, multiplayer, proximity voice, missions, recovery tools, hazards, native touch controls, and Android/iOS export configuration.
 
-> Dustbound RV has original branding, code, procedural art, generated mobile artwork, sounds, and level design. It is inspired by the chaotic road-trip genre without copying another game's protected textures, models, audio, or maps.
+> This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
-## Download a GitHub build
+## The expedition
 
-Open the latest **Android and iOS Builds** workflow run under the repository's **Actions** tab and download one of these artifacts:
+Your crew leaves Redmesa Trail Camp in one shared, unreliable RV. Pack the supplies, assign roles, and find Route 17 before the rig comes apart.
 
-- `dustbound-rv-android`
-  - `dustbound-rv.apk` — install directly on an Android phone for testing
-  - `dustbound-rv.aab` — Android App Bundle for build validation
-- `dustbound-rv-ios`
-  - `dustbound-rv-ios-simulator.zip` — compiled iPhone/iPad Simulator app
+The handcrafted route contains:
 
-Apple requires an Apple Developer signing identity and provisioning profile before an iOS app can be installed on a physical device or submitted to TestFlight. The included Xcode project is ready to be signed under your Apple team.
+1. **Redmesa Trail Camp** — load three supply crates and start the RV.
+2. **Dry Creek Overlook** — learn the weight and manual gearbox.
+3. **Broken Span** — carry and secure two planks across a ravine.
+4. **Lantern Post Garage** — repair the frame and collect fuel.
+5. **Mudwater Bog** — attach a front or rear cable and winch through.
+6. **Last Light Pass** — climb switchbacks through wildlife and rockfall.
+7. **Route 17 Exit** — get the RV and crew home.
+
+## Implemented systems
+
+### 3D vehicle
+
+- Four-wheel `VehicleBody3D` RV with suspension, steering and rear-wheel traction
+- Reverse, neutral and five forward gear ratios
+- Fuel, layered health, impact damage and performance degradation
+- Breakable/damage-reactive exterior details
+- Synthesized positional engine audio
+- Server-authoritative transform and status synchronization
+
+### Co-op
+
+- 1–4 players using Godot ENet multiplayer
+- Host and join by LAN/direct IP on UDP port `24817`
+- Named crew roster and Driver/Mechanic/Scout/Navigator roles
+- Replicated first-person players, RV, wildlife, interactions and progress
+- Positional proximity voice chat with mobile microphone permission
+- Shared missions and checkpoints
+
+Direct-IP internet games require the host to forward UDP `24817`. A production release should add a relay/lobby service for zero-configuration internet matchmaking.
+
+### Recovery and missions
+
+- Independent front and rear physics winches
+- Environmental cable anchors and progressive cable tension
+- Carryable bridge planks and networked placement sockets
+- Supply crates, fuel cans and a repair garage
+- Checkpoint recovery for the RV
+- Eight-step cooperative mission chain
+- Ridge-boar AI and a triggered physics rockfall
+
+### Mobile presentation
+
+- Locked landscape layout
+- Dual virtual sticks for movement/driving and camera control
+- Touch actions for interaction, sprint, jump, gears and both winches
+- Mission, crew, speed, gear, fuel and RV-integrity HUD
+- OpenGL compatibility renderer and reduced mobile terrain density
+- Original procedural low-poly props and terrain shader
+- Original generated app/key artwork, with no remote runtime assets
 
 ## Controls
 
-| Touch control | Keyboard during development | Action |
+| Action | Touch | Keyboard/gamepad |
 |---|---|---|
-| **Drive** | `W` / `↑` | Accelerate |
-| **Brake** | `S` / `↓` | Brake and reverse |
-| **Tilt** | `A D` / `← →` | Balance the RV in the air |
-| **Cable** | `Space` | Pull out of a bad climb |
-| **Patch** | Touch button | Spend two parts to repair |
-| Pause | `P` | Pause the run |
+| Walk / drive | Left stick | `WASD` / left stick |
+| Look | Right stick | Mouse / right stick |
+| Interact / enter / exit | **USE** | `E` |
+| Jump | **JUMP** | `Space` |
+| Sprint | **SPRINT** | `Shift` |
+| Shift down / up | **GEAR − / +** | `Z / X` |
+| Front cable | **FRONT CABLE** | `Q` |
+| Rear cable | **REAR CABLE** | `R` |
 
-Collect fuel cans and spare parts, stop at both trail camps, and manage the rig's health. Hard landings and boulders damage the RV.
+## Engine
 
-## Mobile features
+- Godot **4.7.2 stable**
+- GDScript only; no third-party runtime plugins
+- Android 7.0+ / arm64 export preset
+- iOS 15+ Xcode export preset
+- Godot ENet networking and AudioEffectCapture voice pipeline
 
-- Android APK/AAB project targeting Android SDK 36, with Android 7.0 as the minimum
-- iOS Xcode project targeting iOS 15 and newer
-- Locked landscape orientation and immersive full-screen presentation
-- Native haptic feedback, status-bar handling, and screen-orientation integration
-- Original Android adaptive icon, iOS app icon, and native launch artwork
-- Responsive multi-touch controls and safe-area support
-- Locally bundled fonts, graphics, and synthesized Web Audio—no remote assets
-- Offline save data for best-distance progress
-- Automated Android and iOS builds on GitHub-hosted runners
+See [`docs/game-research.md`](docs/game-research.md) for the researched mechanic breakdown and the original-design boundary.
 
-## Gameplay systems
+## Run locally
 
-- Custom RV suspension, airborne rotation, traction, and terrain handling
-- A 14.4 km route across multiple biomes with dynamic lighting
-- Fuel, vehicle damage, field repairs, recovery cable, camps, and collectibles
-- Parallax scenery, dust, screen shake, audio, and mobile haptics
-
-## Technology
-
-- Phaser 4.2.1
-- Capacitor 8.5.2 with Android and iOS native projects
-- Vite 8.3.2
-- TypeScript 7.0.2 in strict mode
-- Android Gradle Plugin 8.13 / Gradle 8.14.3
-- Swift Package Manager for the iOS Capacitor runtime
-
-Direct dependency versions are pinned in `package.json` and `package-lock.json` for reproducible builds.
-
-## Development
-
-Requirements:
-
-- Node.js 22 or newer
-- Android Studio/JDK 21 for Android development
-- macOS with Xcode for iOS development
-
-Install and synchronize both native projects:
+Install Godot 4.7.2 and open `project.godot`, or run:
 
 ```bash
-npm ci
-npm run sync:native
+godot --editor --path .
 ```
 
-### Android
+For two local peers, start one instance with **HOST CREW**, then join `127.0.0.1` from the second instance.
 
-```bash
-npm run android:sync
-npm run android:open
-```
+## GitHub mobile builds
 
-Or build from the command line:
+`.github/workflows/ci.yml`:
 
-```bash
-cd android
-./gradlew assembleDebug bundleDebug
-```
+1. imports the project and validates every GDScript;
+2. exports a debug-signed Android APK;
+3. exports an iOS Xcode project archive.
 
-### iOS
-
-```bash
-npm run ios:sync
-npm run ios:open
-```
-
-Choose your signing team in Xcode before running on an iPhone or creating a TestFlight archive.
-
-## GitHub automation
-
-`.github/workflows/ci.yml` builds both platforms on pushes, pull requests, and manual workflow runs. Android produces installable APK and AAB artifacts; macOS compiles and packages the iOS Simulator app.
+The iOS project still requires an Apple Developer team, certificate, and provisioning profile before installation on a physical iPhone or TestFlight submission.

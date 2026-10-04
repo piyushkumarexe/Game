@@ -1,9 +1,26 @@
-node_modules/
-dist/
-.vite/
-*.log
+# Godot editor/import cache
+.godot/
+.import/
+
+# Native/export outputs
+build/
+exports/
+*.apk
+*.aab
+*.ipa
+*.pck
+*.xcarchive
+
+# Local signing material
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+export_credentials.cfg
+
+# OS/editor
 .DS_Store
-.env
-.env.*
-!.env.example
-coverage/
+Thumbs.db
+*.log
+.idea/
+.vscode/

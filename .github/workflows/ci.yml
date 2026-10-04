@@ -1,4 +1,4 @@
-name: Android and iOS Builds
+name: Godot Mobile Builds
 
 on:
   push:
@@ -11,22 +11,37 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-${{ github.ref }}
+  group: godot-mobile-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GODOT_VERSION: 4.7.2
+
 jobs:
-  android:
-    name: Android APK and AAB
+  validate:
+    name: Validate 3D game project
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Install Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: false
+      - name: Import resources and validate scripts
+        run: godot --headless --editor --path . --quit
+
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: validate
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
-      - name: Use Node.js 22
-        uses: actions/setup-node@v7.0.0
-        with:
-          node-version: 22
-          cache: npm
       - name: Use Java 21
         uses: actions/setup-java@v6.0.1
         with:
@@ -34,67 +49,50 @@ jobs:
           java-version: 21
       - name: Configure Android SDK
         uses: android-actions/setup-android@v4.0.4
-      - name: Configure Gradle cache
-        uses: gradle/actions/setup-gradle@v6.4.0
-      - name: Install dependencies
-        run: npm ci
-      - name: Build and sync Android project
-        run: npm run android:sync
-      - name: Build installable APK and app bundle
-        working-directory: android
-        run: ./gradlew assembleDebug bundleDebug --stacktrace
-      - name: Name Android packages
+      - name: Install Godot and export templates
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+      - name: Export debug APK
         run: |
-          mkdir -p mobile-artifacts/android
-          cp android/app/build/outputs/apk/debug/app-debug.apk mobile-artifacts/android/dustbound-rv.apk
-          cp android/app/build/outputs/bundle/debug/app-debug.aab mobile-artifacts/android/dustbound-rv.aab
-      - name: Upload Android packages
+          mkdir -p build/android
+          godot --headless --path . --export-debug Android build/android/DustboundExpeditions.apk
+      - name: Upload Android game
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: dustbound-rv-android
-          path: mobile-artifacts/android
+          name: dustbound-expeditions-android
+          path: build/android/DustboundExpeditions.apk
           if-no-files-found: error
           retention-days: 30
 
   ios:
-    name: iOS Simulator App
+    name: Export iOS Xcode project
     runs-on: macos-latest
-    timeout-minutes: 35
+    needs: validate
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
-      - name: Use Node.js 22
-        uses: actions/setup-node@v7.0.0
+      - name: Install Godot and export templates
+        uses: chickensoft-games/setup-godot@v2.4.3
         with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Build and sync iOS project
-        run: npm run ios:sync
-      - name: Resolve Swift packages
-        run: xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
-      - name: Build iOS Simulator app
-        run: >-
-          xcodebuild
-          -project ios/App/App.xcodeproj
-          -scheme App
-          -configuration Debug
-          -sdk iphonesimulator
-          -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath ios/build
-          CODE_SIGNING_ALLOWED=NO
-          build
-      - name: Package Simulator app
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+      - name: Export iOS Xcode project
         run: |
-          mkdir -p mobile-artifacts/ios
-          ditto -c -k --sequesterRsrc --keepParent \
-            ios/build/Build/Products/Debug-iphonesimulator/App.app \
-            mobile-artifacts/ios/dustbound-rv-ios-simulator.zip
-      - name: Upload iOS app
+          mkdir -p build/ios
+          godot --headless --path . --export-debug iOS build/ios/DustboundExpeditions.zip
+      - name: Upload iOS project
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: dustbound-rv-ios
-          path: mobile-artifacts/ios
+          name: dustbound-expeditions-ios-xcode
+          path: build/ios/DustboundExpeditions.zip
           if-no-files-found: error
           retention-days: 30
