@@ -84,36 +84,29 @@ func _build_expedition_accessories() -> void:
 	# Compact, correctly spaced lenses sit over the authored normal-spaced eyes.
 	for side in [-1.0, 1.0]:
 		var lens_mesh := BoxMesh.new()
-		lens_mesh.size = Vector3(0.122, 0.071, 0.018)
+		lens_mesh.size = Vector3(0.092, 0.055, 0.014)
 		var lens_instance := _mesh(motion_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.070, 1.695, 0.172), lens)
+			Vector3(side * 0.052, 1.694, 0.166), lens)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
-	bridge.size = Vector3(0.035, 0.014, 0.020)
-	_mesh(motion_root, "SunglassBridge", bridge, Vector3(0.0, 1.696, 0.174), charcoal)
-	for side in [-1.0, 1.0]:
-		var arm := BoxMesh.new()
-		arm.size = Vector3(0.10, 0.014, 0.014)
-		_mesh(motion_root, "SunglassArm", arm, Vector3(side * 0.145, 1.698, 0.132), charcoal)
+	bridge.size = Vector3(0.026, 0.010, 0.016)
+	_mesh(motion_root, "SunglassBridge", bridge, Vector3(0.0, 1.695, 0.168), charcoal)
 
 	# Lightweight padded vest panels layer over the authored Ranger body while
 	# preserving its belts, boots, gloves, normals and skinning.
 	for side in [-1.0, 1.0]:
-		var panel := SphereMesh.new()
-		panel.radius = 0.5
-		panel.height = 1.0
-		panel.radial_segments = 20
-		panel.rings = 10
-		_mesh(motion_root, "PaddedVestPanel", panel, Vector3(side * 0.105, 1.255, 0.152), vest,
-			Vector3(0.20, 0.34, 0.060))
+		var panel := BoxMesh.new()
+		panel.size = Vector3(0.17, 0.34, 0.045)
+		_mesh(motion_root, "PaddedVestPanel", panel,
+			Vector3(side * 0.10, 1.255, 0.165), vest)
 		for row in range(2):
 			var seam := BoxMesh.new()
-			seam.size = Vector3(0.165, 0.009, 0.010)
+			seam.size = Vector3(0.145, 0.008, 0.008)
 			_mesh(motion_root, "VestQuiltSeam", seam,
-				Vector3(side * 0.105, 1.185 + row * 0.135, 0.207), trim)
+				Vector3(side * 0.10, 1.185 + row * 0.135, 0.191), trim)
 	var zipper := BoxMesh.new()
-	zipper.size = Vector3(0.016, 0.38, 0.014)
-	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.255, 0.210), trim)
+	zipper.size = Vector3(0.012, 0.36, 0.010)
+	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.255, 0.193), trim)
 
 func _aim_bone(skeleton: Skeleton3D, bone_name: String, child_name: String,
 		desired_direction: Vector3, weight: float) -> void:
