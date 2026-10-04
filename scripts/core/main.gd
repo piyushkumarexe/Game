@@ -331,12 +331,12 @@ func _run_expedition_smoke_test() -> void:
 			if local_player.body_visual and local_player.body_visual.visible:
 				var character_camera := Camera3D.new()
 				character_camera.name = "CharacterAcceptanceCamera"
-				character_camera.fov = 42.0
+				character_camera.fov = 40.0
 				character_camera.near = 0.05
 				active_world.add_child(character_camera)
-				var character_target := local_player.body_visual.global_position + Vector3.UP * 1.38
+				var character_target := local_player.body_visual.global_position + Vector3.UP * 1.50
 				var character_front := local_player.body_visual.global_transform.basis.z.normalized()
-				character_camera.global_position = character_target + character_front * 2.05 + Vector3.UP * 0.05
+				character_camera.global_position = character_target + character_front * 1.25 + Vector3.UP * 0.03
 				character_camera.look_at(character_target, Vector3.UP)
 				if active_hud:
 					active_hud.visible = false

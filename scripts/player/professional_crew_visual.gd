@@ -28,6 +28,11 @@ func _build_character() -> void:
 	motion_root.add_child(outfit)
 	var head := HEAD_SCENE.instantiate() as Node3D
 	head.name = "QuaterniusProfessionalHead"
+	# Enlarge around the authored 1.70 m head centre, not around the character's
+	# feet. This keeps the facial anatomy/eye spacing intact while producing the
+	# friendly, stout road-trip silhouette rather than a tiny superhero head.
+	head.scale = Vector3.ONE * 1.22
+	head.position.y = -0.37
 	motion_root.add_child(head)
 	_collect_skeletons(outfit)
 	_collect_skeletons(head)
@@ -66,30 +71,30 @@ func _build_expedition_accessories() -> void:
 	var trim := _material(Color("e1c9a4"), 0.70)
 
 	var crown := CylinderMesh.new()
-	crown.top_radius = 0.145
-	crown.bottom_radius = 0.190
-	crown.height = 0.145
+	crown.top_radius = 0.170
+	crown.bottom_radius = 0.205
+	crown.height = 0.105
 	crown.radial_segments = 24
-	_mesh(motion_root, "ExpeditionCapCrown", crown, Vector3(0.0, 1.790, 0.002), charcoal)
+	_mesh(motion_root, "ExpeditionCapCrown", crown, Vector3(0.0, 1.815, 0.002), charcoal)
 	var brim := BoxMesh.new()
-	brim.size = Vector3(0.29, 0.035, 0.19)
-	var brim_instance := _mesh(motion_root, "ExpeditionCapBrim", brim, Vector3(0.0, 1.735, 0.120), charcoal)
+	brim.size = Vector3(0.34, 0.030, 0.19)
+	var brim_instance := _mesh(motion_root, "ExpeditionCapBrim", brim, Vector3(0.0, 1.770, 0.138), charcoal)
 	brim_instance.rotation.x = -0.08
 
 	# Compact, correctly spaced lenses sit over the authored normal-spaced eyes.
 	for side in [-1.0, 1.0]:
 		var lens_mesh := BoxMesh.new()
-		lens_mesh.size = Vector3(0.105, 0.064, 0.018)
+		lens_mesh.size = Vector3(0.122, 0.071, 0.018)
 		var lens_instance := _mesh(motion_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.061, 1.693, 0.142), lens)
+			Vector3(side * 0.070, 1.695, 0.172), lens)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
 	bridge.size = Vector3(0.035, 0.014, 0.020)
-	_mesh(motion_root, "SunglassBridge", bridge, Vector3(0.0, 1.694, 0.144), charcoal)
+	_mesh(motion_root, "SunglassBridge", bridge, Vector3(0.0, 1.696, 0.174), charcoal)
 	for side in [-1.0, 1.0]:
 		var arm := BoxMesh.new()
-		arm.size = Vector3(0.09, 0.014, 0.014)
-		_mesh(motion_root, "SunglassArm", arm, Vector3(side * 0.125, 1.696, 0.108), charcoal)
+		arm.size = Vector3(0.10, 0.014, 0.014)
+		_mesh(motion_root, "SunglassArm", arm, Vector3(side * 0.145, 1.698, 0.132), charcoal)
 
 	# Lightweight padded vest panels layer over the authored Ranger body while
 	# preserving its belts, boots, gloves, normals and skinning.
@@ -99,16 +104,16 @@ func _build_expedition_accessories() -> void:
 		panel.height = 1.0
 		panel.radial_segments = 20
 		panel.rings = 10
-		_mesh(motion_root, "PaddedVestPanel", panel, Vector3(side * 0.145, 1.235, 0.158), vest,
-			Vector3(0.29, 0.50, 0.105))
-		for row in range(3):
+		_mesh(motion_root, "PaddedVestPanel", panel, Vector3(side * 0.105, 1.255, 0.152), vest,
+			Vector3(0.20, 0.34, 0.060))
+		for row in range(2):
 			var seam := BoxMesh.new()
-			seam.size = Vector3(0.24, 0.012, 0.012)
+			seam.size = Vector3(0.165, 0.009, 0.010)
 			_mesh(motion_root, "VestQuiltSeam", seam,
-				Vector3(side * 0.145, 1.065 + row * 0.17, 0.252), trim)
+				Vector3(side * 0.105, 1.185 + row * 0.135, 0.207), trim)
 	var zipper := BoxMesh.new()
-	zipper.size = Vector3(0.022, 0.62, 0.018)
-	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.225, 0.250), trim)
+	zipper.size = Vector3(0.016, 0.38, 0.014)
+	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.255, 0.210), trim)
 
 func _set_bone(skeleton: Skeleton3D, bone_name: String, target: Quaternion, weight: float) -> void:
 	var index := skeleton.find_bone(bone_name)
