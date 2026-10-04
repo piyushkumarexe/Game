@@ -115,13 +115,6 @@ func _build_expedition_accessories() -> void:
 	zipper.size = Vector3(0.016, 0.38, 0.014)
 	_mesh(motion_root, "VestZipper", zipper, Vector3(0.0, 1.255, 0.210), trim)
 
-func _set_bone(skeleton: Skeleton3D, bone_name: String, target: Quaternion, weight: float) -> void:
-	var index := skeleton.find_bone(bone_name)
-	if index < 0:
-		return
-	var current := skeleton.get_bone_pose_rotation(index)
-	skeleton.set_bone_pose_rotation(index, current.slerp(target, clampf(weight, 0.0, 1.0)))
-
 func _aim_bone(skeleton: Skeleton3D, bone_name: String, child_name: String,
 		desired_direction: Vector3, weight: float) -> void:
 	var bone_index := skeleton.find_bone(bone_name)
@@ -149,14 +142,17 @@ func _apply_pose(stride: float, arm_swing: float, crouch: float, weight: float) 
 			Vector3(0.12, -0.98, -arm_swing * 0.62), weight)
 		_aim_bone(skeleton, "upperarm_r", "lowerarm_r",
 			Vector3(-0.12, -0.98, arm_swing * 0.62), weight)
-		_set_bone(skeleton, "lowerarm_l", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
-		_set_bone(skeleton, "lowerarm_r", Quaternion(Vector3.RIGHT, -0.16 - absf(arm_swing) * 0.18), weight)
-		_set_bone(skeleton, "thigh_l", Quaternion(Vector3.RIGHT, stride + crouch), weight)
-		_set_bone(skeleton, "thigh_r", Quaternion(Vector3.RIGHT, -stride + crouch), weight)
-		_set_bone(skeleton, "calf_l", Quaternion(Vector3.RIGHT, -maxf(0.05, -stride * 0.55) - crouch), weight)
-		_set_bone(skeleton, "calf_r", Quaternion(Vector3.RIGHT, -maxf(0.05, stride * 0.55) - crouch), weight)
-		_set_bone(skeleton, "spine_01", Quaternion(Vector3.RIGHT, -crouch * 0.35), weight)
-		_set_bone(skeleton, "Head", Quaternion(Vector3.UP, sin(phase * 0.42) * 0.025), weight)
+		# The imported rig's rolled local axes also make conventional thigh/calf
+		# rotations fold boots up through the torso. Skeleton-space targets produce
+		# a true opposing gait and a planted landing crouch.
+		_aim_bone(skeleton, "thigh_l", "calf_l",
+			Vector3(0.0, -1.0 + crouch * 0.10, -stride * 0.82), weight)
+		_aim_bone(skeleton, "thigh_r", "calf_r",
+			Vector3(0.0, -1.0 + crouch * 0.10, stride * 0.82), weight)
+		_aim_bone(skeleton, "calf_l", "foot_l",
+			Vector3(0.0, -1.0, maxf(0.0, stride) * 0.42 + crouch * 0.20), weight)
+		_aim_bone(skeleton, "calf_r", "foot_r",
+			Vector3(0.0, -1.0, maxf(0.0, -stride) * 0.42 + crouch * 0.20), weight)
 
 func set_locomotion(state: String, horizontal_speed: float, vertical_speed: float, delta: float) -> void:
 	current_state = state
