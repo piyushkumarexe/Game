@@ -134,6 +134,8 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: dustbound-expeditions-ios-xcode
-          path: build/ios/DustboundExpeditions.zip
+          # Project-only exports are an expanded .xcodeproj plus its source folder;
+          # upload-artifact packages both into the downloadable artifact archive.
+          path: build/ios/
           if-no-files-found: error
           retention-days: 30
