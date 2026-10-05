@@ -1,0 +1,293 @@
+name: Godot Mobile Builds
+
+on:
+  push:
+    branches: ['main', 'arena/**']
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
+    inputs:
+      emit_preview_log:
+        description: 'Emit compact base64 render previews for visual review'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  validate:
+    name: Validate 3D game project
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Verify professional vehicle and crew assets
+        run: |
+          # The generated scene now supplies only the connected interior and
+          # mechanisms. Rebuilding it must not restore the deleted placeholder.
+          python3 tools/generate_lowpoly_assets.py
+          test ! -e assets/models/crew_member.gltf
+          python3 - <<'PY'
+          import json
+          interior = json.load(open('assets/models/rv_exterior.gltf', encoding='utf-8'))
+          motorhome = json.load(open('assets/third_party/gmc_motorhome/motorhome.gltf', encoding='utf-8'))
+          wheel = json.load(open('assets/third_party/gmc_motorhome/wheel.gltf', encoding='utf-8'))
+          head = json.load(open('assets/third_party/quaternius_crew/crew_head.gltf', encoding='utf-8'))
+          outfit = json.load(open('assets/third_party/quaternius_crew/ranger_outfit.gltf', encoding='utf-8'))
+          assert __import__('os').path.getsize('assets/third_party/quaternius_crew/animations.glb') >= 8_000_000
+          for tree_asset in ('assets/third_party/ez_tree/pine_realistic_a.glb',
+                             'assets/third_party/ez_tree/pine_realistic_b.glb'):
+              assert __import__('os').path.getsize(tree_asset) >= 250_000, tree_asset
+          motorhome_triangles = sum(motorhome['accessors'][primitive['indices']]['count'] // 3
+                                    for mesh in motorhome['meshes'] for primitive in mesh['primitives'])
+          wheel_triangles = wheel['accessors'][wheel['meshes'][0]['primitives'][0]['indices']]['count'] // 3
+          assert motorhome_triangles >= 42000, motorhome_triangles
+          assert wheel_triangles >= 1500, wheel_triangles
+          assert not {7, 13, 17, 19, 21} & set(motorhome['nodes'][2]['children']), 'oversized source seats or baked axle pairs still render'
+          assert {'StaticRVInterior', 'StaticCockpitInterior', 'CockpitSteeringWheel', 'GearLever', 'EntryDoor'} <= {node.get('name') for node in interior['nodes']}
+          assert len(head.get('skins', [])) == 1 and len(outfit.get('skins', [])) == 1
+          assert 72 not in outfit['nodes'][74]['children'], 'Ranger hood intersects expedition cap'
+          assert head['accessors'][head['meshes'][2]['primitives'][0]['indices']]['count'] // 3 >= 3000
+          for notice in ('assets/third_party/gmc_motorhome/ATTRIBUTION.md',
+                         'assets/third_party/quaternius_crew/base-license.txt',
+                         'assets/third_party/quaternius_crew/outfits-license.txt',
+                         'assets/third_party/quaternius_crew/animations-license.txt',
+                         'assets/third_party/ez_tree/LICENSE',
+                         'assets/third_party/ez_tree/SOURCE.md'):
+              assert open(notice, encoding='utf-8').read().strip(), notice
+          controller = open('scripts/vehicles/rv_controller.gd', encoding='utf-8').read()
+          for required in ('RearForward%s', 'RearAft%s', 'wheel.wheel_radius = 0.43',
+                           'ProfessionalGMCMotorhomeExterior', '_build_entry_steps_and_frame'):
+              assert required in controller, required
+          assert 'StylizedCrewVisual' not in open('scripts/player/player_controller.gd', encoding='utf-8').read()
+          print(f'Professional assets verified: motorhome={motorhome_triangles} triangles wheel={wheel_triangles} triangles')
+          PY
+      - name: Install Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: false
+      - name: Import resources and validate scripts
+        run: godot --headless --editor --path . --quit
+      - name: Launch main scene smoke test
+        run: godot --headless --path . --quit-after 3
+      - name: Render the playable 3D expedition
+        run: |
+          mkdir -p build/validation
+          set +e
+          xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            test -s build/validation/expedition-render.png \
+              && test -s build/validation/rv-cockpit-render.png \
+              && test -s build/validation/rv-doorway-render.png \
+              && test -s build/validation/character-face-render.png \
+              && test -s build/validation/character-body-render.png
+            status=$?
+          fi
+          {
+            echo '### Playable 3D render smoke log'
+            echo '```text'
+            tail -120 render-smoke.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          crew_proof=$(grep 'CREW_ANIMATION_PROOF' render-smoke.log | tail -1 || true)
+          if [ -n "$crew_proof" ]; then
+            echo "::notice title=Authored crew animation::$crew_proof"
+          fi
+          if [ "$status" -ne 0 ]; then
+            detail=$(tail -100 render-smoke.log | tr '\n' '|' | cut -c 1-7000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=scenes/main.tscn,title=Playable 3D render smoke::$detail"
+          fi
+          exit $status
+      - name: Emit compact render previews
+        if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+          for source in build/validation/expedition-render.png build/validation/rv-cockpit-render.png; do
+            label=$(basename "$source" .png)
+            convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
+            encoded=$(base64 -w0 "/tmp/${label}.jpg")
+            part=0
+            while [ -n "$encoded" ]; do
+              piece=${encoded:0:3500}
+              encoded=${encoded:3500}
+              printf -v part_label '%03d' "$part"
+              echo "::notice title=${label}_BASE64_${part_label}::${piece}"
+              part=$((part + 1))
+            done
+          done
+      - name: Emit doorway preview
+        if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
+        run: |
+          source=build/validation/rv-doorway-render.png
+          label=$(basename "$source" .png)
+          convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
+          encoded=$(base64 -w0 "/tmp/${label}.jpg")
+          part=0
+          while [ -n "$encoded" ]; do
+            piece=${encoded:0:3500}
+            encoded=${encoded:3500}
+            printf -v part_label '%03d' "$part"
+            echo "::notice title=${label}_BASE64_${part_label}::${piece}"
+            part=$((part + 1))
+          done
+      - name: Emit character previews
+        if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
+        run: |
+          for source in build/validation/character-face-render.png build/validation/character-body-render.png; do
+            label=$(basename "$source" .png)
+            convert "$source" -resize 360x203 -strip -quality 60 "/tmp/${label}.jpg"
+            encoded=$(base64 -w0 "/tmp/${label}.jpg")
+            part=0
+            while [ -n "$encoded" ]; do
+              piece=${encoded:0:3500}
+              encoded=${encoded:3500}
+              printf -v part_label '%03d' "$part"
+              echo "::notice title=${label}_BASE64_${part_label}::${piece}"
+              part=$((part + 1))
+            done
+          done
+      - name: Upload 3D render proof
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dustbound-expedition-render-proof
+          path: build/validation/
+          if-no-files-found: error
+          retention-days: 30
+
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Use Java 17
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v4.0.4
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Godot and export templates
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Configure Godot Android paths
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+      - name: Export debug APK
+        run: |
+          mkdir -p build/android
+          set +e
+          godot --headless --path . --export-debug Android build/android/DustboundExpeditions.apk 2>&1 | tee android-export.log
+          status=${PIPESTATUS[0]}
+          {
+            echo '### Android export log'
+            echo '```text'
+            tail -100 android-export.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            detail=$(tail -80 android-export.log | tr '\n' '|' | cut -c 1-7000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=export_presets.cfg,title=Godot Android full log::$detail"
+          fi
+          exit $status
+      - name: Verify Android landscape lock
+        run: |
+          set +e
+          aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          "$aapt2" dump xmltree build/android/DustboundExpeditions.apk --file AndroidManifest.xml > android-manifest.txt 2>android-manifest-error.txt
+          dump_status=$?
+          orientation=$(grep 'screenOrientation' android-manifest.txt || true)
+          echo "aapt2 status: $dump_status"
+          echo "orientation: $orientation"
+          cat android-manifest-error.txt
+          # ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE is the integer value 0.
+          echo "$orientation" | grep -Eq '(\(type 0x10\)0x0|=0)([[:space:]]|$)'
+          status=$?
+          if [ "$dump_status" -ne 0 ] || [ "$status" -ne 0 ]; then
+            detail="aapt2 status=$dump_status; orientation=$orientation; error=$(tr '\n' '|' < android-manifest-error.txt)"
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=project.godot,title=Android landscape manifest::$detail"
+            exit 1
+          fi
+          echo 'Android manifest verified: the game activity is locked to landscape (value 0).' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Android game
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dustbound-expeditions-android
+          path: build/android/DustboundExpeditions.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: Export iOS Xcode project
+    runs-on: macos-latest
+    needs: validate
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Install Godot and export templates
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: true
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+      - name: Export iOS Xcode project
+        run: |
+          mkdir -p build/ios
+          set +e
+          godot --headless --path . --export-debug iOS build/ios/DustboundExpeditions.zip 2>&1 | tee ios-export.log
+          status=${PIPESTATUS[0]}
+          {
+            echo '### iOS export log'
+            echo '```text'
+            tail -100 ios-export.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            detail=$(tail -80 ios-export.log | tr '\n' '|' | cut -c 1-7000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=export_presets.cfg,title=Godot iOS full log::$detail"
+          fi
+          exit $status
+      - name: Upload iOS project
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dustbound-expeditions-ios-xcode
+          # Project-only exports are an expanded .xcodeproj plus its source folder;
+          # upload-artifact packages both into the downloadable artifact archive.
+          path: build/ios/
+          if-no-files-found: error
+          retention-days: 30

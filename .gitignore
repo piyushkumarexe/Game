@@ -1,0 +1,30 @@
+# Godot editor/import cache
+.godot/
+.import/
+
+# Native/export outputs
+build/
+exports/
+*.apk
+*.aab
+*.ipa
+*.pck
+*.xcarchive
+
+# Local signing material
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+export_credentials.cfg
+
+# Generated Python caches
+__pycache__/
+*.py[cod]
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
