@@ -16,6 +16,8 @@ var role := 0
 var is_driving := false
 var driven_vehicle: Node
 var carried_item := ""
+var carried_object: PhysicsCargo
+var cargo_mount: Node3D
 var interaction_text := ""
 var remote_target := Transform3D.IDENTITY
 var safe_position := Vector3.ZERO
@@ -42,6 +44,15 @@ var carried_visual: MeshInstance3D
 var hands_visual: Node3D
 var nameplate: Label3D
 var voice: ProximityVoice
+# Last observed coach pose for moving-platform transport. CharacterBody3D does
+# not automatically inherit a VehicleBody3D's full translation and rotation,
+# so passengers apply the coach delta before their own walking input.
+var previous_rv_transform := Transform3D.IDENTITY
+var rv_transform_initialized := false
+# Touch players get a short automatic clutch press around each gear change. The
+# dedicated clutch remains available for advanced starts, but routine shifting
+# does not require holding two small buttons while steering with a thumb.
+var mobile_auto_clutch_timer := 0.0
 
 func setup(id: int, display_name: String, selected_role: int, spawn_position: Vector3) -> void:
 	peer_id = id
@@ -93,6 +104,7 @@ func _physics_process(delta: float) -> void:
 	if peer_id != multiplayer.get_unique_id():
 		transform = transform.interpolate_with(remote_target, minf(1.0, delta * 13.0))
 		return
+	_apply_moving_rv_platform()
 	if Input.is_action_just_pressed("toggle_view") or GameSession.consume_touch_press("toggle_view"):
 		_toggle_camera_mode()
 	if is_driving and driven_vehicle:
@@ -100,9 +112,29 @@ func _physics_process(delta: float) -> void:
 	else:
 		_move_on_foot(delta)
 	_update_body_animation(delta)
+	_update_winch_remote()
+	_update_carried_tool()
 	_update_interaction()
 	if Net.is_online:
 		_sync_state.rpc(transform, velocity, is_driving)
+
+func _apply_moving_rv_platform() -> void:
+	var rig := GameSession.rv
+	if not rig or not is_instance_valid(rig):
+		rv_transform_initialized = false
+		return
+	var current: Transform3D = rig.global_transform
+	if not rv_transform_initialized:
+		previous_rv_transform = current
+		rv_transform_initialized = true
+		return
+	if not is_driving and rig.has_method("contains_cabin_point") and rig.contains_cabin_point(global_position):
+		# Preserve the passenger's coach-local position and facing while the rigid
+		# body translates, climbs and turns. Their walking input is applied next.
+		var coach_delta := current * previous_rv_transform.affine_inverse()
+		global_transform = coach_delta * global_transform
+		safe_position = global_position
+	previous_rv_transform = current
 
 func _move_on_foot(delta: float) -> void:
 	just_jumped = false
@@ -193,12 +225,18 @@ func _drive_vehicle(delta: float) -> void:
 	global_transform = driven_vehicle.driver_seat_transform()
 	velocity = Vector3.ZERO
 	var input := GameSession.movement_vector()
+	var shift_up_pressed := Input.is_action_just_pressed("shift_up") or GameSession.consume_touch_press("shift_up")
+	var shift_down_pressed := Input.is_action_just_pressed("shift_down") or GameSession.consume_touch_press("shift_down")
+	if OS.has_feature("mobile") and (shift_up_pressed or shift_down_pressed):
+		mobile_auto_clutch_timer = 0.34
+	mobile_auto_clutch_timer = maxf(0.0, mobile_auto_clutch_timer - delta)
+	var clutch_pressed := GameSession.is_action_pressed("clutch") or (OS.has_feature("mobile") and mobile_auto_clutch_timer > 0.0)
 	driven_vehicle.submit_driver_input(peer_id, -input.y, input.x,
-		GameSession.is_action_pressed("handbrake"),
-		Input.is_action_just_pressed("shift_up") or GameSession.consume_touch_press("shift_up"),
-		Input.is_action_just_pressed("shift_down") or GameSession.consume_touch_press("shift_down"),
+		GameSession.is_action_pressed("handbrake"), shift_up_pressed, shift_down_pressed,
 		Input.is_action_just_pressed("winch_front") or GameSession.consume_touch_press("winch_front"),
-		Input.is_action_just_pressed("winch_rear") or GameSession.consume_touch_press("winch_rear"))
+		Input.is_action_just_pressed("winch_rear") or GameSession.consume_touch_press("winch_rear"),
+		clutch_pressed,
+		Input.is_action_just_pressed("primary") or GameSession.consume_touch_press("primary"))
 	_apply_mobile_and_gamepad_look(delta, true)
 
 func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
@@ -260,9 +298,59 @@ func _apply_camera_mode(use_third_person: bool) -> void:
 		# On-foot first person stays unobstructed; driving uses the RV's actual
 		# cockpit geometry, while third person shows the complete animated survivor.
 		hands_visual.visible = false
-		carried_visual.visible = not third_person and carried_item == "plank"
+		# Physical cargo is rendered from cargo_mount in both camera modes; the old
+		# placeholder plank mesh remains disabled.
+		carried_visual.visible = false
 		if driven_vehicle and driven_vehicle.has_method("set_local_driver_first_person"):
 			driven_vehicle.set_local_driver_first_person(is_driving and not third_person)
+
+func _update_winch_remote() -> void:
+	var rig := GameSession.rv
+	if not rig or not is_instance_valid(rig):
+		return
+	var reel_direction := 0.0
+	if GameSession.is_action_pressed("winch_in"):
+		reel_direction += 1.0
+	if GameSession.is_action_pressed("winch_out"):
+		reel_direction -= 1.0
+	rig.set_winch_reel(peer_id, reel_direction)
+	if is_driving:
+		return
+	var front_pressed := Input.is_action_just_pressed("winch_front") or GameSession.consume_touch_press("winch_front")
+	var rear_pressed := Input.is_action_just_pressed("winch_rear") or GameSession.consume_touch_press("winch_rear")
+	if not front_pressed and not rear_pressed:
+		return
+	interact_ray.force_raycast_update()
+	var target := interact_ray.get_collider() if interact_ray.is_colliding() else null
+	var anchor_node: Node = target
+	while anchor_node and not anchor_node.is_in_group("winch_anchor"):
+		anchor_node = anchor_node.get_parent()
+	if not anchor_node or not anchor_node is Node3D:
+		GameSession.toast_requested.emit("AIM AT ANCHOR", "Point the reticle at a marked tree or steel post.")
+		return
+	rig.attach_winch_from_player(peer_id, front_pressed, (anchor_node as Node3D).global_position)
+
+func _update_carried_tool() -> void:
+	if is_driving:
+		return
+	var use_pressed := Input.is_action_just_pressed("tool_use") or GameSession.consume_touch_press("tool_use")
+	if not use_pressed:
+		return
+	if not has_carried_tool("extinguisher"):
+		GameSession.toast_requested.emit("NO ACTIVE TOOL", "Carry a fire extinguisher before using this control.")
+		return
+	var rig := GameSession.rv
+	if not rig or global_position.distance_to(rig.global_position) > 8.0:
+		GameSession.toast_requested.emit("TOO FAR", "Move closer to the burning RV.")
+		return
+	if rig.fire_level <= 0.0:
+		GameSession.toast_requested.emit("NO FIRE", "Save the remaining extinguisher charge.")
+		return
+	if not carried_object.use_charge():
+		GameSession.toast_requested.emit("EXTINGUISHER EMPTY", "Find another extinguisher.")
+		return
+	rig.extinguish(24.0)
+	GameSession.toast_requested.emit("FIRE SUPPRESSED", "%d extinguisher bursts remaining." % carried_object.uses_remaining)
 
 func _update_interaction() -> void:
 	# Consume a touch pulse exactly once even when no target is present; otherwise
@@ -276,6 +364,10 @@ func _update_interaction() -> void:
 	interaction_text = ""
 	interact_ray.force_raycast_update()
 	if not interact_ray.is_colliding():
+		if carried_object and is_instance_valid(carried_object):
+			interaction_text = "DROP %s" % carried_item.to_upper()
+			if interact_pressed:
+				drop_carried_cargo()
 		return
 	var target := interact_ray.get_collider()
 	if target and target.has_method("interact"):
@@ -283,6 +375,50 @@ func _update_interaction() -> void:
 		interaction_text = str(target_prompt) if target_prompt != null else "INTERACT"
 		if interact_pressed:
 			target.interact(self)
+	elif carried_object and is_instance_valid(carried_object):
+		interaction_text = "DROP %s" % carried_item.to_upper()
+		if interact_pressed:
+			drop_carried_cargo()
+
+func pick_up_cargo(cargo: PhysicsCargo) -> void:
+	if carried_object and is_instance_valid(carried_object):
+		GameSession.toast_requested.emit("HANDS FULL", "Drop the current cargo before carrying another item.")
+		return
+	carried_object = cargo
+	carried_item = cargo.cargo_kind
+	cargo.attach_to_carrier(self, cargo_mount)
+	update_carried_visual()
+	GameSession.toast_requested.emit("CARGO LIFTED", "Carry it into the RV or to a matching worksite.")
+
+func drop_carried_cargo() -> void:
+	if not carried_object or not is_instance_valid(carried_object):
+		carried_object = null
+		carried_item = ""
+		return
+	var cargo := carried_object
+	carried_object = null
+	carried_item = ""
+	var forward := -head.global_transform.basis.z.normalized()
+	var drop_position := head.global_position + forward * 1.45 - Vector3.UP * 0.55
+	var drop_basis := Basis(Vector3.UP, global_rotation.y)
+	var inherited := velocity
+	if Net.world and Net.world.rv and Net.world.rv.contains_cabin_point(global_position):
+		inherited += Net.world.rv.linear_velocity
+	cargo.drop_from_carrier(Net.world if Net.world else get_parent(), Transform3D(drop_basis, drop_position), inherited)
+	update_carried_visual()
+
+func has_carried_tool(expected_kind: String) -> bool:
+	return carried_item == expected_kind and carried_object != null and is_instance_valid(carried_object)
+
+func consume_carried_cargo(expected_kind: String) -> bool:
+	if not has_carried_tool(expected_kind):
+		return false
+	var cargo := carried_object
+	carried_object = null
+	carried_item = ""
+	cargo.consume()
+	update_carried_visual()
+	return true
 
 func enter_driver(vehicle: Node) -> void:
 	is_driving = true
@@ -323,10 +459,11 @@ func leave_driver(exit_transform: Transform3D) -> void:
 		body_visual.visible = true
 
 func update_carried_visual() -> void:
+	# Cargo itself is now the visual and physical object. Keep the legacy mesh
+	# hidden so first person never renders two overlapping planks.
+	carried_visual.visible = false
 	if peer_id == multiplayer.get_unique_id():
 		_apply_camera_mode(third_person)
-	else:
-		carried_visual.visible = carried_item == "plank"
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
 func _sync_state(new_transform: Transform3D, new_velocity: Vector3, driving: bool) -> void:
@@ -372,6 +509,9 @@ func _build_player() -> void:
 	first_camera.near = 0.030
 	head.add_child(first_camera)
 	camera = first_camera
+	cargo_mount = Node3D.new()
+	cargo_mount.name = "PhysicalCargoMount"
+	head.add_child(cargo_mount)
 
 	spring_arm = SpringArm3D.new()
 	spring_arm.name = "ThirdPersonSpringArm"

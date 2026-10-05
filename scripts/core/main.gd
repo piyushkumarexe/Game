@@ -522,6 +522,14 @@ func _run_expedition_smoke_test() -> void:
 			failures.append("mobile control-layout settings button missing")
 		if not active_hud.find_child("Touch_handbrake", true, false):
 			failures.append("mobile RV brake button missing")
+		if not active_hud.find_child("Touch_clutch", true, false):
+			failures.append("mobile RV clutch button missing")
+		if not active_hud.find_child("Touch_primary", true, false):
+			failures.append("mobile RV ignition button missing")
+		if not active_hud.find_child("Touch_winch_in", true, false) or not active_hud.find_child("Touch_winch_out", true, false):
+			failures.append("manual winch reel controls missing")
+		if not active_hud.find_child("Touch_tool_use", true, false):
+			failures.append("physical tool-use control missing")
 	if active_world:
 		var terrain := active_world.find_child("RedmesaTerrain", true, false) as MeshInstance3D
 		if not terrain:

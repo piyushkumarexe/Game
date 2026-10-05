@@ -5,6 +5,7 @@ extends Node3D
 const PlayerScript = preload("res://scripts/player/player_controller.gd")
 const RVScript = preload("res://scripts/vehicles/rv_controller.gd")
 const InteractableScript = preload("res://scripts/gameplay/interactable.gd")
+const PhysicsCargoScript = preload("res://scripts/gameplay/physics_cargo.gd")
 const WildlifeScript = preload("res://scripts/gameplay/wildlife.gd")
 const RockfallScript = preload("res://scripts/gameplay/rockfall_hazard.gd")
 const PINE_SCENES: Array[PackedScene] = [
@@ -62,6 +63,8 @@ var players_root: Node3D
 var props_root: Node3D
 var last_checkpoint_transform := Transform3D.IDENTITY
 var bridge_planks: Array[Node3D] = []
+var physical_cargo: Array[PhysicsCargo] = []
+var cargo_check_accumulator := 0.0
 var random := RandomNumberGenerator.new()
 var bootstrap_camera: Camera3D
 var player_blockers: Array[Dictionary] = []
@@ -105,6 +108,30 @@ func _ready() -> void:
 	last_checkpoint_transform = rv.global_transform
 	Net.register_world(self)
 	call_deferred("_verify_playable_view")
+
+func _physics_process(delta: float) -> void:
+	if not rv or not is_instance_valid(rv) or (Net.is_online and not multiplayer.is_server()):
+		return
+	cargo_check_accumulator += delta
+	if cargo_check_accumulator < 0.15:
+		return
+	cargo_check_accumulator = 0.0
+	for cargo: PhysicsCargo in physical_cargo.duplicate():
+		if not is_instance_valid(cargo):
+			physical_cargo.erase(cargo)
+			continue
+		if cargo.cargo_kind != "supply" or cargo.stowed or cargo.carrier:
+			continue
+		if rv.contains_cabin_point(cargo.global_position):
+			var slot := GameSession.supplies_loaded
+			var local_slot := Vector3(-0.72 + float(slot % 2) * 1.44, 0.43, 1.72 + float(slot / 2) * 0.72)
+			cargo.stow_in_rv(rv, local_slot)
+			GameSession.supplies_loaded += 1
+			GameSession.toast_requested.emit("SUPPLY STOWED", "%d / 3 physical crates secured" % GameSession.supplies_loaded)
+			if GameSession.supplies_loaded >= 3:
+				GameSession.complete_target("supplies")
+			else:
+				Net.broadcast_progress()
 
 func _build_bootstrap_view() -> void:
 	var safety_floor := StaticBody3D.new()
@@ -993,13 +1020,29 @@ func _make_winch_post(position: Vector3) -> void:
 
 func _build_mission_props() -> void:
 	for offset in [Vector3(-7, 0.6, 5), Vector3(-4.8, 0.6, 5.6), Vector3(-2.6, 0.6, 5.1)]:
-		_spawn_interactable("supply", ROUTE[0] + offset)
-	_spawn_interactable("plank", ROUTE[3] + Vector3(-5.5, 0.6, 3.0))
-	_spawn_interactable("plank", ROUTE[3] + Vector3(-4.0, 0.6, 4.2))
+		_spawn_physics_cargo("supply", ROUTE[0] + offset)
+	_spawn_physics_cargo("plank", ROUTE[3] + Vector3(-5.5, 0.6, 3.0))
+	_spawn_physics_cargo("plank", ROUTE[3] + Vector3(-4.0, 0.6, 4.2))
 	_spawn_interactable("bridge_socket", ROUTE[3] + Vector3(-1.1, 0.5, -2.2))
 	_spawn_interactable("bridge_socket", ROUTE[3] + Vector3(1.1, 0.5, -2.2))
-	_spawn_interactable("repair_station", ROUTE[5] + Vector3(-3.5, 1.0, 1.2))
-	_spawn_interactable("fuel", ROUTE[5] + Vector3(-2.0, 0.6, 1.1))
+	# Distinct service points make damage readable and require the correct tool
+	# interaction instead of one button magically repairing the entire vehicle.
+	_spawn_interactable("repair_body", ROUTE[5] + Vector3(-5.0, 1.0, 1.2))
+	_spawn_interactable("repair_frame", ROUTE[5] + Vector3(-3.7, 1.0, 1.2))
+	_spawn_interactable("repair_engine", ROUTE[5] + Vector3(-2.4, 1.0, 1.2))
+	_spawn_interactable("repair_tires", ROUTE[5] + Vector3(-1.1, 1.0, 1.2))
+	# Every repair now starts with a real tool the player must locate, carry and
+	# present to the matching service point.
+	_spawn_physics_cargo("hammer", ROUTE[5] + Vector3(-5.0, 0.75, 3.0))
+	_spawn_physics_cargo("welder", ROUTE[5] + Vector3(-3.7, 0.75, 3.0))
+	_spawn_physics_cargo("oil", ROUTE[5] + Vector3(-2.6, 0.75, 3.0))
+	_spawn_physics_cargo("oil", ROUTE[5] + Vector3(-2.1, 0.75, 3.0))
+	_spawn_physics_cargo("drill", ROUTE[5] + Vector3(-1.1, 0.75, 3.0))
+	_spawn_physics_cargo("spare_tire", ROUTE[5] + Vector3(0.1, 0.85, 3.0))
+	_spawn_physics_cargo("spare_tire", ROUTE[5] + Vector3(1.1, 0.85, 3.0))
+	_spawn_physics_cargo("extinguisher", ROUTE[0] + Vector3(1.0, 0.65, 4.8))
+	_spawn_physics_cargo("extinguisher", ROUTE[5] + Vector3(2.0, 0.65, 3.0))
+	_spawn_interactable("fuel", ROUTE[5] + Vector3(0.3, 0.6, 1.1))
 	_create_checkpoint(ROUTE[2], 1, "Dry Creek Overlook", Vector3(10, 5, 7))
 	_create_checkpoint(ROUTE[5], 2, "Lantern Post Garage", Vector3(12, 6, 8))
 	_create_checkpoint(ROUTE[8], 3, "Last Light Summit", Vector3(12, 7, 8))
@@ -1007,6 +1050,13 @@ func _build_mission_props() -> void:
 	var rockfall: RockfallHazard = RockfallScript.new()
 	add_child(rockfall)
 	rockfall.setup((ROUTE[7] + ROUTE[8]) * 0.5 + Vector3.UP * 3.0, self)
+
+func _spawn_physics_cargo(kind: String, position: Vector3) -> PhysicsCargo:
+	var cargo: PhysicsCargo = PhysicsCargoScript.new()
+	add_child(cargo)
+	cargo.setup(kind, position)
+	physical_cargo.append(cargo)
+	return cargo
 
 func _spawn_interactable(kind: String, position: Vector3) -> TrailInteractable:
 	var item: TrailInteractable = InteractableScript.new()

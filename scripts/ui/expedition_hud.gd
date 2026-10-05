@@ -13,6 +13,10 @@ var health_bar: ProgressBar
 var fuel_bar: ProgressBar
 var speed_label: Label
 var gear_label: Label
+var component_label: Label
+var rpm_label: Label
+var winch_label: Label
+var fire_label: Label
 var prompt_panel: PanelContainer
 var prompt_label: Label
 var toast_panel: PanelContainer
@@ -37,6 +41,11 @@ func _ready() -> void:
 	await get_tree().process_frame
 	if GameSession.rv:
 		GameSession.rv.stats_changed.connect(_update_rv_stats)
+		GameSession.rv.components_changed.connect(_update_components)
+		GameSession.rv.drivetrain_changed.connect(_update_drivetrain)
+		GameSession.rv.fire_changed.connect(_update_fire)
+		_update_components(GameSession.rv.health, GameSession.rv.frame_integrity,
+			GameSession.rv.engine_integrity, GameSession.rv._average_tire_integrity())
 	_update_roster(Net.roster)
 
 func _process(_delta: float) -> void:
@@ -55,6 +64,12 @@ func _process(_delta: float) -> void:
 				node.visible = driving
 			elif node.has_meta("walking_only"):
 				node.visible = not driving
+	if winch_label and GameSession.rv:
+		var front_tension := float(GameSession.rv.front_winch.get("tension", 0.0))
+		var rear_tension := float(GameSession.rv.rear_winch.get("tension", 0.0))
+		var active_tension := maxf(front_tension, rear_tension)
+		winch_label.text = "WINCH %d%%" % roundi(active_tension * 100.0) if (bool(GameSession.rv.front_winch["active"]) or bool(GameSession.rv.rear_winch["active"])) else "WINCH READY"
+		winch_label.add_theme_color_override("font_color", Color("e46f55") if active_tension > 0.88 else Color("7fc6bc"))
 	if GameSession.consume_touch_press("control_settings") and not is_instance_valid(settings_editor):
 		_open_control_editor()
 
@@ -100,7 +115,7 @@ func _build_hud() -> void:
 	rig_panel.offset_left = -190.0
 	rig_panel.offset_top = 18.0
 	rig_panel.offset_right = 190.0
-	rig_panel.offset_bottom = 104.0
+	rig_panel.offset_bottom = 164.0
 	rig_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.045, 0.06, 0.86), Color(1, 1, 1, 0.08), 16))
 	root.add_child(rig_panel)
 	var rig_margin := MarginContainer.new()
@@ -119,12 +134,20 @@ func _build_hud() -> void:
 	fuel_bar = _status_bar("FUEL", Color("e2a03b"))
 	bars.add_child(health_bar)
 	bars.add_child(fuel_bar)
+	component_label = _label("FRAME 100  ENG 100  TIRES 100", 10, Color("b9c7c2"), true)
+	bars.add_child(component_label)
+	winch_label = _label("WINCH READY", 10, Color("7fc6bc"), true)
+	bars.add_child(winch_label)
+	fire_label = _label("FIRE SAFE", 10, Color("7fc6bc"), true)
+	bars.add_child(fire_label)
 	var drive_stats := VBoxContainer.new()
 	rig_row.add_child(drive_stats)
 	speed_label = _label("0 KM/H", 18, Color("fff2d5"), true)
-	gear_label = _label("GEAR 1", 16, Color("e2a03b"), true)
+	gear_label = _label("NEUTRAL", 16, Color("e2a03b"), true)
+	rpm_label = _label("ENGINE OFF", 11, Color("b9c7c2"), true)
 	drive_stats.add_child(speed_label)
 	drive_stats.add_child(gear_label)
+	drive_stats.add_child(rpm_label)
 
 	crew_label = _label("SOLO RUN", 14, Color("d7d2c2"), true)
 	crew_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -230,14 +253,14 @@ func _build_touch_controls(root: Control) -> void:
 	var sprint := _make_touch_button("SPRINT", "sprint", Vector2(-205, -94), true)
 	sprint.set_meta("walking_only", true)
 	action_buttons.append(sprint)
-	var front := _make_touch_button("FRONT\nWINCH", "winch_front", Vector2(-302, -95), false)
-	front.set_meta("driving_only", true)
-	front.visible = false
+	var front := _make_touch_button("FRONT\nCABLE", "winch_front", Vector2(-302, -95), false)
 	action_buttons.append(front)
-	var rear := _make_touch_button("REAR\nWINCH", "winch_rear", Vector2(-400, -95), false)
-	rear.set_meta("driving_only", true)
-	rear.visible = false
+	var rear := _make_touch_button("REAR\nCABLE", "winch_rear", Vector2(-400, -95), false)
 	action_buttons.append(rear)
+	var reel_in := _make_touch_button("REEL IN", "winch_in", Vector2(-596, -95), true)
+	action_buttons.append(reel_in)
+	var reel_out := _make_touch_button("REEL OUT", "winch_out", Vector2(-694, -95), true)
+	action_buttons.append(reel_out)
 	var up := _make_touch_button("GEAR +", "shift_up", Vector2(-105, -285), false)
 	up.set_meta("driving_only", true)
 	up.visible = false
@@ -250,6 +273,17 @@ func _build_touch_controls(root: Control) -> void:
 	handbrake.set_meta("driving_only", true)
 	handbrake.visible = false
 	action_buttons.append(handbrake)
+	var clutch := _make_touch_button("CLUTCH", "clutch", Vector2(-498, -95), true)
+	clutch.set_meta("driving_only", true)
+	clutch.visible = false
+	action_buttons.append(clutch)
+	var ignition := _make_touch_button("IGNITION", "primary", Vector2(-302, -190), false)
+	ignition.set_meta("driving_only", true)
+	ignition.visible = false
+	action_buttons.append(ignition)
+	var tool_use := _make_touch_button("USE TOOL", "tool_use", Vector2(-400, -190), false)
+	tool_use.set_meta("walking_only", true)
+	action_buttons.append(tool_use)
 	var settings := _make_touch_button("LAYOUT", "control_settings", Vector2(-103, -590), false)
 	settings.anchor_top = 0.0
 	settings.anchor_bottom = 0.0
@@ -346,6 +380,26 @@ func _update_rv_stats(health: float, fuel: float, gear: int, speed: float) -> vo
 	fuel_bar.value = fuel
 	speed_label.text = "%d KM/H" % roundi(speed)
 	gear_label.text = "REVERSE" if gear == 0 else ("NEUTRAL" if gear == 1 else "GEAR %d" % (gear - 1))
+
+func _update_fire(level: float) -> void:
+	if not fire_label:
+		return
+	fire_label.text = "FIRE %d%%" % roundi(level) if level > 0.0 else "FIRE SAFE"
+	fire_label.add_theme_color_override("font_color", Color("ff5b3d") if level > 0.0 else Color("7fc6bc"))
+
+func _update_drivetrain(rpm: float, clutch: float, running: bool) -> void:
+	if not rpm_label:
+		return
+	rpm_label.text = ("%d RPM%s" % [roundi(rpm), "  CLUTCH" if clutch < 0.5 else ""]) if running else "ENGINE OFF"
+	rpm_label.add_theme_color_override("font_color", Color("e46f55") if rpm > 3900.0 else Color("b9c7c2"))
+
+func _update_components(_body: float, frame: float, engine: float, tires: float) -> void:
+	if not component_label:
+		return
+	component_label.text = "FRAME %02d  ENG %02d  TIRES %02d" % [roundi(frame), roundi(engine), roundi(tires)]
+	var weakest := minf(frame, minf(engine, tires))
+	component_label.add_theme_color_override("font_color",
+		Color("e46f55") if weakest < 35.0 else (Color("e2a03b") if weakest < 65.0 else Color("b9c7c2")))
 
 func _show_toast(title: String, detail: String) -> void:
 	toast_title.text = title

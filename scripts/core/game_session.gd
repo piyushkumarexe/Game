@@ -54,7 +54,12 @@ const DEFAULT_CONTROL_LAYOUT := {
 	"winch_rear": Vector2(0.722, 0.91),
 	"shift_up": Vector2(0.947, 0.64),
 	"shift_down": Vector2(0.870, 0.64),
-	"handbrake": Vector2(0.870, 0.77)
+	"handbrake": Vector2(0.870, 0.77),
+	"clutch": Vector2(0.645, 0.91),
+	"primary": Vector2(0.790, 0.77),
+	"winch_in": Vector2(0.565, 0.91),
+	"winch_out": Vector2(0.485, 0.91),
+	"tool_use": Vector2(0.790, 0.67)
 }
 
 func _ready() -> void:
@@ -199,8 +204,12 @@ func _create_input_actions() -> void:
 	_bind_keys("interact", [KEY_E])
 	_bind_keys("sprint", [KEY_SHIFT])
 	_bind_keys("primary", [KEY_F])
+	_bind_keys("clutch", [KEY_CTRL])
+	_bind_keys("tool_use", [KEY_G])
 	_bind_keys("winch_front", [KEY_Q])
 	_bind_keys("winch_rear", [KEY_R])
+	_bind_keys("winch_in", [KEY_V])
+	_bind_keys("winch_out", [KEY_B])
 	_bind_keys("shift_up", [KEY_X])
 	_bind_keys("shift_down", [KEY_Z])
 	_bind_keys("toggle_view", [KEY_C])
@@ -214,6 +223,7 @@ func _create_input_actions() -> void:
 	_add_joy_axis("look_right", JOY_AXIS_RIGHT_X, 1.0)
 	_add_joy_axis("look_up", JOY_AXIS_RIGHT_Y, -1.0)
 	_add_joy_axis("look_down", JOY_AXIS_RIGHT_Y, 1.0)
+	_add_joy_axis("clutch", JOY_AXIS_TRIGGER_LEFT, 1.0)
 	# Complete controller parity: face buttons cover locomotion/interaction and
 	# shoulders/D-pad handle the RV without requiring keyboard or touch fallback.
 	_bind_joy_button("jump", JOY_BUTTON_A)
@@ -225,6 +235,10 @@ func _create_input_actions() -> void:
 	_bind_joy_button("shift_down", JOY_BUTTON_LEFT_SHOULDER)
 	_bind_joy_button("winch_front", JOY_BUTTON_DPAD_UP)
 	_bind_joy_button("winch_rear", JOY_BUTTON_DPAD_DOWN)
+	_bind_joy_button("primary", JOY_BUTTON_BACK)
+	_bind_joy_button("tool_use", JOY_BUTTON_RIGHT_STICK)
+	_bind_joy_button("winch_in", JOY_BUTTON_DPAD_LEFT)
+	_bind_joy_button("winch_out", JOY_BUTTON_DPAD_RIGHT)
 	_bind_joy_button("pause", JOY_BUTTON_START)
 
 func _bind_keys(action: StringName, keys: Array) -> void:

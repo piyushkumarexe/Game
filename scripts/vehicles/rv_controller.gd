@@ -3,6 +3,9 @@ extends VehicleBody3D
 ## Server-authoritative four-wheel RV with manual gears, damage and twin winches.
 
 signal stats_changed(health: float, fuel: float, gear: int, speed: float)
+signal components_changed(body: float, frame: float, engine: float, tires: float)
+signal drivetrain_changed(rpm: float, clutch: float, running: bool)
+signal fire_changed(level: float)
 
 const GEAR_RATIOS := [-0.62, 0.0, 0.68, 0.92, 1.16, 1.38, 1.55]
 const MAX_ENGINE_FORCE := 4300.0
@@ -19,18 +22,29 @@ const RV_WHEEL_SCENE: PackedScene = preload("res://assets/third_party/gmc_motorh
 const RVDoorInteractableScript = preload("res://scripts/vehicles/rv_door_interactable.gd")
 
 var prompt := "DRIVE THE RV"
+# Layered integrity. `health` remains the exterior/body value for compatibility
+# with the existing HUD and mission code; the other systems fail independently.
 var health := 100.0
+var frame_integrity := 100.0
+var engine_integrity := 100.0
+var wheel_integrity := PackedFloat32Array([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
+var wheel_installed := PackedByteArray([1, 1, 1, 1, 1, 1])
+var wheel_nodes: Array[VehicleWheel3D] = []
 var fuel := 100.0
-var gear := 2
+var gear := 1 # neutral until the driver deliberately selects a gear
 var engine_running := false
+var engine_rpm := 0.0
+var clutch_input := 1.0 # 1 = engaged, 0 = pedal fully pressed/disengaged
+var shift_clutch_grace := 0.0
 var driver_peer_id := 0
 var throttle_input := 0.0
 var steer_input := 0.0
 var handbrake_input := false
 var command_front_winch := false
 var command_rear_winch := false
-var front_winch := {"active": false, "anchor": Vector3.ZERO, "length": 0.0}
-var rear_winch := {"active": false, "anchor": Vector3.ZERO, "length": 0.0}
+var front_winch := {"active": false, "anchor": Vector3.ZERO, "length": 0.0, "tension": 0.0}
+var rear_winch := {"active": false, "anchor": Vector3.ZERO, "length": 0.0, "tension": 0.0}
+var winch_reel_command := 0.0
 var front_cable: MeshInstance3D
 var rear_cable: MeshInstance3D
 var engine_audio: AudioStreamPlayer3D
@@ -54,6 +68,14 @@ var entry_door_open := false
 var cabin_light: OmniLight3D
 var headlamps: Array[SpotLight3D] = []
 var stats_emit_accumulator := 0.0
+var fire_level := 0.0
+var fire_damage_accumulator := 0.0
+var fire_visual: Node3D
+var fire_light: OmniLight3D
+# Once the rig has been started it remains a live rigid body even when nobody is
+# in the driver seat. Parking is handled by the brakes rather than freezing and
+# teleporting the coach, so passengers, cargo and recovery physics stay honest.
+var has_been_started := false
 
 func setup(spawn_transform: Transform3D) -> void:
 	name = "ExpeditionRV"
@@ -91,6 +113,7 @@ func _physics_process(delta: float) -> void:
 	_stabilize_motion()
 	_apply_grounded_stability(delta)
 	_simulate_driver(delta)
+	_simulate_fire(delta)
 	_update_vehicle_visuals()
 	_simulate_winch(front_winch, _front_hook_position(), delta)
 	_simulate_winch(rear_winch, _rear_hook_position(), delta)
@@ -98,48 +121,88 @@ func _physics_process(delta: float) -> void:
 	_update_cable(rear_cable, rear_winch, _rear_hook_position())
 	_fill_engine_audio()
 	if Net.is_online:
-		_sync_rv.rpc(global_transform, linear_velocity, angular_velocity, health, fuel, gear, engine_running, driver_peer_id,
-			front_winch, rear_winch)
+		_sync_rv.rpc(global_transform, linear_velocity, angular_velocity, health, frame_integrity, engine_integrity,
+			wheel_integrity, wheel_installed, fuel, gear, engine_running, engine_rpm, clutch_input, fire_level,
+			driver_peer_id, front_winch, rear_winch)
 	# Text layout and signal fan-out at 60 Hz wastes mobile CPU. Ten updates per
 	# second is visually smooth for HUD meters and leaves time for physics/render.
 	stats_emit_accumulator += delta
 	if stats_emit_accumulator >= 0.10:
 		stats_emit_accumulator = 0.0
 		stats_changed.emit(health, fuel, gear, _hud_speed_kmh())
+		components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+		drivetrain_changed.emit(engine_rpm, clutch_input, engine_running)
+		fire_changed.emit(fire_level)
 
 func submit_driver_input(peer_id: int, throttle: float, steering_input: float, handbrake_pressed: bool,
-	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed := false, rear_pressed := false) -> void:
+	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed := false, rear_pressed := false,
+	clutch_pressed := false, ignition_pressed := false) -> void:
 	if Net.is_online and not multiplayer.is_server():
 		_receive_driver_input.rpc_id(1, peer_id, throttle, steering_input, handbrake_pressed,
-			shift_up_pressed, shift_down_pressed, front_pressed, rear_pressed)
+			shift_up_pressed, shift_down_pressed, front_pressed, rear_pressed, clutch_pressed, ignition_pressed)
 		return
 	_apply_driver_input(peer_id, throttle, steering_input, handbrake_pressed,
-		shift_up_pressed, shift_down_pressed, front_pressed, rear_pressed)
+		shift_up_pressed, shift_down_pressed, front_pressed, rear_pressed, clutch_pressed, ignition_pressed)
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 0)
 func _receive_driver_input(peer_id: int, throttle: float, steering_input: float, handbrake_pressed: bool,
-	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed: bool, rear_pressed: bool) -> void:
+	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed: bool, rear_pressed: bool,
+	clutch_pressed: bool, ignition_pressed: bool) -> void:
 	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == peer_id:
 		_apply_driver_input(peer_id, throttle, steering_input, handbrake_pressed,
-			shift_up_pressed, shift_down_pressed, front_pressed, rear_pressed)
+			shift_up_pressed, shift_down_pressed, front_pressed, rear_pressed, clutch_pressed, ignition_pressed)
 
 func _apply_driver_input(peer_id: int, throttle: float, steering_input: float, handbrake_pressed: bool,
-	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed: bool, rear_pressed: bool) -> void:
+	shift_up_pressed: bool, shift_down_pressed: bool, front_pressed: bool, rear_pressed: bool,
+	clutch_pressed: bool, ignition_pressed: bool) -> void:
 	if peer_id != driver_peer_id:
 		return
 	throttle_input = clampf(throttle, -1.0, 1.0)
 	steer_input = clampf(steering_input, -1.0, 1.0)
 	handbrake_input = handbrake_pressed
+	clutch_input = 0.0 if clutch_pressed else 1.0
+	if ignition_pressed:
+		_toggle_ignition()
 	if shift_up_pressed:
-		gear = mini(GEAR_RATIOS.size() - 1, gear + 1)
+		_attempt_shift(1)
 	if shift_down_pressed:
-		gear = maxi(0, gear - 1)
+		_attempt_shift(-1)
 	if front_pressed:
 		_toggle_winch(front_winch, true)
 	if rear_pressed:
 		_toggle_winch(rear_winch, false)
 
+func _toggle_ignition() -> void:
+	if engine_running:
+		engine_running = false
+		engine_rpm = 0.0
+		GameSession.toast_requested.emit("ENGINE OFF", "Ignition switched off.")
+		return
+	if fuel <= 0.0 or engine_integrity <= 0.0:
+		GameSession.toast_requested.emit("NO START", "Check fuel and engine condition.")
+		return
+	# Starting in gear requires the clutch pedal, just like the physical rig.
+	if gear != 1 and clutch_input > 0.25:
+		GameSession.toast_requested.emit("PRESS CLUTCH", "Disengage the clutch before starting in gear.")
+		return
+	engine_running = true
+	engine_rpm = 850.0
+	GameSession.complete_target("engine")
+	GameSession.toast_requested.emit("ENGINE STARTED", "Tap GEAR + and add throttle. Touch clutch assist handles routine shifts.")
+
+func _attempt_shift(direction: int) -> void:
+	if clutch_input > 0.35:
+		engine_integrity = maxf(0.0, engine_integrity - 1.5)
+		GameSession.toast_requested.emit("GEAR GRIND", "Press and hold CLUTCH before shifting.")
+		components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+		return
+	gear = clampi(gear + direction, 0, GEAR_RATIOS.size() - 1)
+	shift_clutch_grace = 0.18
+
 func interact(player: Node) -> void:
+	if player.get("carried_object") != null:
+		GameSession.toast_requested.emit("HANDS FULL", "Drop or stow the cargo before taking the wheel.")
+		return
 	if driver_peer_id != 0:
 		GameSession.toast_requested.emit("DRIVER SEAT OCCUPIED", "Someone is already wrestling the wheel.")
 		return
@@ -163,7 +226,7 @@ func _request_driver(requested_peer: int) -> void:
 @rpc("authority", "call_local", "reliable")
 func _assign_driver(id: int) -> void:
 	driver_peer_id = id
-	engine_running = true
+	has_been_started = true
 	set_entry_door_open(false)
 	freeze = false
 	sleeping = false
@@ -171,8 +234,7 @@ func _assign_driver(id: int) -> void:
 	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.enter_driver(self)
-	if multiplayer.is_server() or not Net.is_online:
-		GameSession.complete_target("engine")
+	GameSession.toast_requested.emit("AT THE WHEEL", "Tap IGNITION, then GEAR +. Touch shifting uses clutch assist.")
 
 func exit_driver(player: Node) -> void:
 	if player.peer_id != driver_peer_id:
@@ -189,23 +251,20 @@ func _request_exit(requested_peer: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _release_driver(id: int) -> void:
-	# Park on an upright terrain-aligned pose before placing the player outside.
-	# This prevents a harmless suspension lean from becoming a permanently frozen
-	# overturned camper after EXIT DRIVER SEAT.
-	if Net.world and Net.world.has_method("terrain_height"):
-		var yaw := global_rotation.y
-		var parked_origin := global_position
-		parked_origin.y = float(Net.world.terrain_height(parked_origin.x, parked_origin.z)) + 0.86
-		global_transform = Transform3D(Basis(Vector3.UP, yaw), parked_origin)
+	# Do not snap, zero or freeze the RV here. Leaving a moving vehicle must keep
+	# its momentum, and a parked vehicle must continue supporting passengers and
+	# physical cargo. The no-driver branch in _simulate_driver applies the brake.
 	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.leave_driver(exit_seat_transform())
 	driver_peer_id = 0
 	throttle_input = 0.0
-	linear_velocity = Vector3.ZERO
-	angular_velocity = Vector3.ZERO
+	steer_input = 0.0
+	handbrake_input = true
+	engine_force = 0.0
 	brake = 95.0
-	freeze = true
+	freeze = false
+	sleeping = false
 
 func set_local_driver_first_person(_active: bool) -> void:
 	# The professional shell is authored for an interior camera: exterior faces
@@ -237,6 +296,12 @@ func cabin_entry_transform() -> Transform3D:
 	var inward_facing := global_transform.basis * Basis(Vector3.UP, PI * 0.5)
 	return Transform3D(inward_facing.orthonormalized(), global_transform * Vector3(0.82, 0.06, 0.98))
 
+func contains_cabin_point(world_position: Vector3) -> bool:
+	# Shared definition used by moving-platform passengers. Keep this slightly
+	# inside the shell so somebody walking next to the coach is never dragged.
+	var local := global_transform.affine_inverse() * world_position
+	return absf(local.x) <= 1.16 and local.z > -3.16 and local.z < 3.00 and local.y > -0.18 and local.y < 2.12
+
 func assist_cabin_entry(player: Node) -> void:
 	if not entry_door_open:
 		return
@@ -245,8 +310,92 @@ func assist_cabin_entry(player: Node) -> void:
 		GameSession.toast_requested.emit("INSIDE THE RV", "Walk through the connected cabin, or aim at the cockpit and tap USE to drive.")
 
 func repair(value: float) -> void:
-	health = minf(100.0, health + value)
-	_update_damage_visuals()
+	# Compatibility entry point: a hammer repairs exterior panels only.
+	repair_component("body", value)
+
+func repair_component(component: String, value: float) -> bool:
+	var changed := false
+	match component:
+		"body":
+			var before := health
+			health = minf(100.0, health + value)
+			changed = health > before
+		"frame":
+			var before := frame_integrity
+			frame_integrity = minf(100.0, frame_integrity + value)
+			changed = frame_integrity > before
+		"engine":
+			var before := engine_integrity
+			engine_integrity = minf(100.0, engine_integrity + value)
+			changed = engine_integrity > before
+		"tires":
+			var weakest := _weakest_wheel_index(true)
+			if weakest >= 0:
+				var before := wheel_integrity[weakest]
+				wheel_integrity[weakest] = minf(100.0, wheel_integrity[weakest] + value)
+				changed = wheel_integrity[weakest] > before
+	if changed:
+		_update_damage_visuals()
+		components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+	return changed
+
+func component_integrity(component: String) -> float:
+	match component:
+		"body": return health
+		"frame": return frame_integrity
+		"engine": return engine_integrity
+		"tires": return _average_tire_integrity()
+	return 100.0
+
+func _average_tire_integrity() -> float:
+	var total := 0.0
+	for value: float in wheel_integrity:
+		total += value
+	return total / maxf(1.0, float(wheel_integrity.size()))
+
+func _weakest_wheel_index(installed_only := false) -> int:
+	var weakest := -1
+	for index in wheel_integrity.size():
+		if installed_only and wheel_installed[index] == 0:
+			continue
+		if weakest < 0 or wheel_integrity[index] < wheel_integrity[weakest]:
+			weakest = index
+	return weakest
+
+func has_missing_wheel() -> bool:
+	return wheel_installed.has(0)
+
+func install_spare_tire() -> bool:
+	for index in wheel_installed.size():
+		if wheel_installed[index] == 0:
+			wheel_installed[index] = 1
+			wheel_integrity[index] = 72.0
+			_apply_wheel_state(index)
+			components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+			return true
+	return false
+
+func _remove_wheel(index: int) -> void:
+	if index < 0 or index >= wheel_installed.size() or wheel_installed[index] == 0:
+		return
+	wheel_installed[index] = 0
+	wheel_integrity[index] = 0.0
+	_apply_wheel_state(index)
+	GameSession.toast_requested.emit("WHEEL LOST", "Use the power drill at the tire station, then bring a spare tire.")
+
+func _apply_wheel_state(index: int) -> void:
+	if index < 0 or index >= wheel_nodes.size():
+		return
+	var wheel := wheel_nodes[index]
+	var installed := wheel_installed[index] == 1
+	wheel.wheel_radius = 0.43 if installed else 0.08
+	wheel.use_as_traction = installed and index >= 2
+	var assembly := wheel.find_child("DetailedWheelAssembly", true, false) as Node3D
+	if assembly:
+		assembly.visible = installed
+	var contact := find_child("%sTireContact" % wheel.name, false, false) as CollisionShape3D
+	if contact:
+		contact.set_deferred("disabled", not installed)
 
 func add_fuel(value: float) -> void:
 	fuel = minf(MAX_FUEL, fuel + value)
@@ -261,8 +410,15 @@ func respawn_at(new_transform: Transform3D) -> void:
 	safe_spawn_seconds = 1.5
 	upside_down_seconds = 0.0
 	health = maxf(health, 55.0)
+	frame_integrity = maxf(frame_integrity, 45.0)
+	engine_integrity = maxf(engine_integrity, 40.0)
+	for index in wheel_integrity.size():
+		if wheel_installed[index] == 1:
+			wheel_integrity[index] = maxf(wheel_integrity[index], 38.0)
 	fuel = maxf(fuel, 35.0)
-	freeze = driver_peer_id == 0
+	# A never-started rig may remain statically staged at camp. After ignition,
+	# checkpoint recovery returns it as a live parked rigid body.
+	freeze = driver_peer_id == 0 and not has_been_started
 	reset_physics_interpolation()
 
 func damage(value: float, source := "IMPACT") -> void:
@@ -271,10 +427,23 @@ func damage(value: float, source := "IMPACT") -> void:
 	if Time.get_ticks_msec() / 1000.0 - last_impact_time < 0.35:
 		return
 	last_impact_time = Time.get_ticks_msec() / 1000.0
-	health = maxf(0.0, health - value)
+	# Impacts first crush bodywork, but also create persistent mechanical damage.
+	# A deterministic wheel choice keeps network/server outcomes reproducible.
+	health = maxf(0.0, health - value * 0.58)
+	frame_integrity = maxf(0.0, frame_integrity - value * 0.20)
+	engine_integrity = maxf(0.0, engine_integrity - value * 0.12)
+	var wheel_index := int(absf(global_position.x * 3.0 + global_position.z * 5.0)) % wheel_integrity.size()
+	if wheel_installed[wheel_index] == 1:
+		wheel_integrity[wheel_index] = maxf(0.0, wheel_integrity[wheel_index] - value * 0.45)
+		if wheel_integrity[wheel_index] <= 8.0:
+			_remove_wheel(wheel_index)
+	if engine_integrity < 42.0 and fire_level <= 0.0:
+		ignite(34.0)
 	_update_damage_visuals()
-	GameSession.toast_requested.emit(source, "RV frame -%d" % roundi(value))
-	if health <= 0.0:
+	components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+	GameSession.toast_requested.emit(source, "Body, frame and running gear damaged")
+	if health <= 0.0 or frame_integrity <= 0.0 or engine_integrity <= 0.0:
+		engine_running = false
 		GameSession.run_finished.emit(false)
 
 func _apply_grounded_stability(_delta: float) -> void:
@@ -310,19 +479,26 @@ func _apply_grounded_stability(_delta: float) -> void:
 
 func _simulate_driver(delta: float) -> void:
 	var horizontal_speed := Vector2(linear_velocity.x, linear_velocity.z).length()
+	shift_clutch_grace = maxf(0.0, shift_clutch_grace - delta)
+	_update_drivetrain(delta, horizontal_speed)
 	var steering_limit := lerpf(MAX_STEER, 0.20, clampf(horizontal_speed / MAX_SAFE_SPEED, 0.0, 1.0))
+	steering_limit *= lerpf(0.58, 1.0, _average_tire_integrity() / 100.0)
 	steering = move_toward(steering, steer_input * steering_limit, delta * 1.8)
 	var parked := driver_peer_id == 0
 	var drive_throttle := maxf(throttle_input, 0.0)
 	if parked or not engine_running or fuel <= 0.0 or health <= 0.0 or gear == 1:
 		engine_force = 0.0
 	else:
-		var health_factor := lerpf(0.42, 1.0, health / 100.0)
+		var body_factor := lerpf(0.70, 1.0, health / 100.0)
+		var frame_factor := lerpf(0.55, 1.0, frame_integrity / 100.0)
+		var engine_factor := lerpf(0.22, 1.0, engine_integrity / 100.0)
+		var tire_factor := lerpf(0.48, 1.0, _average_tire_integrity() / 100.0)
+		var mechanical_factor := body_factor * frame_factor * engine_factor * tire_factor
 		var speed_factor := clampf((MAX_SAFE_SPEED - linear_velocity.length()) / 8.0, 0.0, 1.0)
 		var traction_factor := 1.0
 		if Net.world and Net.world.has_method("vehicle_traction_factor"):
 			traction_factor = float(Net.world.vehicle_traction_factor(global_position))
-		engine_force = drive_throttle * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * health_factor * speed_factor * traction_factor
+		engine_force = drive_throttle * GEAR_RATIOS[gear] * MAX_ENGINE_FORCE * mechanical_factor * speed_factor * traction_factor * clutch_input
 		if traction_factor < 0.9:
 			var mud_drag := exp(-delta * 1.15)
 			linear_velocity.x *= mud_drag
@@ -336,6 +512,65 @@ func _simulate_driver(delta: float) -> void:
 	# falling rigid body to slow down is impossible and caused runaway speed HUDs.
 	if global_position.y < -24.0 or upside_down_seconds > 2.0:
 		respawn_at(Net.world.last_checkpoint_transform if Net.world else start_transform)
+
+func ignite(amount: float) -> void:
+	fire_level = clampf(fire_level + amount, 0.0, 100.0)
+	_update_fire_visual()
+	fire_changed.emit(fire_level)
+	GameSession.toast_requested.emit("ENGINE FIRE", "Stop the RV and use a fire extinguisher before it spreads.")
+
+func extinguish(amount: float) -> bool:
+	if fire_level <= 0.0:
+		return false
+	fire_level = maxf(0.0, fire_level - amount)
+	_update_fire_visual()
+	fire_changed.emit(fire_level)
+	return true
+
+func _simulate_fire(delta: float) -> void:
+	if fire_level <= 0.0:
+		return
+	fire_level = minf(100.0, fire_level + delta * 1.25)
+	fire_damage_accumulator += delta
+	if fire_damage_accumulator >= 1.0:
+		fire_damage_accumulator = 0.0
+		engine_integrity = maxf(0.0, engine_integrity - 1.8 - fire_level * 0.012)
+		health = maxf(0.0, health - 0.8 - fire_level * 0.008)
+		if fire_level > 58.0:
+			frame_integrity = maxf(0.0, frame_integrity - 0.65)
+		components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+	if engine_integrity <= 0.0 or health <= 0.0:
+		engine_running = false
+		fire_level = 0.0
+		_update_fire_visual()
+		GameSession.run_finished.emit(false)
+	_update_fire_visual()
+
+func _update_fire_visual() -> void:
+	if fire_visual:
+		fire_visual.visible = fire_level > 0.0
+		fire_visual.scale = Vector3.ONE * lerpf(0.65, 1.35, fire_level / 100.0)
+	if fire_light:
+		fire_light.visible = fire_level > 0.0
+		fire_light.light_energy = lerpf(1.2, 4.2, fire_level / 100.0)
+
+func _update_drivetrain(delta: float, horizontal_speed: float) -> void:
+	if not engine_running:
+		engine_rpm = move_toward(engine_rpm, 0.0, delta * 2400.0)
+		return
+	var throttle := maxf(throttle_input, 0.0)
+	var free_rev_target := 850.0 + throttle * 3350.0
+	var coupled_target := 850.0
+	if gear != 1:
+		coupled_target = clampf(620.0 + horizontal_speed * absf(GEAR_RATIOS[gear]) * 112.0, 550.0, 4200.0)
+	var target_rpm := lerpf(free_rev_target, maxf(coupled_target, 720.0 + throttle * 900.0), clutch_input)
+	engine_rpm = move_toward(engine_rpm, target_rpm, delta * (2600.0 if throttle > 0.05 else 1700.0))
+	# Releasing the clutch at a standstill without enough throttle stalls the rig.
+	if gear != 1 and clutch_input > 0.92 and shift_clutch_grace <= 0.0 and horizontal_speed < 0.45 and throttle < 0.16:
+		engine_running = false
+		engine_rpm = 0.0
+		engine_force = 0.0
+		GameSession.toast_requested.emit("ENGINE STALLED", "Press CLUTCH and use IGNITION to restart.")
 
 func _stabilize_motion() -> void:
 	if (not global_position.is_finite()
@@ -358,33 +593,60 @@ func _hud_speed_kmh() -> float:
 	var horizontal := Vector2(linear_velocity.x, linear_velocity.z).length() * 3.6
 	return clampf(horizontal, 0.0, MAX_SAFE_SPEED * 3.6)
 
-func _toggle_winch(data: Dictionary, front: bool) -> void:
+func _toggle_winch(data: Dictionary, front: bool, requested_anchor := Vector3.INF) -> void:
 	if bool(data["active"]):
 		data["active"] = false
+		data["tension"] = 0.0
+		GameSession.toast_requested.emit("CABLE DETACHED", "%s winch released." % ("Front" if front else "Rear"))
 		return
 	var hook := _front_hook_position() if front else _rear_hook_position()
-	var anchor := _nearest_winch_anchor(hook, 22.0)
+	var anchor: Vector3 = requested_anchor
 	if anchor == Vector3.INF:
-		GameSession.toast_requested.emit("NO CABLE ANCHOR", "Move within 22 m of a marked tree or steel post.")
+		anchor = _nearest_winch_anchor(hook, 22.0)
+	if anchor == Vector3.INF or hook.distance_to(anchor) > 26.0:
+		GameSession.toast_requested.emit("NO CABLE ANCHOR", "Aim at a marked tree or steel post within 26 m.")
 		return
 	data["active"] = true
 	data["anchor"] = anchor
-	data["length"] = hook.distance_to(anchor) * 0.72
-	GameSession.toast_requested.emit("%s CABLE ATTACHED" % ("FRONT" if front else "REAR"), "Throttle gently while the winch pulls.")
+	# Attach with slight slack; the crew decides when to reel rather than the
+	# cable automatically dragging the RV as soon as it connects.
+	data["length"] = hook.distance_to(anchor) + 0.35
+	data["tension"] = 0.0
+	GameSession.toast_requested.emit("%s CABLE ATTACHED" % ("FRONT" if front else "REAR"), "Hold REEL IN or REEL OUT to control cable length.")
 	GameSession.complete_target("winch")
+
+func attach_winch_from_player(peer_id: int, front: bool, anchor: Vector3) -> void:
+	var player := Net.world.get_player(peer_id) if Net.world else null
+	if not player or player.global_position.distance_to(anchor) > 30.0:
+		return
+	_toggle_winch(front_winch if front else rear_winch, front, anchor)
+
+func set_winch_reel(peer_id: int, direction: float) -> void:
+	var player := Net.world.get_player(peer_id) if Net.world else null
+	if not player or player.global_position.distance_to(global_position) > 18.0:
+		winch_reel_command = 0.0
+		return
+	winch_reel_command = clampf(direction, -1.0, 1.0)
 
 func _simulate_winch(data: Dictionary, hook: Vector3, delta: float) -> void:
 	if not bool(data["active"]):
+		data["tension"] = 0.0
 		return
 	var anchor: Vector3 = data["anchor"]
 	var distance := hook.distance_to(anchor)
-	if distance > float(data["length"]):
-		var tension := clampf((distance - float(data["length"])) * 0.65, 0.0, 1.0)
-		var force := hook.direction_to(anchor) * 11500.0 * tension
+	# Positive command reels in; negative pays cable out.
+	data["length"] = clampf(float(data["length"]) - winch_reel_command * delta * 2.25, 2.8, 31.0)
+	var stretch := maxf(0.0, distance - float(data["length"]))
+	var tension := clampf(stretch / 2.2, 0.0, 1.25)
+	data["tension"] = tension
+	if stretch > 0.0:
+		var force := hook.direction_to(anchor) * 12800.0 * minf(tension, 1.0)
 		apply_force(force, hook - global_position)
-		data["length"] = maxf(2.8, float(data["length"]) - delta * 1.45)
-	if distance > 34.0:
+	# Excess shock load breaks the line instead of launching the entire RV.
+	if tension > 1.12 or distance > 34.0:
 		data["active"] = false
+		data["tension"] = 0.0
+		GameSession.toast_requested.emit("CABLE SNAPPED", "Reduce speed and avoid shock-loading the winch.")
 
 func _nearest_winch_anchor(from: Vector3, max_distance: float) -> Vector3:
 	var best := Vector3.INF
@@ -406,14 +668,26 @@ func _rear_hook_position() -> Vector3:
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
 func _sync_rv(new_transform: Transform3D, new_linear: Vector3, new_angular: Vector3, new_health: float,
-	new_fuel: float, new_gear: int, running: bool, driver_id: int, front_data: Dictionary, rear_data: Dictionary) -> void:
+	new_frame: float, new_engine: float, new_wheels: PackedFloat32Array, new_installed: PackedByteArray,
+	new_fuel: float, new_gear: int, running: bool, new_rpm: float, new_clutch: float, new_fire: float,
+	driver_id: int, front_data: Dictionary, rear_data: Dictionary) -> void:
 	global_transform = global_transform.interpolate_with(new_transform, 0.42)
 	linear_velocity = new_linear
 	angular_velocity = new_angular
 	health = new_health
+	frame_integrity = new_frame
+	engine_integrity = new_engine
+	wheel_integrity = new_wheels.duplicate()
+	wheel_installed = new_installed.duplicate()
+	for index in mini(wheel_nodes.size(), wheel_installed.size()):
+		_apply_wheel_state(index)
 	fuel = new_fuel
 	gear = new_gear
 	engine_running = running
+	engine_rpm = new_rpm
+	clutch_input = new_clutch
+	fire_level = new_fire
+	_update_fire_visual()
 	driver_peer_id = driver_id
 	front_winch = front_data.duplicate(true)
 	rear_winch = rear_data.duplicate(true)
@@ -421,6 +695,9 @@ func _sync_rv(new_transform: Transform3D, new_linear: Vector3, new_angular: Vect
 	_update_cable(rear_cable, rear_winch, _rear_hook_position())
 	_update_damage_visuals()
 	stats_changed.emit(health, fuel, gear, _hud_speed_kmh())
+	components_changed.emit(health, frame_integrity, engine_integrity, _average_tire_integrity())
+	drivetrain_changed.emit(engine_rpm, clutch_input, engine_running)
+	fire_changed.emit(fire_level)
 
 func _on_body_entered(_body: Node) -> void:
 	var impact := linear_velocity.length()
@@ -468,8 +745,8 @@ func _fill_engine_audio() -> void:
 	if not engine_playback:
 		return
 	var available := mini(engine_playback.get_frames_available(), 512)
-	var rpm := 34.0 + linear_velocity.length() * 2.6 + absf(throttle_input) * 28.0
-	var volume := 0.035 if engine_running else 0.0
+	var rpm := 24.0 + (engine_rpm / 4200.0) * 76.0
+	var volume := (0.025 + (engine_rpm / 4200.0) * 0.025) if engine_running else 0.0
 	for _index in available:
 		audio_phase = fmod(audio_phase + rpm / 22050.0, 1.0)
 		var fundamental := sin(audio_phase * TAU)
@@ -701,6 +978,23 @@ func _build_vehicle_lighting() -> void:
 	cabin_light.shadow_enabled = false
 	cabin_light.visible = false
 	body_shell.add_child(cabin_light)
+	# Readable stylized engine-bay flames; mobile-safe meshes and one unshadowed
+	# light communicate the emergency without expensive particles.
+	fire_visual = Node3D.new()
+	fire_visual.name = "EngineFireVisual"
+	fire_visual.position = Vector3(0.0, 0.60, 2.62)
+	body_shell.add_child(fire_visual)
+	PrimitiveFactory.sphere(fire_visual, "OuterFlame", Vector3.ZERO, 0.42, Color("f06a24"))
+	PrimitiveFactory.sphere(fire_visual, "InnerFlame", Vector3(0, 0.18, 0), 0.25, Color("ffd05a"))
+	fire_visual.visible = false
+	fire_light = OmniLight3D.new()
+	fire_light.name = "EngineFireLight"
+	fire_light.position = Vector3(0.0, 0.85, 2.62)
+	fire_light.light_color = Color("ff792f")
+	fire_light.omni_range = 7.0
+	fire_light.shadow_enabled = false
+	fire_light.visible = false
+	body_shell.add_child(fire_light)
 
 func _update_vehicle_visuals() -> void:
 	if steering_visual_root:
@@ -729,6 +1023,7 @@ func _add_wheel(wheel_name: String, wheel_position: Vector3, steering_wheel: boo
 	wheel.use_as_steering = steering_wheel
 	wheel.use_as_traction = traction_wheel
 	add_child(wheel)
+	wheel_nodes.append(wheel)
 	# The compact core sits within the authored 0.43 m sidewall and only catches
 	# a missed first suspension ray; it cannot produce the old buried/floating
 	# 0.61 m cylinders visible in the physical-device rejection screenshots.

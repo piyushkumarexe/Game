@@ -26,8 +26,11 @@ The handcrafted route contains:
 
 - Six-wheel tandem-axle `VehicleBody3D` motorhome with suspension, front steering and rear-bogie traction
 - Low-center-of-mass stability tuning, parked braking, velocity guards and a sane 115 km/h ceiling
-- Reverse, neutral and five forward gear ratios
-- Fuel, layered health, impact damage and performance degradation
+- Physical ignition, live RPM, clutch-gated reverse/neutral/five-speed shifting, gear grinding and low-speed stalling
+- Fuel plus independently damaged body, frame, engine and six-wheel running gear, each affecting performance differently
+- Physical carryable repair hammer, welding tool, motor-oil cans, power drill and modeled spare tires, each required at its matching service point
+- Six independently damaged wheels that can fail visibly, lose traction/support and require a carried replacement tire
+- Escalating engine fires that spread into body/frame damage, with visible flames, HUD warning and limited-charge physical extinguishers
 - Breakable/damage-reactive exterior details
 - Synthesized positional engine audio
 
@@ -46,8 +49,8 @@ The handcrafted route contains:
 
 - Independent front and rear physics winches
 - Environmental cable anchors and progressive cable tension
-- Carryable bridge planks and placement sockets
-- Supply crates, fuel cans and a repair garage
+- Real rigid-body supply crates and bridge planks with pickup, carry, drop, inherited vehicle momentum and RV cargo stowage
+- Physical bridge-plank placement sockets, fuel cans and a repair garage
 - Checkpoint recovery for the RV
 - Eight-step single-player mission chain
 - Ridge-boar AI and a triggered physics rockfall
@@ -72,24 +75,28 @@ The handcrafted route contains:
 - Reduced shadow resolution, quality-scaled scenery/shadows, a batched distant forest, batched RV materials, and throttled vehicle HUD updates for mobile performance
 - Coherent lit forest/campsite palette replacing cyan trees, pink canvas, and white unlit stones
 - Collision-aware deterministic walking around the RV, tent, fire ring, and camp sign
-- Static parking state that prevents the unoccupied RV from settling or tipping before the player enters it
+- Stable pre-departure parking state; after first ignition the RV remains continuously simulated, uses physical brakes when unoccupied, and carries walking passengers with its full translation and rotation
 - Original generated app/key artwork, with no remote runtime assets
 
-## Controls
+## Mobile controls
 
-| Action | Touch | Keyboard/gamepad |
-|---|---|---|
-| Walk / drive | Left stick | `WASD` / left stick |
-| Look | Swipe/drag the right side | Mouse / right stick |
-| First-/third-person view | **VIEW 1P / 3P** | `C` / gamepad Y |
-| Interact / enter / exit | **USE** | `E` / gamepad X |
-| Jump | **JUMP** | `Space` / gamepad A |
-| Sprint | **SPRINT** | `Shift` / left-stick click |
-| Shift down / up | **GEAR − / +** | `Z / X` / left/right shoulder |
-| Brake / handbrake | **BRAKE** | `Space` / gamepad B |
-| Front cable | **FRONT CABLE** | `Q` / D-pad up |
-| Rear cable | **REAR CABLE** | `R` / D-pad down |
-| Customize layout | **LAYOUT**, then drag/save | Main-menu **CONTROLS & PERFORMANCE** |
+Android and iOS are the shipping targets. Desktop bindings exist only for editor/CI diagnostics and are not part of the player-facing design.
+
+| Action | Touch control |
+|---|---|
+| Walk / drive | Left thumb stick |
+| Look | Swipe/drag anywhere on the right side |
+| First-/third-person view | **VIEW 1P / 3P** |
+| Interact / enter / exit | Context-sensitive **USE** |
+| Jump / sprint | **JUMP** / hold **SPRINT** |
+| Start or stop RV | **IGNITION** |
+| Shift | **GEAR − / +**; mobile clutch assist engages automatically |
+| Advanced hill start | Hold **CLUTCH** manually while adding throttle |
+| Brake / handbrake | Hold **BRAKE** |
+| Use extinguisher/tool | **USE TOOL** |
+| Attach cable | Aim, then **FRONT CABLE** or **REAR CABLE** |
+| Operate winch | Hold **REEL IN / OUT** |
+| Customize controls | **LAYOUT**, then drag and save |
 
 ## Engine
 

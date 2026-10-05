@@ -51,9 +51,7 @@ func _apply_interaction(player: Node) -> void:
 				GameSession.toast_requested.emit("PLANK CARRIED", "Take it to a yellow bridge socket.")
 				_consume.rpc()
 		"bridge_socket":
-			if player.carried_item == "plank":
-				player.carried_item = ""
-				player.update_carried_visual()
+			if player.has_method("consume_carried_cargo") and player.consume_carried_cargo("plank"):
 				GameSession.planks_placed += 1
 				if Net.world:
 					Net.world.place_bridge_plank(GameSession.planks_placed)
@@ -65,13 +63,29 @@ func _apply_interaction(player: Node) -> void:
 				_consume.rpc()
 			else:
 				GameSession.toast_requested.emit("BRIDGE GAP", "Find a plank at the worksite.")
-		"repair_station":
-			if GameSession.rv and GameSession.rv.health < 98.0:
-				GameSession.rv.repair(36.0)
+		"repair_body", "repair_frame", "repair_engine", "repair_tires":
+			var component := kind.trim_prefix("repair_")
+			if component == "tires" and GameSession.rv and GameSession.rv.has_missing_wheel():
+				if player.has_method("has_carried_tool") and player.has_carried_tool("spare_tire"):
+					if GameSession.rv.install_spare_tire():
+						player.consume_carried_cargo("spare_tire")
+						GameSession.complete_target("repair")
+						GameSession.toast_requested.emit("SPARE INSTALLED", "Replacement wheel secured at 72% condition.")
+				else:
+					GameSession.toast_requested.emit("SPARE TIRE REQUIRED", "A wheel is missing. Carry a spare tire to this station.")
+				return
+			var required_tool := str({"body": "hammer", "frame": "welder", "engine": "oil", "tires": "drill"}.get(component, ""))
+			if not player.has_method("has_carried_tool") or not player.has_carried_tool(required_tool):
+				GameSession.toast_requested.emit("TOOL REQUIRED", "Bring the %s to this service point." % _tool_display_name(required_tool))
+				return
+			if GameSession.rv and GameSession.rv.repair_component(component, 38.0):
+				# Oil is a consumable; durable hand tools remain physically carried.
+				if required_tool == "oil":
+					player.consume_carried_cargo("oil")
 				GameSession.complete_target("repair")
-				GameSession.toast_requested.emit("RIG PATCHED", "Frame and engine restored.")
+				GameSession.toast_requested.emit("%s REPAIR" % component.to_upper(), "%s restored part of the system." % _tool_display_name(required_tool))
 			else:
-				GameSession.toast_requested.emit("GARAGE", "The rig does not need repairs yet.")
+				GameSession.toast_requested.emit("NO REPAIR NEEDED", "%s is already serviceable." % component.capitalize())
 		"fuel":
 			if GameSession.rv:
 				GameSession.rv.add_fuel(30.0)
@@ -86,6 +100,9 @@ func _consume() -> void:
 	collision_mask = 0
 	set_process(false)
 
+func _tool_display_name(tool: String) -> String:
+	return str({"hammer": "REPAIR HAMMER", "welder": "WELDING TOOL", "oil": "MOTOR OIL", "drill": "POWER DRILL"}.get(tool, "CORRECT TOOL"))
+
 func _match_appearance() -> void:
 	match kind:
 		"supply":
@@ -97,9 +114,18 @@ func _match_appearance() -> void:
 		"bridge_socket":
 			prompt = "PLACE PLANK"
 			display_color = Color("f1a83b")
-		"repair_station":
-			prompt = "REPAIR THE RV"
+		"repair_body":
+			prompt = "USE HAMMER — BODY"
+			display_color = Color("65a879")
+		"repair_frame":
+			prompt = "USE WELDER — FRAME"
 			display_color = Color("4f9f91")
+		"repair_engine":
+			prompt = "ADD MOTOR OIL — ENGINE"
+			display_color = Color("b95a36")
+		"repair_tires":
+			prompt = "USE POWER DRILL — TIRES"
+			display_color = Color("c7a34a")
 		"fuel":
 			prompt = "TAKE FUEL CAN"
 			display_color = Color("c4482e")
