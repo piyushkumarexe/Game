@@ -129,7 +129,7 @@ func _build_head_accessories() -> void:
 		lens_mesh.height = 0.084
 		lens_mesh.radial_segments = 20
 		lens_mesh.rings = 8
-		var lens_instance := _mesh(accessory_root, "RoundedSunglassLens", lens_mesh,
+		var lens_instance := _mesh(accessory_root, "SunglassLens", lens_mesh,
 			Vector3(side * 0.040, -0.005, 0.178), lens)
 		lens_instance.scale = Vector3(1.08, 0.67, 0.16)
 		lens_instance.rotation.z = side * -0.025
