@@ -616,13 +616,13 @@ func _toggle_winch(data: Dictionary, front: bool, requested_anchor := Vector3.IN
 	GameSession.complete_target("winch")
 
 func attach_winch_from_player(peer_id: int, front: bool, anchor: Vector3) -> void:
-	var player := Net.world.get_player(peer_id) if Net.world else null
+	var player: Node3D = Net.world.get_player(peer_id) as Node3D if Net.world else null
 	if not player or player.global_position.distance_to(anchor) > 30.0:
 		return
 	_toggle_winch(front_winch if front else rear_winch, front, anchor)
 
 func set_winch_reel(peer_id: int, direction: float) -> void:
-	var player := Net.world.get_player(peer_id) if Net.world else null
+	var player: Node3D = Net.world.get_player(peer_id) as Node3D if Net.world else null
 	if not player or player.global_position.distance_to(global_position) > 18.0:
 		winch_reel_command = 0.0
 		return
