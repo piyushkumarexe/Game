@@ -196,6 +196,7 @@ func _run_expedition_smoke_test() -> void:
 	Net.start_solo()
 	_start_expedition()
 	await get_tree().create_timer(3.0).timeout
+	print("SMOKE_STAGE world-ready")
 	var failures: Array[String] = []
 	if not active_world or not is_instance_valid(active_world):
 		failures.append("expedition world missing")
@@ -331,6 +332,7 @@ func _run_expedition_smoke_test() -> void:
 			else:
 				failures.append("JUMP touch button missing")
 
+			print("SMOKE_STAGE touch-locomotion-complete")
 			# Dedicated front-facing proof catches facial proportion, eye spacing,
 			# accessory placement and accidental bind/A-pose regressions that a rear
 			# gameplay camera cannot reveal.
@@ -362,6 +364,7 @@ func _run_expedition_smoke_test() -> void:
 					active_hud.visible = true
 				character_camera.queue_free()
 				local_player.third_camera.make_current()
+				print("SMOKE_STAGE character-proofs-complete")
 
 	# Guard the exact runaway/falling regression reported from the phone build.
 	if GameSession.rv and is_instance_valid(GameSession.rv):
@@ -450,6 +453,7 @@ func _run_expedition_smoke_test() -> void:
 				failures.append("door USE assist did not place player inside cabin (%s)" % assisted_local)
 			if smoke_rv.driver_peer_id != 0 or assisted_player.is_driving:
 				failures.append("door USE assist incorrectly skipped directly to driver seat")
+			print("SMOKE_STAGE doorway-walk-and-assist-complete")
 			# Side-on acceptance frame must visibly show the open panel, all three
 			# steps, unobstructed threshold and connected modeled living space.
 			var doorway_camera := Camera3D.new()
@@ -477,6 +481,7 @@ func _run_expedition_smoke_test() -> void:
 				active_hud.visible = doorway_hud_was_visible
 			doorway_camera.queue_free()
 			GameSession.local_player.camera.make_current()
+			print("SMOKE_STAGE doorway-proof-complete")
 		smoke_rv.set_entry_door_open(false)
 		if GameSession.local_player and is_instance_valid(GameSession.local_player):
 			smoke_rv.interact(GameSession.local_player)
@@ -511,6 +516,7 @@ func _run_expedition_smoke_test() -> void:
 						elif wheel_clearance > 0.62:
 							failures.append("%s is floating above terrain after physics release (clearance %.2f m)" % [settled_wheel.name, wheel_clearance])
 
+	print("SMOKE_STAGE rv-driving-complete")
 	if active_hud and is_instance_valid(active_hud):
 		if not active_hud.find_child("MoveStick", true, false):
 			failures.append("left movement stick missing")
@@ -541,6 +547,7 @@ func _run_expedition_smoke_test() -> void:
 			if absf(blocked_local.x) < 1.70 and absf(blocked_local.z) < 4.10:
 				failures.append("player can still stand underneath an RV overhang")
 
+	print("SMOKE_STAGE world-validation-complete")
 	# Capture the 3D viewport without CanvasLayer UI. Stage the already-working
 	# swipe-look camera at a rear three-quarter angle so the proof exposes side
 	# glazing, both axles and wheel stance instead of validating only a rear wall.

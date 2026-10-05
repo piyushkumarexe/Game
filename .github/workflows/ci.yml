@@ -86,7 +86,7 @@ jobs:
         run: |
           mkdir -p build/validation
           set +e
-          xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
+          timeout --signal=TERM --kill-after=15s 240s xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
             test -s build/validation/expedition-render.png \
