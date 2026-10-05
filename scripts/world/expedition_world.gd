@@ -424,8 +424,8 @@ func _apply_quality_profile() -> void:
 		if quality == 2:
 			_ensure_cinematic_detail_layer()
 			cinematic_detail_root.visible = true
-			for geometry: Node in props_root.find_children("*", "GeometryInstance3D", true, false):
-				(geometry as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			# Hero trees already opt into shadows individually. Do not force hundreds
+			# of tiny grass/flower meshes into the mobile shadow atlas.
 		elif cinematic_detail_root:
 			cinematic_detail_root.visible = false
 
@@ -706,8 +706,8 @@ func _ensure_cinematic_detail_layer() -> void:
 	# Extra branch-modelled conifers close the empty opening hills visible in the
 	# phone capture. Their limited 12–42 m ring retains the road sightline while
 	# detailed bark, alpha foliage and contact shadows fill the player's view.
-	for index in 22:
-		var angle := TAU * float(index) / 22.0 + detail_random.randf_range(-0.13, 0.13)
+	for index in 12:
+		var angle := TAU * float(index) / 12.0 + detail_random.randf_range(-0.13, 0.13)
 		var radius := detail_random.randf_range(23.0, 42.0)
 		var position := ROUTE[0] + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		if float(_nearest_route_data(Vector2(position.x, position.z)).x) < 9.5:
@@ -719,7 +719,7 @@ func _ensure_cinematic_detail_layer() -> void:
 	# Dense undergrowth breaks the flat terrain silhouette at human/camera height.
 	# Shadows remain disabled for these small meshes; the high setting spends its
 	# shadow budget on the RV, people and branch-modelled hero trees instead.
-	for index in 120:
+	for index in 48:
 		var angle := detail_random.randf_range(-PI, PI)
 		var radius := detail_random.randf_range(7.0, 38.0)
 		var position := ROUTE[0] + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)

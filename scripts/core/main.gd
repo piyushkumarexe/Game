@@ -536,7 +536,7 @@ func _run_expedition_smoke_test() -> void:
 			if active_world.find_children("RealisticBarkBranches", "MeshInstance3D", true, false).size() < 8:
 				failures.append("HIGH is missing its detailed procedural conifer layer")
 			var cinematic_layer := active_world.find_child("CinematicHighDetailLayer", true, false) as Node3D
-			if not cinematic_layer or not cinematic_layer.visible or cinematic_layer.find_children("*", "GeometryInstance3D", true, false).size() < 45:
+			if not cinematic_layer or not cinematic_layer.visible or cinematic_layer.find_children("*", "GeometryInstance3D", true, false).size() < 25:
 				failures.append("HIGH did not activate its live cinematic scenery layer")
 		if active_world.rv:
 			var under_bumper := active_world.rv.global_transform * Vector3(0.0, 0.0, 3.85)
