@@ -222,10 +222,10 @@ func set_local_driver_first_person(_active: bool) -> void:
 		cockpit_frame.visible = false
 
 func driver_seat_transform() -> Transform3D:
-	# Camera eye = origin + 1.62 m. This puts the physical-device eye at 1.30 m,
-	# behind the modeled dashboard and centered in the GMC panoramic windshield,
-	# with clear distance from the seat back, header, steering rim and console.
-	return global_transform * Transform3D(Basis.IDENTITY, Vector3(-0.72, -0.32, -2.85))
+	# Camera eye = origin + 1.62 m. A 1.42 m seated eye sits near the centre of the
+	# panoramic glass, ahead of the reduced seat back and above the dashboard rim.
+	# This keeps the real cockpit present without letting roof or console dominate.
+	return global_transform * Transform3D(Basis.IDENTITY, Vector3(-0.72, -0.20, -3.02))
 
 func exit_seat_transform() -> Transform3D:
 	# Exit beside the real passenger doorway rather than through the opposite wall.
@@ -622,6 +622,21 @@ func _build_entry_door(exterior: Node3D) -> void:
 					door_mesh.material_override = PrimitiveFactory.material(Color("c98b32"), 0.78, 0.08)
 				elif component_name == "EntryDoorHandle":
 					door_mesh.material_override = PrimitiveFactory.material(Color("c7c5bb"), 0.28, 0.82)
+	# The donor door's glass shares a solid exterior surface and disappeared at
+	# oblique angles, leaving a toy-like yellow slab in doorway proofs. A recessed
+	# smoked panel and metal surround make both faces read as a manufactured door.
+	for face in [-1.0, 1.0]:
+		var face_x := face * 0.052
+		PrimitiveFactory.box(entry_door_pivot, "EntryDoorSmokedGlass", Vector3(face_x, 0.37, -0.42),
+			Vector3(0.024, 0.60, 0.62), Color("17282d"))
+		PrimitiveFactory.box(entry_door_pivot, "EntryDoorWindowTop", Vector3(face_x + face * 0.003, 0.69, -0.42),
+			Vector3(0.030, 0.045, 0.70), Color("c2beb0"))
+		PrimitiveFactory.box(entry_door_pivot, "EntryDoorWindowBottom", Vector3(face_x + face * 0.003, 0.05, -0.42),
+			Vector3(0.030, 0.045, 0.70), Color("c2beb0"))
+		PrimitiveFactory.box(entry_door_pivot, "EntryDoorWindowHingeTrim", Vector3(face_x + face * 0.003, 0.37, -0.76),
+			Vector3(0.030, 0.68, 0.045), Color("c2beb0"))
+		PrimitiveFactory.box(entry_door_pivot, "EntryDoorWindowLatchTrim", Vector3(face_x + face * 0.003, 0.37, -0.08),
+			Vector3(0.030, 0.68, 0.045), Color("c2beb0"))
 	entry_door_interactable = RVDoorInteractableScript.new()
 	entry_door_interactable.name = "FunctionalEntryDoor"
 	entry_door_interactable.position = Vector3(1.58, 0.91, 0.98)

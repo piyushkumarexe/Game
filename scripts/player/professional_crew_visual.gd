@@ -119,17 +119,28 @@ func _build_head_accessories() -> void:
 	var brim_instance := _mesh(accessory_root, "ExpeditionCapBrim", brim, Vector3(0.0, 0.120, 0.128), charcoal)
 	brim_instance.rotation.x = -0.10
 
-	# Leave a visible nose bridge between compact lenses instead of one heavy
-	# black strip across the character's entire face.
+	# Rounded lenses sit over the authored eyes—not over the eyebrows. The former
+	# high rectangular pair made the eyes look detached and exaggerated their gap
+	# in the phone close-up. Shallow spheres provide a convincing curved silhouette
+	# while remaining inexpensive enough for the mobile character.
 	for side in [-1.0, 1.0]:
-		var lens_mesh := BoxMesh.new()
-		lens_mesh.size = Vector3(0.064, 0.034, 0.009)
-		var lens_instance := _mesh(accessory_root, "SunglassLens", lens_mesh,
-			Vector3(side * 0.043, 0.054, 0.178), lens)
+		var lens_mesh := SphereMesh.new()
+		lens_mesh.radius = 0.042
+		lens_mesh.height = 0.084
+		lens_mesh.radial_segments = 20
+		lens_mesh.rings = 8
+		var lens_instance := _mesh(accessory_root, "RoundedSunglassLens", lens_mesh,
+			Vector3(side * 0.040, -0.005, 0.178), lens)
+		lens_instance.scale = Vector3(1.08, 0.67, 0.16)
 		lens_instance.rotation.z = side * -0.025
 	var bridge := BoxMesh.new()
 	bridge.size = Vector3(0.018, 0.006, 0.010)
-	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, 0.055, 0.181), charcoal)
+	_mesh(accessory_root, "SunglassBridge", bridge, Vector3(0.0, -0.004, 0.181), charcoal)
+	for side in [-1.0, 1.0]:
+		var arm := BoxMesh.new()
+		arm.size = Vector3(0.055, 0.007, 0.012)
+		_mesh(accessory_root, "SunglassTemple", arm,
+			Vector3(side * 0.084, -0.002, 0.158), charcoal)
 
 func _resolve_clip(requested: String) -> StringName:
 	if not animation_player:
