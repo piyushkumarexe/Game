@@ -626,7 +626,7 @@ func _build_entry_door(exterior: Node3D) -> void:
 	# oblique angles, leaving a toy-like yellow slab in doorway proofs. A recessed
 	# smoked panel and metal surround make both faces read as a manufactured door.
 	for face in [-1.0, 1.0]:
-		var face_x := face * 0.052
+		var face_x: float = float(face) * 0.052
 		PrimitiveFactory.box(entry_door_pivot, "EntryDoorSmokedGlass", Vector3(face_x, 0.37, -0.42),
 			Vector3(0.024, 0.60, 0.62), Color("17282d"))
 		PrimitiveFactory.box(entry_door_pivot, "EntryDoorWindowTop", Vector3(face_x + face * 0.003, 0.69, -0.42),
