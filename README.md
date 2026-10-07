@@ -2,7 +2,9 @@
 
 A true 3D, first-/third-person single-player mobile physics adventure built with Godot 4.7.2.
 
-Version 0.10 is an **in-development physical-device correction release** for the RV shell/cockpit, suspension clearance, animated mechanisms, rounded crew character, and forest density. It is not stable until fresh Android device screenshots pass the visual and physics checklist. Multiplayer and proximity voice remain deliberately dormant until the core phone experience is stable.
+Version 0.11 opens the trip to a **four-player online crew**: a host-authoritative session over WebSocket (internet) or ENet (same Wi-Fi), a headless dedicated server target, shared cable stations, bench seats for crew who are not driving, and 12 kHz proximity radio with push-to-talk.
+
+The 0.10 RV shell/cockpit, suspension, animated mechanisms, crew character and forest work remain the visual baseline. Nothing here is stable until fresh Android device screenshots pass the visual, physics and [crew checklist](docs/online-coop-hosting.md) gates.
 
 > This is an original game in the cooperative road-trip genre. It does not copy or redistribute another game's protected maps, textures, models, audio, characters, branding, or code.
 
@@ -89,6 +91,11 @@ The handcrafted route contains:
 | Brake / handbrake | **BRAKE** | `Space` / gamepad B |
 | Front cable | **FRONT CABLE** | `Q` / D-pad up |
 | Rear cable | **REAR CABLE** | `R` / D-pad down |
+| Crew radio | hold **RADIO** | hold `V` / gamepad right stick |
+| Deafen the radio | centre **RADIO ON / MUTED** chip | `M` |
+| Mic mode | centre **PUSH TALK / OPEN MIC** chip | — |
+| Ride along / step out | **USE** on the coach | `E` on the coach |
+| Cable from the ground | **USE** at a CABLE STATION | `E` at a CABLE STATION |
 | Customize layout | **LAYOUT**, then drag/save | Main-menu **CONTROLS & PERFORMANCE** |
 
 ## Engine
@@ -97,7 +104,8 @@ The handcrafted route contains:
 - GDScript only; no third-party runtime plugins
 - Android 7.0+ / arm64 export preset
 - iOS 15+ Xcode export preset
-- Multiplayer/voice implementation retained but disabled in the 0.10 correction UI and runtime
+- Host-authoritative 1–4 crew sessions over WebSocket or ENet, plus a rendering-free dedicated server
+- 12 kHz mono proximity radio relayed by the host, distance-filtered and rate-limited per talker
 
 Selected tree, rock, campsite and supply GLBs come from Kenney's CC0 asset packs. Quaternius' CC0 work supplies the textured nature layer and the professionally rigged crew base/Ranger clothing. HIGH also uses deterministic mobile-detail conifer geometry generated with Daniel Greenheck's MIT-licensed EZ-Tree 1.1.0. The hero exterior is based on Karol Miklas' “FREE GMC Motorhome reimagined low poly” under CC-BY-4.0. Dustbound's connected interior, functional doorway/steps, character accessories, map, mechanisms and game-specific assets are original. Exact provenance, modifications and preserved license notices are documented under [`assets/third_party`](assets/third_party).
 
@@ -111,15 +119,38 @@ Install Godot 4.7.2 and open `project.godot`, or run:
 godot --editor --path .
 ```
 
-The 0.10 menu intentionally exposes only **START SINGLE-PLAYER EXPEDITION** plus local **CONTROLS & PERFORMANCE** settings.
+```bash
+# a crew host that nobody plays on
+godot --headless --path . -- --server --port 24817
+
+# four-player handshake, no window, no mocking — the same self-test CI runs
+godot --headless --path . -- --server --port 24817 --selftest &
+godot --headless --path . -- --join 127.0.0.1:24817 --selftest --selftest-wait 110 &
+godot --headless --path . -- --join 127.0.0.1:24817 --selftest --selftest-wait 110 &
+wait
+```
+
+The menu offers **START SINGLE-PLAYER EXPEDITION**, **HOST ONLINE EXPEDITION**
+(WebSocket), **HOST SAME-WI-FI CREW (UDP)**, a **JOIN A CREW** address field and
+local **CONTROLS & PERFORMANCE** settings. Hosting prints a share line such as
+`ws://192.168.1.20:24817/`; up to three crew paste it into the join field. See
+[docs/online-coop-hosting.md](docs/online-coop-hosting.md) for port forwarding,
+`wss://` behind nginx or Caddy, Docker, and the sync model.
 
 ## GitHub mobile builds
 
-`.github/workflows/ci.yml`:
+`.github/workflows/ci.yml` gates on a fast compile check, then fans out:
 
-1. imports the project and validates every GDScript;
-2. launches the actual expedition in a windowed OpenGL session, drives the mobile controls, verifies locomotion/facing, the detailed RV and both cameras, then saves full-coach chase, open-doorway, modeled-cockpit and front-facing character proofs;
-3. exports a debug-signed Android APK and verifies its manifest is locked to landscape;
-4. exports an unsigned, build-ready iOS Xcode project archive.
+- **validate** — imports the project and validates every GDScript, then boots the
+  real main scene headless. This is the gate everything else waits on.
+- **render** — launches the expedition in a windowed OpenGL session, drives the
+  mobile controls, verifies locomotion/facing, the detailed RV and both cameras,
+  and saves the full-coach chase, open-doorway, modeled-cockpit and character
+  proofs. Bounded by a timeout with the log tail on the step summary, because the
+  runner renders on llvmpipe.
+- **coop** — starts a headless dedicated server and two joining crew, asserting the
+  roster rpcs, the world spawn and the mission sync; session logs are uploaded.
+- **android** — exports a debug-signed APK and verifies the manifest is landscape.
+- **ios** — exports an unsigned, build-ready Xcode project archive.
 
 CI intentionally uses Godot's project-only iOS export so no Apple credentials are stored in the repository. Open the artifact in Xcode and select your Apple Developer team; a certificate and provisioning profile are required before installation on a physical iPhone or TestFlight submission.

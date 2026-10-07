@@ -15,6 +15,9 @@ var player_name := "Rover"
 var role := 0
 var is_driving := false
 var driven_vehicle: Node
+var is_riding := false
+var ridden_vehicle: Node
+var ride_slot := 0
 var carried_item := ""
 var interaction_text := ""
 var remote_target := Transform3D.IDENTITY
@@ -92,17 +95,24 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	if peer_id != multiplayer.get_unique_id():
 		transform = transform.interpolate_with(remote_target, minf(1.0, delta * 13.0))
+		# Radio glow is a listener-side judgement: this client is the one that
+		# receives the voice, so it paints every other crew member's nameplate.
+		_update_radio_glow()
 		return
 	if Input.is_action_just_pressed("toggle_view") or GameSession.consume_touch_press("toggle_view"):
 		_toggle_camera_mode()
 	if is_driving and driven_vehicle:
 		_drive_vehicle(delta)
+	elif is_riding and ridden_vehicle:
+		_ride_along(delta)
 	else:
 		_move_on_foot(delta)
 	_update_body_animation(delta)
 	_update_interaction()
 	if Net.is_online:
-		_sync_state.rpc(transform, velocity, is_driving)
+		# Crew riding along sync as "seated" so remote peers stop playing the
+		# walk cycle through the coach windows.
+		_sync_state.rpc(transform, velocity, is_driving or is_riding)
 
 func _move_on_foot(delta: float) -> void:
 	just_jumped = false
@@ -169,6 +179,8 @@ func _terrain_floor(x: float, z: float) -> float:
 
 
 func _recover_on_foot() -> void:
+	if is_driving or is_riding:
+		return
 	global_position = safe_position + Vector3.UP * 0.12
 	velocity = Vector3.ZERO
 	vertical_velocity = 0.0
@@ -217,7 +229,7 @@ func _apply_mobile_and_gamepad_look(delta: float, driving: bool) -> void:
 		head.rotation.x = look_pitch
 
 func _update_body_animation(delta: float) -> void:
-	if is_driving or (not body_rig and not body_animation):
+	if is_driving or is_riding or (not body_rig and not body_animation):
 		return
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
 	var target := "Idle"
@@ -246,6 +258,9 @@ func _update_body_animation(delta: float) -> void:
 		body_animation.play(target, blend)
 
 func _toggle_camera_mode() -> void:
+	if is_riding:
+		GameSession.toast_requested.emit("PASSENGER VIEW", "The coach interior is all you get from the bench.")
+		return
 	_apply_camera_mode(not third_person)
 	GameSession.toast_requested.emit("THIRD-PERSON CAMERA" if third_person else "FIRST-PERSON CAMERA",
 		"Swipe anywhere on the right side to look around.")
@@ -272,6 +287,19 @@ func _update_interaction() -> void:
 		interaction_text = "EXIT DRIVER SEAT"
 		if interact_pressed:
 			driven_vehicle.exit_driver(self)
+		return
+	if is_riding:
+		# Jumping out of a moving coach is a bad idea, so the RV has to be
+		# essentially parked before the door is offered.
+		var coach_speed := 99.0
+		if ridden_vehicle:
+			coach_speed = ridden_vehicle.linear_velocity.length()
+		if coach_speed > 1.6:
+			interaction_text = "TOO FAST TO STEP OUT  (%d KM/H)" % roundi(coach_speed * 3.6)
+			return
+		interaction_text = "STEP OUT OF THE RV"
+		if interact_pressed:
+			ridden_vehicle.request_exit_ride(self)
 		return
 	interaction_text = ""
 	interact_ray.force_raycast_update()
@@ -321,6 +349,77 @@ func leave_driver(exit_transform: Transform3D) -> void:
 		_apply_camera_mode(third_person)
 	else:
 		body_visual.visible = true
+
+func enter_rider(vehicle: Node, slot: int) -> void:
+	## Called on every peer by the RV's authority rpc, so the seat pose is shared
+	## instead of being teleported only for the local player.
+	ridden_vehicle = vehicle
+	ride_slot = clampi(slot, 0, 1)
+	is_riding = true
+	is_driving = false
+	driven_vehicle = null
+	velocity = Vector3.ZERO
+	vertical_velocity = 0.0
+	grounded = true
+	air_time = 0.0
+	head.rotation = Vector3.ZERO
+	look_pitch = 0.0
+	$CollisionShape3D.set_deferred("disabled", true)
+	body_visual.visible = false
+	_apply_seat_pose()
+	if peer_id == multiplayer.get_unique_id():
+		_apply_camera_mode(false)
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if not OS.has_feature("mobile") else Input.mouse_mode
+
+
+func leave_rider(exit_transform: Transform3D) -> void:
+	is_riding = false
+	ridden_vehicle = null
+	ride_slot = 0
+	global_transform = exit_transform
+	velocity = Vector3.ZERO
+	vertical_velocity = 0.0
+	grounded = false
+	$CollisionShape3D.set_deferred("disabled", false)
+	head.rotation = Vector3.ZERO
+	look_pitch = 0.0
+	if peer_id == multiplayer.get_unique_id():
+		_apply_camera_mode(third_person)
+	else:
+		body_visual.visible = true
+	safe_position = global_position
+
+
+func _ride_along(_delta: float) -> void:
+	if ridden_vehicle == null or not is_instance_valid(ridden_vehicle):
+		is_riding = false
+		ridden_vehicle = null
+		return
+	_apply_seat_pose()
+	# Passengers keep their free-look: calling out a washed-out bridge or a boar
+	# on the ridge is the whole reason to ride together.
+	_apply_mobile_and_gamepad_look(_delta, true)
+
+
+func _apply_seat_pose() -> void:
+	if ridden_vehicle == null or not is_instance_valid(ridden_vehicle):
+		return
+	global_transform = ridden_vehicle.ride_seat_transform(ride_slot)
+	velocity = Vector3.ZERO
+
+
+func _update_radio_glow() -> void:
+	## A green nameplate means that crew member is on the radio right now. Only
+	## the local listener can know it, since it is the one receiving the voice.
+	if peer_id == multiplayer.get_unique_id() or nameplate == null or not is_instance_valid(nameplate):
+		return
+	var local: Node = GameSession.local_player
+	var voice_node: Node = local.get("voice") if local else null
+	var talking := false
+	if voice_node and voice_node.has_method("is_recently_heard"):
+		talking = bool(voice_node.call("is_recently_heard", peer_id))
+	nameplate.modulate = Color("7ff0c4") if talking else Color.WHITE
+
 
 func update_carried_visual() -> void:
 	if peer_id == multiplayer.get_unique_id():

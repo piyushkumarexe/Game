@@ -77,6 +77,14 @@ func _apply_interaction(player: Node) -> void:
 				GameSession.rv.add_fuel(30.0)
 				GameSession.toast_requested.emit("FUEL LOADED", "+30 L")
 				_consume.rpc()
+		"winch_front", "winch_rear":
+			# The station is a lever, not a pickup, so it is never consumed: the
+			# same post is used to hook and unhook as the rig works through a bog.
+			var front := kind == "winch_front"
+			if GameSession.rv and GameSession.rv.has_method("operate_winch"):
+				GameSession.rv.call("operate_winch", front)
+			else:
+				GameSession.toast_requested.emit("NO WINCH IN RANGE", "Drive the RV up to the cable station first.")
 
 @rpc("authority", "call_local", "reliable")
 func _consume() -> void:
@@ -103,6 +111,12 @@ func _match_appearance() -> void:
 		"fuel":
 			prompt = "TAKE FUEL CAN"
 			display_color = Color("c4482e")
+		"winch_front":
+			prompt = "HOOK FRONT CABLE"
+			display_color = Color("4f9f91")
+		"winch_rear":
+			prompt = "HOOK REAR CABLE"
+			display_color = Color("c07a3c")
 
 func _build_visual() -> void:
 	var visual: Node3D

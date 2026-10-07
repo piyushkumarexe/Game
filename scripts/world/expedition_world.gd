@@ -174,7 +174,10 @@ func _verify_playable_view() -> void:
 		GameSession.toast_requested.emit("REDMESA TRAIL CAMP", "Find the marked supply crates and tap USE to load them.")
 	elif is_instance_valid(bootstrap_camera):
 		bootstrap_camera.make_current()
-		push_error("Local expedition player was not created; bootstrap camera retained.")
+		# A dedicated host has no local player by design, and a joining client may
+		# still be waiting on the roster rpc. Only a silent solo run is a real bug.
+		if not Net.is_online:
+			push_error("Local expedition player was not created; bootstrap camera retained.")
 
 func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	if players.has(peer_id):
@@ -184,10 +187,20 @@ func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	var index := players.size()
 	var spawn_x := ROUTE[0].x - 3.0 + index * 1.4
 	var spawn_z := ROUTE[0].z + 8.5
+	# A crew member who joins after the rig has left camp appears beside the RV.
+	# Dropping them at the trailhead turns a friendly invite into a two-kilometre
+	# walk, which is the fastest way to lose a player mid-trip.
+	var underway := rv != null and is_instance_valid(rv) and rv.global_position.distance_to(ROUTE[0]) > 45.0
+	if underway:
+		var beside: Vector3 = rv.global_transform.basis * Vector3(2.4 + index * 1.1, 0.0, 3.4)
+		spawn_x = rv.global_position.x + beside.x
+		spawn_z = rv.global_position.z + beside.z
 	# Never place a character under the physical safety pad. This exact mistake
 	# caused the device screenshots where the player fell forever below camp.
-	var camp_height := maxf(terrain_height(spawn_x, spawn_z), ROUTE[0].y)
-	var spawn := Vector3(spawn_x, camp_height + 0.35, spawn_z)
+	var ground := terrain_height(spawn_x, spawn_z)
+	if not underway:
+		ground = maxf(ground, ROUTE[0].y)
+	var spawn := Vector3(spawn_x, ground + 0.35, spawn_z)
 	player.setup(peer_id, player_name, role, spawn)
 	players[peer_id] = player
 
@@ -200,6 +213,50 @@ func remove_network_player(peer_id: int) -> void:
 
 func get_player(peer_id: int) -> Node:
 	return players.get(peer_id)
+
+
+func release_riders_for(peer_id: int) -> void:
+	## A crew member who vanished mid-ride must not stay welded to a seat, or the
+	## slot never frees up for the next player.
+	if rv and is_instance_valid(rv) and rv.has_method("force_release_rider"):
+		rv.call("force_release_rider", peer_id)
+
+
+func route_length() -> float:
+	var total := 0.0
+	for index in ROUTE.size() - 1:
+		total += Vector2(ROUTE[index].x, ROUTE[index].z).distance_to(Vector2(ROUTE[index + 1].x, ROUTE[index + 1].z))
+	return total
+
+
+func trip_progress(world_position: Vector3) -> float:
+	## How far along the hand-authored Redmesa route a point is, used by the
+	## "are we there yet" trip bar. Nearest-point-on-polyline, not raw distance,
+	## so cutting a corner never claims the crew finished a leg.
+	if not world_position.is_finite():
+		return 0.0
+	var total := route_length()
+	var best_distance := INF
+	var best_progress := 0.0
+	var walked := 0.0
+	for index in ROUTE.size() - 1:
+		var start := Vector2(ROUTE[index].x, ROUTE[index].z)
+		var finish := Vector2(ROUTE[index + 1].x, ROUTE[index + 1].z)
+		var segment := finish - start
+		var length := maxf(0.001, segment.length())
+		var point := Vector2(world_position.x, world_position.z)
+		var along := clampf((point - start).dot(segment) / (length * length), 0.0, 1.0)
+		var projected := start.lerp(finish, along)
+		var distance := point.distance_to(projected)
+		if distance < best_distance:
+			best_distance = distance
+			best_progress = (walked + length * along) / total
+		walked += length
+	return clampf(best_progress, 0.0, 1.0)
+
+
+func distance_to_finish(world_position: Vector3) -> float:
+	return maxf(0.0, (1.0 - trip_progress(world_position)) * route_length())
 
 func place_bridge_plank(index: int) -> void:
 	if index <= bridge_planks.size():
@@ -1000,6 +1057,13 @@ func _build_mission_props() -> void:
 	_spawn_interactable("bridge_socket", ROUTE[3] + Vector3(1.1, 0.5, -2.2))
 	_spawn_interactable("repair_station", ROUTE[5] + Vector3(-3.5, 1.0, 1.2))
 	_spawn_interactable("fuel", ROUTE[5] + Vector3(-2.0, 0.6, 1.1))
+	# Cable stations let a mechanic or scout work the winch from solid ground
+	# while the driver keeps both hands on the wheel — the core co-op move in the
+	# bog and on the pass, where a lone driver has nobody to hook the line.
+	for station in [[1, Vector3(6.5, 0.0, 9.5)], [1, Vector3(9.0, 0.0, 12.2)],
+			[8, Vector3(4.8, 0.0, 6.4)], [8, Vector3(7.4, 0.0, 9.2)]]:
+		var spot := ROUTE[int(station[0])] + Vector3(station[1])
+		_spawn_winch_station(spot)
 	_create_checkpoint(ROUTE[2], 1, "Dry Creek Overlook", Vector3(10, 5, 7))
 	_create_checkpoint(ROUTE[5], 2, "Lantern Post Garage", Vector3(12, 6, 8))
 	_create_checkpoint(ROUTE[8], 3, "Last Light Summit", Vector3(12, 7, 8))
@@ -1007,6 +1071,17 @@ func _build_mission_props() -> void:
 	var rockfall: RockfallHazard = RockfallScript.new()
 	add_child(rockfall)
 	rockfall.setup((ROUTE[7] + ROUTE[8]) * 0.5 + Vector3.UP * 3.0, self)
+
+func _spawn_winch_station(route_spot: Vector3) -> void:
+	var grounded := Vector3(route_spot.x, terrain_height(route_spot.x, route_spot.z) + 0.05, route_spot.z)
+	_spawn_interactable("winch_front", grounded + Vector3(0.0, 0.55, 0.0))
+	_spawn_interactable("winch_rear", grounded + Vector3(1.25, 0.55, 0.0))
+	# A tripod keeps the two levers readable from the driver seat, which is where
+	# a crew member is standing when they look for the winch in the dark.
+	PrimitiveFactory.box(self, "WinchStationFrame", grounded + Vector3(0.62, 1.15, 0.0),
+		Vector3(2.35, 0.16, 0.16), Color("6d7476"), true)
+	PrimitiveFactory.label_3d(self, "CABLE STATION", grounded + Vector3(0.62, 2.05, 0.0), Color("9fe8cf"), 26)
+
 
 func _spawn_interactable(kind: String, position: Vector3) -> TrailInteractable:
 	var item: TrailInteractable = InteractableScript.new()

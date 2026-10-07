@@ -12,11 +12,12 @@ const ACTION_LABELS := {
 	"sprint": "SPRINT",
 	"winch_front": "FRONT\nWINCH",
 	"winch_rear": "REAR\nWINCH",
+	"voice": "RADIO",
 	"shift_up": "GEAR +",
 	"shift_down": "GEAR −",
 	"handbrake": "BRAKE"
 }
-const ACTION_ORDER := ["move", "winch_rear", "winch_front", "sprint", "jump", "handbrake", "interact", "shift_down", "shift_up", "toggle_view"]
+const ACTION_ORDER := ["move", "winch_rear", "winch_front", "voice", "sprint", "jump", "handbrake", "interact", "shift_down", "shift_up", "toggle_view"]
 
 var cards: Dictionary = {}
 var tools: Dictionary = {}

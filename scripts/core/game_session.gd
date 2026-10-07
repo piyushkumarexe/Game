@@ -11,6 +11,7 @@ signal settings_changed
 
 enum Mode { MENU, LOBBY, PLAYING, RESULTS }
 enum Role { DRIVER, MECHANIC, SCOUT, NAVIGATOR }
+enum VoiceMode { PUSH_TO_TALK, OPEN_MIC }
 
 const MISSIONS: Array[Dictionary] = [
 	{"title": "PACK FOR THE DETOUR", "detail": "Load 3 supply crates into the RV.", "target": "supplies"},
@@ -36,6 +37,12 @@ var mobile_look_delta := Vector2.ZERO
 var mobile_actions: Dictionary = {}
 var player_name: String = "Rover"
 var selected_role: Role = Role.DRIVER
+## True when this process is a rendering-free authoritative host (`--server`).
+var dedicated := false
+var last_join_address := ""
+var voice_enabled := true
+var voice_deafened := false
+var voice_mode: VoiceMode = VoiceMode.PUSH_TO_TALK
 var reduced_graphics: bool = false
 var graphics_quality := 1
 var control_scale := 1.0
@@ -52,6 +59,7 @@ const DEFAULT_CONTROL_LAYOUT := {
 	"sprint": Vector2(0.872, 0.91),
 	"winch_front": Vector2(0.800, 0.91),
 	"winch_rear": Vector2(0.722, 0.91),
+	"voice": Vector2(0.645, 0.905),
 	"shift_up": Vector2(0.947, 0.64),
 	"shift_down": Vector2(0.870, 0.64),
 	"handbrake": Vector2(0.870, 0.77)
@@ -59,10 +67,17 @@ const DEFAULT_CONTROL_LAYOUT := {
 
 func _ready() -> void:
 	_create_input_actions()
+	# Host-raised toasts reach every client through the network layer, so the
+	# crew shares one feed of what happened to the rig.
+	toast_requested.connect(_relay_toast_to_crew)
 	graphics_quality = 1 if OS.has_feature("mobile") else 2
 	control_layout = DEFAULT_CONTROL_LAYOUT.duplicate(true)
 	_load_settings()
 	reduced_graphics = graphics_quality == 0
+
+func _relay_toast_to_crew(title: String, detail: String) -> void:
+	Net.broadcast_toast(title, detail)
+
 
 func reset_run() -> void:
 	mission_index = 0
@@ -94,12 +109,24 @@ func reset_control_layout() -> void:
 	touch_look_speed = 1.0
 	settings_changed.emit()
 
+func save_profile() -> void:
+	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)
+	config.set_value("profile", "name", player_name)
+	config.set_value("profile", "role", selected_role)
+	config.set_value("profile", "last_join", last_join_address)
+	config.save(SETTINGS_PATH)
+
+
 func save_settings() -> void:
 	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)
 	config.set_value("video", "quality", graphics_quality)
 	config.set_value("controls", "scale", control_scale)
 	config.set_value("controls", "opacity", control_opacity)
 	config.set_value("controls", "look_speed", touch_look_speed)
+	config.set_value("voice", "enabled", voice_enabled)
+	config.set_value("voice", "mode", voice_mode)
 	for action: String in control_layout:
 		config.set_value("layout", action, control_layout[action])
 	var error := config.save(SETTINGS_PATH)
@@ -112,14 +139,43 @@ func _load_settings() -> void:
 	var config := ConfigFile.new()
 	if config.load(SETTINGS_PATH) != OK:
 		return
+	player_name = str(config.get_value("profile", "name", player_name))
+	selected_role = clampi(int(config.get_value("profile", "role", selected_role)), 0, 3)
+	last_join_address = str(config.get_value("profile", "last_join", ""))
 	graphics_quality = clampi(int(config.get_value("video", "quality", graphics_quality)), 0, 2)
 	control_scale = clampf(float(config.get_value("controls", "scale", 1.0)), 0.72, 1.35)
 	control_opacity = clampf(float(config.get_value("controls", "opacity", 0.82)), 0.35, 1.0)
 	touch_look_speed = clampf(float(config.get_value("controls", "look_speed", 1.0)), 0.55, 1.65)
+	voice_enabled = bool(config.get_value("voice", "enabled", true))
+	voice_mode = clampi(int(config.get_value("voice", "mode", VoiceMode.PUSH_TO_TALK)), 0, 1)
 	for action: String in DEFAULT_CONTROL_LAYOUT:
 		var saved_position: Variant = config.get_value("layout", action, DEFAULT_CONTROL_LAYOUT[action])
 		if saved_position is Vector2:
 			set_control_position(action, saved_position)
+
+func role_label(role: int) -> String:
+	match clampi(role, 0, 3):
+		0:
+			return "DRIVER"
+		1:
+			return "MECHANIC"
+		2:
+			return "SCOUT"
+		_:
+			return "NAVIGATOR"
+
+
+func toggle_mute() -> void:
+	voice_deafened = not voice_deafened
+	toast_requested.emit("RADIO %s" % ("DEAFENED" if voice_deafened else "LISTENING"),
+		"You will not hear the crew." if voice_deafened else "Crew voice is back on.")
+
+
+func toggle_voice() -> void:
+	voice_enabled = not voice_enabled
+	toast_requested.emit("RADIO %s" % ("ON" if voice_enabled else "OFF"),
+		"Hold V or the RADIO button to talk." if voice_enabled else "Microphone capture is disabled.")
+
 
 func complete_target(target: String) -> bool:
 	if mission_index >= MISSIONS.size():
@@ -204,6 +260,9 @@ func _create_input_actions() -> void:
 	_bind_keys("shift_up", [KEY_X])
 	_bind_keys("shift_down", [KEY_Z])
 	_bind_keys("toggle_view", [KEY_C])
+	# Radio: hold V (or right-stick click) to talk, M to mute the whole radio.
+	_bind_keys("voice", [KEY_V])
+	_bind_keys("toggle_voice", [KEY_M])
 	_bind_keys("handbrake", [KEY_SPACE])
 	_bind_keys("pause", [KEY_ESCAPE])
 	_add_joy_axis("move_left", JOY_AXIS_LEFT_X, -1.0)
@@ -226,6 +285,10 @@ func _create_input_actions() -> void:
 	_bind_joy_button("winch_front", JOY_BUTTON_DPAD_UP)
 	_bind_joy_button("winch_rear", JOY_BUTTON_DPAD_DOWN)
 	_bind_joy_button("pause", JOY_BUTTON_START)
+	_bind_joy_button("voice", JOY_BUTTON_RIGHT_STICK)
+	# No gamepad binding for deafen: START/BACK are already claimed by the pause
+	# path on the Android and iOS controllers this project targets, and the HUD
+	# chip covers touch play.
 
 func _bind_keys(action: StringName, keys: Array) -> void:
 	if not InputMap.has_action(action):
