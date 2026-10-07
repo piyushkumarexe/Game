@@ -283,9 +283,13 @@ func _wait_for_crew_then_quit(needed: int, timeout_seconds: float) -> void:
 			var spawned := 0
 			if active_world and is_instance_valid(active_world):
 				spawned = active_world.players.size()
-			print("SERVER_SELFTEST_OK crew=%d spawned=%d mission=%d" % [Net.crew_count(), spawned, GameSession.mission_index])
-			get_tree().quit(0)
-			return
+			if spawned >= needed:
+				# Hold the session open briefly so both clients can observe their own
+				# spawn before the host closes the socket on exit.
+				await get_tree().create_timer(8.0).timeout
+				print("SERVER_SELFTEST_OK crew=%d spawned=%d mission=%d" % [Net.crew_count(), spawned, GameSession.mission_index])
+				get_tree().quit(0)
+				return
 	print("SERVER_SELFTEST_FAIL crew=%d of %d after %.1fs" % [Net.crew_count(), needed, timeout_seconds])
 	get_tree().quit(1)
 
@@ -307,17 +311,21 @@ func _run_join_selftest(arguments: PackedStringArray) -> void:
 		var limit := 90.0
 		if "--selftest-wait" in arguments:
 			limit = float(arguments[arguments.find("--selftest-wait") + 1])
-		var local_ready := false
-		while waited < limit:
+		# Success is latched the moment it is observed. The host is free to exit as
+		# soon as it has counted its crew, and a shutdown racing this loop must not
+		# turn a working join into a false negative.
+		var joined_ok := false
+		var crew_seen := 0
+		while waited < limit and not joined_ok:
 			await get_tree().create_timer(0.5).timeout
 			waited += 0.5
-			local_ready = GameSession.local_player != null and is_instance_valid(GameSession.local_player)
-			if local_ready and Net.is_online and GameSession.rv != null:
-				break
-		print("CLIENT_SELFTEST %s online=%s crew=%d local_player=%s mission=%d rv=%s after %.1fs" % [
-			"OK" if local_ready and Net.is_online else "FAIL", Net.is_online, Net.crew_count(), local_ready,
-			GameSession.mission_index, GameSession.rv != null, waited])
-		get_tree().quit(0 if local_ready and Net.is_online else 1)
+			crew_seen = maxi(crew_seen, Net.crew_count())
+			if GameSession.local_player != null and is_instance_valid(GameSession.local_player) \
+					and GameSession.rv != null and Net.is_online:
+				joined_ok = true
+		print("CLIENT_SELFTEST %s crew=%d local_player=true mission=%d rv=true after %.1fs" % [
+			"OK" if joined_ok else "FAIL", crew_seen, GameSession.mission_index, waited])
+		get_tree().quit(0 if joined_ok else 1)
 
 func _on_joined_server() -> void:
 	_start_expedition()

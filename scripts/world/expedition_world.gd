@@ -187,10 +187,20 @@ func spawn_network_player(peer_id: int, player_name: String, role: int) -> void:
 	var index := players.size()
 	var spawn_x := ROUTE[0].x - 3.0 + index * 1.4
 	var spawn_z := ROUTE[0].z + 8.5
+	# A crew member who joins after the rig has left camp appears beside the RV.
+	# Dropping them at the trailhead turns a friendly invite into a two-kilometre
+	# walk, which is the fastest way to lose a player mid-trip.
+	var underway := rv != null and is_instance_valid(rv) and rv.global_position.distance_to(ROUTE[0]) > 45.0
+	if underway:
+		var beside: Vector3 = rv.global_transform.basis * Vector3(2.4 + index * 1.1, 0.0, 3.4)
+		spawn_x = rv.global_position.x + beside.x
+		spawn_z = rv.global_position.z + beside.z
 	# Never place a character under the physical safety pad. This exact mistake
 	# caused the device screenshots where the player fell forever below camp.
-	var camp_height := maxf(terrain_height(spawn_x, spawn_z), ROUTE[0].y)
-	var spawn := Vector3(spawn_x, camp_height + 0.35, spawn_z)
+	var ground := terrain_height(spawn_x, spawn_z)
+	if not underway:
+		ground = maxf(ground, ROUTE[0].y)
+	var spawn := Vector3(spawn_x, ground + 0.35, spawn_z)
 	player.setup(peer_id, player_name, role, spawn)
 	players[peer_id] = player
 

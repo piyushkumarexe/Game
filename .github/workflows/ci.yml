@@ -112,44 +112,6 @@ jobs:
             echo "::error file=scenes/main.tscn,title=Playable 3D render smoke::$detail"
           fi
           exit $status
-      - name: Online crew self-test over a headless dedicated server
-        run: |
-          # Real handshake proof: one authoritative host plus two joining crew on
-          # the WebSocket transport. Nothing here mocks the engine — the same
-          # roster rpcs, world spawn and mission sync a phone session uses.
-          mkdir -p build/coop
-          set +e
-          godot --headless --path . -- --server --port 24817 --selftest > build/coop/server.log 2>&1 &
-          server_pid=$!
-          for attempt in $(seq 1 45); do
-            if [ -s build/coop/server.log ] && grep -q SERVER_READY build/coop/server.log; then break; fi
-            sleep 2
-          done
-          godot --headless --path . -- --join 127.0.0.1:24817 --selftest --selftest-wait 110 > build/coop/crew-a.log 2>&1 &
-          godot --headless --path . -- --join 127.0.0.1:24817 --selftest --selftest-wait 110 > build/coop/crew-b.log 2>&1 &
-          wait
-          kill "$server_pid" 2>/dev/null
-          {
-            echo '### Online crew self-test'
-            echo '```text'
-            for log in build/coop/server.log build/coop/crew-a.log build/coop/crew-b.log; do
-              echo "--- $log"
-              grep -E 'SERVER_|CLIENT_|ERROR|SCRIPT' "$log" | tail -14
-            done
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          status=0
-          grep -q 'CLIENT_SELFTEST OK' build/coop/crew-a.log || { echo "::error file=scripts/network/network_manager.gd,title=Crew A join::first client never received its player spawn"; status=1; }
-          grep -q 'CLIENT_SELFTEST OK' build/coop/crew-b.log || { echo "::error file=scripts/network/network_manager.gd,title=Crew B join::second client never received its player spawn"; status=1; }
-          grep -q 'SERVER_SELFTEST_OK crew=2' build/coop/server.log || { echo "::error file=scripts/network/network_manager.gd,title=Host roster::the host did not register two crew members"; status=1; }
-          if [ "$status" -ne 0 ]; then
-            detail=$(cat build/coop/server.log | tr '\n' '|' | cut -c 1-6000)
-            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
-            echo "::error file=scripts/network/network_manager.gd,title=Online crew self-test log::$detail"
-          fi
-          echo "Online crew self-test finished with status $status"
-          exit $status
-
       - name: Emit compact render previews
         if: (github.event_name == 'workflow_dispatch' && inputs.emit_preview_log == true) || contains(github.event.head_commit.message, '[render-log]')
         run: |
@@ -205,6 +167,68 @@ jobs:
           path: build/validation/
           if-no-files-found: error
           retention-days: 30
+
+  coop:
+    name: Online crew session self-test
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Install Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: false
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+      - name: Headless dedicated server with two joining crew
+        run: |
+          # Real handshake proof: one authoritative host plus two joining crew on
+          # the WebSocket transport. Nothing here mocks the engine — the same
+          # roster rpcs, world spawn and mission sync a phone session uses.
+          mkdir -p build/coop
+          set +e
+          godot --headless --path . -- --server --port 24817 --selftest > build/coop/server.log 2>&1 &
+          server_pid=$!
+          for attempt in $(seq 1 45); do
+            if [ -s build/coop/server.log ] && grep -q SERVER_READY build/coop/server.log; then break; fi
+            sleep 2
+          done
+          godot --headless --path . -- --join 127.0.0.1:24817 --selftest --selftest-wait 110 > build/coop/crew-a.log 2>&1 &
+          godot --headless --path . -- --join 127.0.0.1:24817 --selftest --selftest-wait 110 > build/coop/crew-b.log 2>&1 &
+          wait
+          kill "$server_pid" 2>/dev/null
+          {
+            echo '### Online crew self-test'
+            echo '```text'
+            for log in build/coop/server.log build/coop/crew-a.log build/coop/crew-b.log; do
+              echo "--- $log"
+              grep -E 'SERVER_|CLIENT_|ERROR|SCRIPT' "$log" | tail -14
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          status=0
+          grep -q 'CLIENT_SELFTEST OK' build/coop/crew-a.log || { echo "::error file=scripts/network/network_manager.gd,title=Crew A join::first client never received its player spawn"; status=1; }
+          grep -q 'CLIENT_SELFTEST OK' build/coop/crew-b.log || { echo "::error file=scripts/network/network_manager.gd,title=Crew B join::second client never received its player spawn"; status=1; }
+          grep -q 'SERVER_SELFTEST_OK crew=2' build/coop/server.log || { echo "::error file=scripts/network/network_manager.gd,title=Host roster::the host did not register two crew members"; status=1; }
+          if [ "$status" -ne 0 ]; then
+            detail=$(cat build/coop/server.log | tr '\n' '|' | cut -c 1-6000)
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}
+            echo "::error file=scripts/network/network_manager.gd,title=Online crew self-test log::$detail"
+          fi
+          echo "Online crew self-test finished with status $status"
+          exit $status
+      - name: Upload session logs
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dustbound-online-crew-logs
+          path: build/coop/
+          if-no-files-found: ignore
+          retention-days: 14
 
   android:
     name: Build Android APK
