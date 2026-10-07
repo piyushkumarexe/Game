@@ -24,6 +24,11 @@ var fuel := 100.0
 var gear := 2
 var engine_running := false
 var driver_peer_id := 0
+## Crew who hitched a ride instead of driving: peer_id -> seat index. Riders are
+## carried by the coach transform, so they never get stranded mid-route.
+var rider_peers := {}
+const RIDE_SEAT_LIMIT := 2
+const RIDE_SEAT_OFFSETS: Array[Vector3] = [Vector3(-0.78, -0.22, 0.95), Vector3(0.74, -0.22, 1.35)]
 var throttle_input := 0.0
 var steer_input := 0.0
 var handbrake_input := false
@@ -82,6 +87,7 @@ func setup(spawn_transform: Transform3D) -> void:
 func _ready() -> void:
 	front_cable = _create_cable("FrontCable")
 	rear_cable = _create_cable("RearCable")
+	_refresh_prompt()
 
 func _physics_process(delta: float) -> void:
 	if Net.is_online and not multiplayer.is_server():
@@ -140,8 +146,10 @@ func _apply_driver_input(peer_id: int, throttle: float, steering_input: float, h
 		_toggle_winch(rear_winch, false)
 
 func interact(player: Node) -> void:
+	# A taken wheel is not a dead end in co-op: everyone else rides along, so the
+	# crew stays together instead of walking in the RV's dust.
 	if driver_peer_id != 0:
-		GameSession.toast_requested.emit("DRIVER SEAT OCCUPIED", "Someone is already wrestling the wheel.")
+		request_ride(player)
 		return
 	if GameSession.supplies_loaded < 3:
 		GameSession.toast_requested.emit("PACK BEFORE DEPARTURE",
@@ -162,6 +170,8 @@ func _request_driver(requested_peer: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _assign_driver(id: int) -> void:
+	# Whoever grabs the wheel stops being a passenger.
+	rider_peers.erase(id)
 	driver_peer_id = id
 	engine_running = true
 	set_entry_door_open(false)
@@ -171,6 +181,7 @@ func _assign_driver(id: int) -> void:
 	var player: Node = Net.world.get_player(id) if Net.world else null
 	if player:
 		player.enter_driver(self)
+	_refresh_prompt()
 	if multiplayer.is_server() or not Net.is_online:
 		GameSession.complete_target("engine")
 
@@ -206,6 +217,128 @@ func _release_driver(id: int) -> void:
 	angular_velocity = Vector3.ZERO
 	brake = 95.0
 	freeze = true
+	_refresh_prompt()
+
+
+## A disconnected driver would otherwise leave the rig frozen forever with an
+## occupied seat nobody can release. Only ever called on the authority.
+func force_release_driver(id: int) -> void:
+	if driver_peer_id != id:
+		return
+	_release_driver(id)
+	GameSession.toast_requested.emit("CREW LEFT THE WHEEL", "The RV is parked. Anyone can take it now.")
+
+
+func force_release_rider(id: int) -> void:
+	if not rider_peers.has(id):
+		return
+	_release_rider(id)
+
+
+# --- shared ride slots -----------------------------------------------------
+
+func request_ride(player: Node) -> void:
+	if rider_peers.has(player.peer_id):
+		request_exit_ride(player)
+		return
+	if _free_ride_slot() < 0:
+		GameSession.toast_requested.emit("NO FREE SEAT", "Only two crew ride aboard; wait at the campfire.")
+		return
+	if Net.is_online and not multiplayer.is_server():
+		_request_ride.rpc_id(1, player.peer_id)
+	else:
+		_assign_rider.rpc(player.peer_id)
+
+
+func request_exit_ride(player: Node) -> void:
+	if not rider_peers.has(player.peer_id):
+		return
+	if Net.is_online and not multiplayer.is_server():
+		_request_exit_ride.rpc_id(1, player.peer_id)
+	else:
+		_release_rider.rpc(player.peer_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_ride(requested_peer: int) -> void:
+	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == requested_peer:
+		_assign_rider.rpc(requested_peer)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_exit_ride(requested_peer: int) -> void:
+	if multiplayer.is_server() and multiplayer.get_remote_sender_id() == requested_peer:
+		_release_rider.rpc(requested_peer)
+
+
+@rpc("authority", "call_local", "reliable")
+func _assign_rider(id: int) -> void:
+	if rider_peers.has(id) or id == driver_peer_id:
+		return
+	var slot := _free_ride_slot()
+	if slot < 0:
+		return
+	rider_peers[id] = slot
+	set_entry_door_open(false)
+	var player: Node = Net.world.get_player(id) if Net.world else null
+	if player and player.has_method("enter_rider"):
+		player.call("enter_rider", self, slot)
+	GameSession.toast_requested.emit("CREW ABOARD", "%s climbed into the coach." % _crew_name(id))
+	_refresh_prompt()
+
+
+@rpc("authority", "call_local", "reliable")
+func _release_rider(id: int) -> void:
+	if not rider_peers.has(id):
+		return
+	var slot := int(rider_peers[id])
+	rider_peers.erase(id)
+	var player: Node = Net.world.get_player(id) if Net.world else null
+	if player and player.has_method("leave_rider"):
+		player.call("leave_rider", exit_seat_transform())
+	# Leave the door open where the crew stepped out, so the next tap is a
+	# doorway to walk through rather than a sealed wall.
+	if slot >= 0:
+		set_entry_door_open(true)
+	_refresh_prompt()
+
+
+func _free_ride_slot() -> int:
+	for slot in RIDE_SEAT_LIMIT:
+		if not rider_peers.values().has(slot):
+			return slot
+	return -1
+
+
+func ride_seat_transform(slot: int) -> Transform3D:
+	var index := clampi(slot, 0, RIDE_SEAT_LIMIT - 1)
+	return Transform3D(global_transform.basis, global_transform * RIDE_SEAT_OFFSETS[index])
+
+
+func rider_count() -> int:
+	return rider_peers.size()
+
+
+func _crew_name(peer_id: int) -> String:
+	var entry: Dictionary = Net.roster.get(peer_id, {})
+	return str(entry.get("name", "Crew")) if not entry.is_empty() else "Crew"
+
+
+func _refresh_prompt() -> void:
+	if driver_peer_id == 0:
+		prompt = "DRIVE THE RV"
+	elif _free_ride_slot() >= 0:
+		prompt = "RIDE ALONG AS CREW"
+	else:
+		prompt = "NO FREE SEAT"
+
+
+## Shared winch control. The cable is a crew tool, not a driver key: a mechanic
+## standing at a bog station can hook up while the driver keeps both hands on
+## the wheel. Only the authority reaches this through an interactable request.
+func operate_winch(front: bool) -> void:
+	if multiplayer.is_server() or not Net.is_online:
+		_toggle_winch(front_winch if front else rear_winch, front)
 
 func set_local_driver_first_person(_active: bool) -> void:
 	# The professional shell is authored for an interior camera: exterior faces
@@ -263,6 +396,10 @@ func respawn_at(new_transform: Transform3D) -> void:
 	health = maxf(health, 55.0)
 	fuel = maxf(fuel, 35.0)
 	freeze = driver_peer_id == 0
+	for rider_id: int in rider_peers.keys():
+		var rider: Node = Net.world.get_player(rider_id) if Net.world else null
+		if rider and rider.has_method("enter_rider"):
+			rider.call("enter_rider", self, int(rider_peers[rider_id]))
 	reset_physics_interpolation()
 
 func damage(value: float, source := "IMPACT") -> void:

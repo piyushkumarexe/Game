@@ -19,6 +19,12 @@ var toast_panel: PanelContainer
 var toast_title: Label
 var toast_detail: Label
 var crew_label: Label
+var trip_bar: ProgressBar
+var trip_label: Label
+var session_chip: Label
+var mic_chip: Button
+var deafen_chip: Button
+var roster_refresh_left := 0.0
 var toast_tween: Tween
 var touch_root: Control
 var input_router: MobileInputRouter
@@ -31,6 +37,7 @@ func _ready() -> void:
 	GameSession.toast_requested.connect(_show_toast)
 	GameSession.checkpoint_reached.connect(_on_checkpoint)
 	Net.peer_roster_changed.connect(_update_roster)
+	Net.crew_spoken.connect(func(_peer: int) -> void: _update_roster(Net.roster))
 	if GameSession.mission_index < GameSession.MISSIONS.size():
 		var mission: Dictionary = GameSession.MISSIONS[GameSession.mission_index]
 		_on_mission_changed(str(mission["title"]), str(mission["detail"]), GameSession.mission_index + 1, GameSession.MISSIONS.size())
@@ -39,7 +46,8 @@ func _ready() -> void:
 		GameSession.rv.stats_changed.connect(_update_rv_stats)
 	_update_roster(Net.roster)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_update_trip(delta)
 	var has_player := GameSession.local_player and is_instance_valid(GameSession.local_player)
 	var driving := false
 	if has_player:
@@ -57,6 +65,11 @@ func _process(_delta: float) -> void:
 				node.visible = not driving
 	if GameSession.consume_touch_press("control_settings") and not is_instance_valid(settings_editor):
 		_open_control_editor()
+	if Input.is_action_just_pressed("toggle_voice") or GameSession.consume_touch_press("toggle_voice"):
+		_toggle_deafen()
+	if is_instance_valid(mic_chip):
+		mic_chip.visible = Net.is_online
+		deafen_chip.visible = Net.is_online
 
 func _build_hud() -> void:
 	var root := Control.new()
@@ -91,15 +104,31 @@ func _build_hud() -> void:
 	objective_box.add_child(mission_title)
 	mission_detail = _label("Load the supplies.", 14, Color("c7c3b8"))
 	objective_box.add_child(mission_detail)
+	# "Are we there yet?" is the whole joke of a road trip, so the leg progress
+	# bar lives in the objective card where a passenger reads it, not in a corner.
+	var trip_row := HBoxContainer.new()
+	trip_row.add_theme_constant_override("separation", 9)
+	objective_box.add_child(trip_row)
+	trip_bar = ProgressBar.new()
+	trip_bar.max_value = 100.0
+	trip_bar.value = 0.0
+	trip_bar.show_percentage = false
+	trip_bar.custom_minimum_size = Vector2(150.0, 13)
+	trip_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	trip_bar.add_theme_stylebox_override("background", _panel_style(Color(1, 1, 1, 0.1), Color.TRANSPARENT, 5))
+	trip_bar.add_theme_stylebox_override("fill", _panel_style(Color("d89138"), Color.TRANSPARENT, 5))
+	trip_row.add_child(trip_bar)
+	trip_label = _label("REDMESA → ROUTE 17", 11, Color("bcb9ae"), true)
+	trip_row.add_child(trip_label)
 
 	var rig_panel := PanelContainer.new()
 	rig_panel.anchor_left = 0.5
 	rig_panel.anchor_top = 0.0
 	rig_panel.anchor_right = 0.5
 	rig_panel.anchor_bottom = 0.0
-	rig_panel.offset_left = -190.0
+	rig_panel.offset_left = -238.0
 	rig_panel.offset_top = 18.0
-	rig_panel.offset_right = 190.0
+	rig_panel.offset_right = 238.0
 	rig_panel.offset_bottom = 104.0
 	rig_panel.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.045, 0.06, 0.86), Color(1, 1, 1, 0.08), 16))
 	root.add_child(rig_panel)
@@ -125,6 +154,13 @@ func _build_hud() -> void:
 	gear_label = _label("GEAR 1", 16, Color("e2a03b"), true)
 	drive_stats.add_child(speed_label)
 	drive_stats.add_child(gear_label)
+	var radio_column := VBoxContainer.new()
+	radio_column.add_theme_constant_override("separation", 4)
+	rig_row.add_child(radio_column)
+	mic_chip = _chip_button("PUSH TALK", _toggle_voice_mode)
+	deafen_chip = _chip_button("RADIO ON", _toggle_deafen)
+	radio_column.add_child(mic_chip)
+	radio_column.add_child(deafen_chip)
 
 	crew_label = _label("SOLO RUN", 14, Color("d7d2c2"), true)
 	crew_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -132,11 +168,27 @@ func _build_hud() -> void:
 	crew_label.anchor_top = 0.0
 	crew_label.anchor_right = 1.0
 	crew_label.anchor_bottom = 0.0
-	crew_label.offset_left = -320.0
-	crew_label.offset_top = 27.0
-	crew_label.offset_right = -20.0
-	crew_label.offset_bottom = 88.0
+	crew_label.offset_left = -330.0
+	crew_label.offset_top = 30.0
+	crew_label.offset_right = -112.0
+	crew_label.offset_bottom = 136.0
 	root.add_child(crew_label)
+
+	session_chip = _label("SOLO", 11, Color("9fe8cf"), true)
+	session_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	session_chip.anchor_left = 1.0
+	session_chip.anchor_top = 0.0
+	session_chip.anchor_right = 1.0
+	session_chip.anchor_bottom = 0.0
+	session_chip.offset_left = -320.0
+	session_chip.offset_top = 9.0
+	session_chip.offset_right = -20.0
+	session_chip.offset_bottom = 26.0
+	root.add_child(session_chip)
+
+	# Radio state is one tap on a phone and one key on a keyboard, and it has to be
+	# readable at a glance: nobody can tell a muted buddy from a good one at
+	# forty metres of mud. The chips live in the centre rig card for that reason.
 
 	prompt_panel = PanelContainer.new()
 	prompt_panel.anchor_left = 0.5
@@ -250,6 +302,9 @@ func _build_touch_controls(root: Control) -> void:
 	handbrake.set_meta("driving_only", true)
 	handbrake.visible = false
 	action_buttons.append(handbrake)
+	var radio := _make_touch_button("RADIO", "voice", Vector2(-498, -95), true)
+	radio.add_theme_font_size_override("font_size", 12)
+	action_buttons.append(radio)
 	var settings := _make_touch_button("LAYOUT", "control_settings", Vector2(-103, -590), false)
 	settings.anchor_top = 0.0
 	settings.anchor_bottom = 0.0
@@ -363,8 +418,62 @@ func _show_toast(title: String, detail: String) -> void:
 func _on_checkpoint(_index: int, title: String) -> void:
 	_show_toast("CHECKPOINT SECURED", title)
 
-func _update_roster(_roster: Dictionary) -> void:
-	crew_label.text = "SINGLE PLAYER\n%s" % GameSession.player_name
+func _update_trip(delta: float) -> void:
+	roster_refresh_left = maxf(0.0, roster_refresh_left - delta)
+	if not GameSession.rv or not is_instance_valid(GameSession.rv):
+		return
+	var position: Vector3 = GameSession.rv.global_position
+	var progress := 0.0
+	var remaining := 0.0
+	if Net.world and is_instance_valid(Net.world):
+		progress = float(Net.world.call("trip_progress", position))
+		remaining = float(Net.world.call("distance_to_finish", position))
+	trip_bar.value = progress * 100.0
+	trip_label.text = "%d M TO ROUTE 17" % roundi(remaining) if remaining > 4.0 else "AT THE EXIT"
+	if roster_refresh_left > 0.0:
+		return
+	roster_refresh_left = 0.4
+	_update_roster(Net.roster)
+
+
+func _update_roster(roster: Dictionary) -> void:
+	var driving := int(GameSession.rv.driver_peer_id) if GameSession.rv and is_instance_valid(GameSession.rv) else 0
+	if not Net.is_online:
+		crew_label.text = "SOLO RUN\n%s · %s" % [GameSession.player_name, GameSession.role_label(GameSession.selected_role)]
+		session_chip.text = "OFFLINE"
+		return
+	var lines: Array[String] = Net.roster_lines(driving)
+	crew_label.text = "CREW %d / %d\n%s" % [roster.size(), Net.MAX_PLAYERS, "\n".join(lines)]
+	var speaking := ""
+	var local_player: Node = GameSession.local_player
+	var voice_node: Node = local_player.get("voice") if local_player else null
+	if voice_node and bool(voice_node.call("is_speaking")):
+		speaking = " · TALKING"
+	session_chip.text = "%d CREW · %s%s" % [roster.size(), Net.transport_name().to_upper(), speaking]
+
+
+func _chip_button(text: String, handler: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(104.0, 25.0)
+	button.add_theme_font_size_override("font_size", 11)
+	button.add_theme_color_override("font_color", Color("fff2d5"))
+	button.add_theme_stylebox_override("normal", _panel_style(Color(0.04, 0.055, 0.07, 0.8), Color(0.62, 0.86, 0.78, 0.4), 14))
+	button.add_theme_stylebox_override("hover", _panel_style(Color(0.07, 0.09, 0.11, 0.9), Color(0.62, 0.86, 0.78, 0.75), 14))
+	button.pressed.connect(handler)
+	return button
+
+
+func _toggle_voice_mode() -> void:
+	GameSession.voice_mode = GameSession.VoiceMode.OPEN_MIC if GameSession.voice_mode == GameSession.VoiceMode.PUSH_TO_TALK else GameSession.VoiceMode.PUSH_TO_TALK
+	GameSession.save_settings()
+	mic_chip.text = "OPEN MIC" if GameSession.voice_mode == GameSession.VoiceMode.OPEN_MIC else "PUSH TALK"
+
+
+func _toggle_deafen() -> void:
+	GameSession.toggle_mute()
+	deafen_chip.text = "RADIO MUTED" if GameSession.voice_deafened else "RADIO ON"
 
 func _status_bar(title: String, color: Color) -> ProgressBar:
 	var bar := ProgressBar.new()

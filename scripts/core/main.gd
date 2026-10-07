@@ -7,6 +7,9 @@ const MenuDioramaScript = preload("res://scripts/ui/menu_diorama.gd")
 const ControlLayoutEditorScript = preload("res://scripts/ui/control_layout_editor.gd")
 
 var menu_layer: CanvasLayer
+var crew_list_label: Label
+var share_label: Label
+var lobby_refresh_left := 0.0
 var name_input: LineEdit
 var address_input: LineEdit
 var role_picker: OptionButton
@@ -23,10 +26,29 @@ func _ready() -> void:
 	Net.connection_failed.connect(_on_connection_failed)
 	Net.disconnected.connect(_on_disconnected)
 	GameSession.run_finished.connect(_show_results)
-	if "--smoke-expedition" in OS.get_cmdline_user_args():
+	Net.host_ready.connect(_on_host_ready)
+	Net.peer_roster_changed.connect(_on_roster_changed)
+	var arguments := OS.get_cmdline_user_args()
+	if "--server" in arguments:
+		# A rendering-free authoritative host: godot --headless -- --server
+		_run_dedicated_server(arguments)
+	elif "--join" in arguments:
+		# Unattended join used by CI to prove the real handshake end to end.
+		_run_join_selftest(arguments)
+	elif "--smoke-expedition" in arguments:
 		_run_expedition_smoke_test()
 	else:
 		_show_main_menu()
+
+
+func _process(delta: float) -> void:
+	if menu_layer == null or not is_instance_valid(menu_layer):
+		return
+	lobby_refresh_left = maxf(0.0, lobby_refresh_left - delta)
+	if lobby_refresh_left > 0.0 or not Net.is_online or not multiplayer.is_server():
+		return
+	lobby_refresh_left = 0.3
+	_on_roster_changed(Net.roster)
 
 func _show_main_menu() -> void:
 	_clear_game()
@@ -62,9 +84,16 @@ func _show_main_menu() -> void:
 	margin.add_theme_constant_override("margin_top", 22)
 	margin.add_theme_constant_override("margin_bottom", 20)
 	panel.add_child(margin)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 10)
-	margin.add_child(content)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(content)
 
 	var title := _label("DUSTBOUND", 49, Color("fff0d1"), true)
 	content.add_child(title)
@@ -86,15 +115,51 @@ func _show_main_menu() -> void:
 	name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_field(name_input)
 	content.add_child(name_input)
-	# Keep a driver-only picker object for the existing profile API, but do not
-	# expose unfinished co-op roles in this stabilization release.
 	role_picker = OptionButton.new()
-	role_picker.add_item("DRIVER")
+	for index in Net.ROLES.size():
+		role_picker.add_item("%s — %s" % [Net.ROLES[index], _role_note(index)], index)
+	role_picker.selected = clampi(GameSession.selected_role, 0, Net.ROLES.size() - 1)
+	role_picker.custom_minimum_size = Vector2(210, 46)
+	role_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_field(role_picker)
+	role_picker.item_selected.connect(func(index: int) -> void: GameSession.selected_role = clampi(index, 0, 3))
+	content.add_child(role_picker)
 
 	var solo := _button("START SINGLE-PLAYER EXPEDITION", Vector2.ZERO, Vector2(0, 58), Color("dd8f33"))
 	solo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	solo.pressed.connect(_start_solo)
 	content.add_child(solo)
+	var crew_head := _label("CREW LINK — UP TO 4", 12, Color("eea23b"), true)
+	content.add_child(crew_head)
+	var host_online := _button("HOST ONLINE EXPEDITION", Vector2.ZERO, Vector2(0, 52), Color("3f7f7a"))
+	host_online.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	host_online.add_theme_font_size_override("font_size", 15)
+	host_online.pressed.connect(func() -> void: _host_game(true))
+	content.add_child(host_online)
+	var host_lan := _button("HOST SAME-WI-FI CREW (UDP)", Vector2.ZERO, Vector2(0, 46), Color("38535f"))
+	host_lan.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	host_lan.add_theme_font_size_override("font_size", 13)
+	host_lan.pressed.connect(func() -> void: _host_game(false))
+	content.add_child(host_lan)
+	address_input = LineEdit.new()
+	address_input.placeholder_text = "ws://192.168.1.20:24817  ·  trip.example.com  ·  enet:IP"
+	address_input.text = GameSession.last_join_address
+	address_input.custom_minimum_size = Vector2(210, 46)
+	address_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_field(address_input)
+	content.add_child(address_input)
+	var join := _button("JOIN A CREW", Vector2.ZERO, Vector2(0, 52), Color("7a6a3f"))
+	join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	join.add_theme_font_size_override("font_size", 15)
+	join.pressed.connect(_join_game)
+	content.add_child(join)
+	share_label = _label("OPEN A CREW LINK TO SHARE AN INVITE.", 11, Color("9fe8cf"), true)
+	share_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(share_label)
+	crew_list_label = _label("NO CREW YET", 11, Color("d7d2c4"), true)
+	crew_list_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	crew_list_label.custom_minimum_size.y = 46
+	content.add_child(crew_list_label)
 	var settings := _button("CONTROLS & PERFORMANCE", Vector2.ZERO, Vector2(0, 46), Color("315c61"))
 	settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings.add_theme_font_size_override("font_size", 14)
@@ -105,12 +170,12 @@ func _show_main_menu() -> void:
 	status_label.custom_minimum_size.y = 34
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(status_label)
-	var feature := _label("SWIPE FREE-LOOK  •  FIRST/THIRD PERSON  •  PHYSICS RV\nMANUAL GEARS  •  REPAIRS  •  MISSIONS  •  WINCHES", 11, Color("f1d6a9"), true)
+	var feature := _label("SWIPE FREE-LOOK  •  FIRST/THIRD PERSON  •  PHYSICS RV\nMANUAL GEARS  •  REPAIRS  •  TWIN WINCHES  •  PROXIMITY RADIO", 11, Color("f1d6a9"), true)
 	feature.add_theme_constant_override("line_spacing", 5)
 	content.add_child(feature)
 
 	var badge := Label.new()
-	badge.text = "LIVE 3D CAMPSITE  •  SINGLE-PLAYER STABILITY BUILD"
+	badge.text = "LIVE 3D CAMPSITE  •  SOLO OR FOUR-PLAYER CREW"
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	badge.anchor_left = 0.68
 	badge.anchor_top = 0.885
@@ -133,17 +198,126 @@ func _start_solo() -> void:
 	Net.start_solo()
 	_start_expedition()
 
-func _host_game() -> void:
+
+func _role_note(role: int) -> String:
+	match role:
+		0:
+			return "handles the wheel, gears and both cables"
+		1:
+			return "patches the frame and carries fuel"
+		2:
+			return "walks the route, planks and crates"
+		_:
+			return "reads the map and calls the hazards"
+
+
+func _host_game(use_websocket: bool) -> void:
 	_save_profile()
-	var error := Net.host_game(GameSession.player_name, GameSession.selected_role)
-	if error == OK:
-		status_label.text = "CREW LOBBY OPEN ON %s:%d — STARTING…" % [Net._best_local_address(), Net.PORT]
-		_start_expedition()
+	var error := Net.host_game(GameSession.player_name, GameSession.selected_role, use_websocket, Net.DEFAULT_PORT)
+	if error != OK:
+		return
+	_start_expedition()
+
 
 func _join_game() -> void:
 	_save_profile()
-	status_label.text = "CONTACTING HOST…"
-	Net.join_game(address_input.text, GameSession.player_name, GameSession.selected_role)
+	if address_input and not address_input.text.strip_edges().is_empty():
+		GameSession.last_join_address = address_input.text.strip_edges()
+	if status_label and is_instance_valid(status_label):
+		status_label.text = "CONTACTING HOST…"
+	var error := Net.join_game(address_input.text if address_input else "", GameSession.player_name,
+		GameSession.selected_role, Net.DEFAULT_PORT)
+	if error != OK:
+		return
+	# A client keeps the menu on screen until the host answers, so a wrong address
+	# reads as a waiting screen instead of a black viewport. The expedition starts
+	# from the joined_server callback.
+
+
+func _on_host_ready(address: String, port: int) -> void:
+	if share_label and is_instance_valid(share_label):
+		share_label.text = "SHARE THIS WITH UP TO 3 CREW\n%s   (port %d open on your router for internet play)" % [address, port]
+	if status_label and is_instance_valid(status_label):
+		status_label.text = "CREW LINK OPEN · %s" % address
+
+
+func _on_roster_changed(roster: Dictionary) -> void:
+	if crew_list_label == null or not is_instance_valid(crew_list_label):
+		return
+	var lines: Array[String] = []
+	for peer_id: int in roster.keys():
+		var entry: Dictionary = roster[peer_id]
+		lines.append("%d · %s · %s%s" % [peer_id, str(entry.get("name", "?")),
+			Net.role_name(int(entry.get("role", 0))), " (you)" if bool(entry.get("local", false)) else ""])
+	crew_list_label.text = "CREW %d / %d\n%s" % [roster.size(), Net.MAX_PLAYERS, "\n".join(lines)]
+
+
+func _run_dedicated_server(arguments: PackedStringArray) -> void:
+	GameSession.dedicated = true
+	GameSession.player_name = "Expedition Server"
+	var listen_port := Net.DEFAULT_PORT
+	if "--port" in arguments:
+		listen_port = int(arguments[arguments.find("--port") + 1])
+	var use_websocket := not "--enet" in arguments
+	var error := Net.start_dedicated_server(listen_port, use_websocket)
+	if error != OK:
+		push_error("Dedicated server could not start: %s" % error_string(error))
+		get_tree().quit(1)
+		return
+	# Same lifecycle as a playing host, minus the HUD, so the server exercises the
+	# exact world/spawn path the crew will join into rather than a parallel one.
+	_start_expedition()
+	print("SERVER_WORLD_READY valley=Redmesa max_players=%d" % Net.MAX_PLAYERS)
+	if "--selftest" in arguments:
+		# Exit only after the crew actually joined, so CI proves the handshake, the
+		# roster rpcs and the world spawn path — not just that a socket opened.
+		_wait_for_crew_then_quit(2, 150.0)
+
+
+func _wait_for_crew_then_quit(needed: int, timeout_seconds: float) -> void:
+	var waited := 0.0
+	while waited < timeout_seconds:
+		await get_tree().create_timer(0.25).timeout
+		waited += 0.25
+		if Net.crew_count() >= needed:
+			var spawned := 0
+			if active_world and is_instance_valid(active_world):
+				spawned = active_world.players.size()
+			print("SERVER_SELFTEST_OK crew=%d spawned=%d mission=%d" % [Net.crew_count(), spawned, GameSession.mission_index])
+			get_tree().quit(0)
+			return
+	print("SERVER_SELFTEST_FAIL crew=%d of %d after %.1fs" % [Net.crew_count(), needed, timeout_seconds])
+	get_tree().quit(1)
+
+
+func _run_join_selftest(arguments: PackedStringArray) -> void:
+	GameSession.player_name = "CI Crew"
+	var target := "127.0.0.1"
+	if "--join" in arguments and arguments.size() > arguments.find("--join") + 1:
+		target = arguments[arguments.find("--join") + 1]
+	var error := Net.join_game(target, GameSession.player_name, GameSession.Role.SCOUT, Net.DEFAULT_PORT)
+	if error != OK:
+		push_error("Self-test join failed: %s" % error_string(error))
+		get_tree().quit(1)
+		return
+	if "--selftest" in arguments:
+		# A headless host needs a while to build the whole valley before it can
+		# answer the join rpc, so poll for the crew instead of sleeping a fixed time.
+		var waited := 0.0
+		var limit := 90.0
+		if "--selftest-wait" in arguments:
+			limit = float(arguments[arguments.find("--selftest-wait") + 1])
+		var local_ready := false
+		while waited < limit:
+			await get_tree().create_timer(0.5).timeout
+			waited += 0.5
+			local_ready = GameSession.local_player != null and is_instance_valid(GameSession.local_player)
+			if local_ready and Net.is_online and GameSession.rv != null:
+				break
+		print("CLIENT_SELFTEST %s online=%s crew=%d local_player=%s mission=%d rv=%s after %.1fs" % [
+			"OK" if local_ready and Net.is_online else "FAIL", Net.is_online, Net.crew_count(), local_ready,
+			GameSession.mission_index, GameSession.rv != null, waited])
+		get_tree().quit(0 if local_ready and Net.is_online else 1)
 
 func _on_joined_server() -> void:
 	_start_expedition()
@@ -167,6 +341,10 @@ func _start_expedition() -> void:
 	GameSession.reset_run()
 	active_world = WorldScript.new()
 	add_child(active_world)
+	# A dedicated host renders nothing, so a HUD would only cost mobile-grade GPU
+	# work for an empty screen.
+	if GameSession.dedicated:
+		return
 	active_hud = HUDScript.new()
 	add_child(active_hud)
 
@@ -204,7 +382,7 @@ func _run_expedition_smoke_test() -> void:
 	if not GameSession.rv or not is_instance_valid(GameSession.rv):
 		failures.append("physics RV missing")
 	if Net.is_online:
-		failures.append("single-player stability build unexpectedly enabled networking")
+		failures.append("solo smoke run must not open a network session")
 
 	# Exercise both camera modes instead of merely checking that camera nodes
 	# exist. The screenshot is intentionally captured in third person so the
@@ -700,8 +878,11 @@ func _clear_game() -> void:
 	active_world = null
 
 func _save_profile() -> void:
-	GameSession.player_name = name_input.text.strip_edges().left(18) if not name_input.text.strip_edges().is_empty() else "Rover"
-	GameSession.selected_role = GameSession.Role.DRIVER
+	if name_input and is_instance_valid(name_input):
+		GameSession.player_name = name_input.text.strip_edges().left(18) if not name_input.text.strip_edges().is_empty() else "Rover"
+	if role_picker and is_instance_valid(role_picker) and role_picker.selected >= 0:
+		GameSession.selected_role = clampi(role_picker.selected, 0, 3)
+	GameSession.save_profile()
 
 func _button(text: String, position: Vector2, size: Vector2, color: Color) -> Button:
 	var button := Button.new()
