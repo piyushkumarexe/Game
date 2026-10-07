@@ -84,6 +84,22 @@ jobs:
         run: godot --headless --editor --path . --quit
       - name: Launch main scene smoke test
         run: godot --headless --path . --quit-after 3
+  render:
+    name: Playable render proof
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Install Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          use-dotnet: false
+          include-templates: false
+      - name: Import resources
+        run: godot --headless --editor --path . --quit
       - name: Render the playable 3D expedition
         run: |
           mkdir -p build/validation

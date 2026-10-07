@@ -139,12 +139,18 @@ local **CONTROLS & PERFORMANCE** settings. Hosting prints a share line such as
 
 ## GitHub mobile builds
 
-`.github/workflows/ci.yml`:
+`.github/workflows/ci.yml` gates on a fast compile check, then fans out:
 
-1. imports the project and validates every GDScript;
-2. launches the actual expedition in a windowed OpenGL session, drives the mobile controls, verifies locomotion/facing, the detailed RV and both cameras, then saves full-coach chase, open-doorway, modeled-cockpit and front-facing character proofs;
-3. runs the real online handshake: a headless dedicated server plus two joining crew, asserting the roster rpcs, the world spawn and the mission sync;
-4. exports a debug-signed Android APK and verifies its manifest is locked to landscape;
-5. exports an unsigned, build-ready iOS Xcode project archive.
+- **validate** — imports the project and validates every GDScript, then boots the
+  real main scene headless. This is the gate everything else waits on.
+- **render** — launches the expedition in a windowed OpenGL session, drives the
+  mobile controls, verifies locomotion/facing, the detailed RV and both cameras,
+  and saves the full-coach chase, open-doorway, modeled-cockpit and character
+  proofs. Bounded by a timeout with the log tail on the step summary, because the
+  runner renders on llvmpipe.
+- **coop** — starts a headless dedicated server and two joining crew, asserting the
+  roster rpcs, the world spawn and the mission sync; session logs are uploaded.
+- **android** — exports a debug-signed APK and verifies the manifest is landscape.
+- **ios** — exports an unsigned, build-ready Xcode project archive.
 
 CI intentionally uses Godot's project-only iOS export so no Apple credentials are stored in the repository. Open the artifact in Xcode and select your Apple Developer team; a certificate and provisioning profile are required before installation on a physical iPhone or TestFlight submission.
