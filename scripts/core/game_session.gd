@@ -286,7 +286,9 @@ func _create_input_actions() -> void:
 	_bind_joy_button("winch_rear", JOY_BUTTON_DPAD_DOWN)
 	_bind_joy_button("pause", JOY_BUTTON_START)
 	_bind_joy_button("voice", JOY_BUTTON_RIGHT_STICK)
-	_bind_joy_button("toggle_voice", JOY_BUTTON_SELECT)
+	# No gamepad binding for deafen: START/BACK are already claimed by the pause
+	# path on the Android and iOS controllers this project targets, and the HUD
+	# chip covers touch play.
 
 func _bind_keys(action: StringName, keys: Array) -> void:
 	if not InputMap.has_action(action):

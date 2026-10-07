@@ -241,6 +241,13 @@ func request_ride(player: Node) -> void:
 	if rider_peers.has(player.peer_id):
 		request_exit_ride(player)
 		return
+	# Boarding a moving coach is the one co-op action that gets people hurt, so the
+	# rig has to be essentially stopped first — the same rule the exit uses.
+	var coach_speed := linear_velocity.length()
+	if coach_speed > 2.4:
+		GameSession.toast_requested.emit("WAIT FOR THE RIG",
+			"The bench is only reachable at walking pace (now %d km/h)." % roundi(coach_speed * 3.6))
+		return
 	if _free_ride_slot() < 0:
 		GameSession.toast_requested.emit("NO FREE SEAT", "Only two crew ride aboard; wait at the campfire.")
 		return

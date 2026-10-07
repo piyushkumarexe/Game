@@ -161,16 +161,10 @@ func _setup_microphone() -> void:
 
 
 func _input_device_ready() -> bool:
-	if AudioServer.has_method("is_input_device_available") and not AudioServer.is_input_device_available():
-		return false
-	if OS.has_feature("Android") and DisplayServer.has_method("is_permission_granted"):
-		if not DisplayServer.is_permission_granted(DisplayServer.GLOBAL_PERMISSION_MICROPHONE):
-			if DisplayServer.has_method("request_permission"):
-				DisplayServer.request_permission(DisplayServer.GLOBAL_PERMISSION_MICROPHONE)
-			return false
-	if AudioServer.has_method("load_default_input_device"):
-		return AudioServer.load_default_input_device() == OK
-	return true
+	# An empty input list means no microphone (or no recorder permission yet).
+	# Godot requests RECORD_AUDIO itself because the export preset declares it,
+	# so this only has to decide whether to build the capture chain at all.
+	return not AudioServer.get_input_device_list().is_empty()
 
 
 func is_speaking() -> bool:

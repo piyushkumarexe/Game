@@ -1081,8 +1081,6 @@ func _spawn_winch_station(route_spot: Vector3) -> void:
 	PrimitiveFactory.box(self, "WinchStationFrame", grounded + Vector3(0.62, 1.15, 0.0),
 		Vector3(2.35, 0.16, 0.16), Color("6d7476"), true)
 	PrimitiveFactory.label_3d(self, "CABLE STATION", grounded + Vector3(0.62, 2.05, 0.0), Color("9fe8cf"), 26)
-	if front:
-		front.top_level = false
 
 
 func _spawn_interactable(kind: String, position: Vector3) -> TrailInteractable:

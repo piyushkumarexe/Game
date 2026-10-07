@@ -144,9 +144,11 @@ Light Pass for exactly that reason — on foot, USE **HOOK FRONT CABLE** or
 **HOOK REAR CABLE**.
 
 Riding: when the driver seat is taken, USE on the RV offers
-**RIDE ALONG AS CREW** (two bench seats). Riders are carried by the coach
-transform, so nobody is stranded three switchbacks behind the rig, and the door
-is left open where they stepped out.
+**RIDE ALONG AS CREW** (two bench seats). Boarding and stepping out are both
+gated to under ~2.4 m/s, because a moving coach is how co-op runs end in a
+laughable rescue. Riders are carried by the coach transform, so nobody is
+stranded three switchbacks behind the rig, and the door is left open where they
+stepped out.
 
 ## Radio
 
