@@ -37,7 +37,7 @@ func interact(player: Node) -> void:
 	# did exactly that during mission one, making a visually open doorway feel
 	# blocked. From outside, USE now assists onto the connected interior floor;
 	# from inside, the same handle closes the door normally.
-	var local_player_position := rv.global_transform.affine_inverse() * player.global_position
+	var local_player_position: Vector3 = rv.global_transform.affine_inverse() * player.global_position
 	if local_player_position.x > 1.24:
 		rv.assist_cabin_entry(player)
 	else:

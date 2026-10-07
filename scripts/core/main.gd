@@ -284,10 +284,14 @@ func _wait_for_crew_then_quit(needed: int, timeout_seconds: float) -> void:
 			if active_world and is_instance_valid(active_world):
 				spawned = active_world.players.size()
 			if spawned >= needed:
+				# Latch the roster size *now*. The grace period below is exactly when
+				# the crew clients finish and drop off, and a re-read after it would
+				# report an empty room and fail CI's assertion on `crew=2`.
+				var crew_seen := Net.crew_count()
 				# Hold the session open briefly so both clients can observe their own
 				# spawn before the host closes the socket on exit.
 				await get_tree().create_timer(8.0).timeout
-				print("SERVER_SELFTEST_OK crew=%d spawned=%d mission=%d" % [Net.crew_count(), spawned, GameSession.mission_index])
+				print("SERVER_SELFTEST_OK crew=%d spawned=%d mission=%d" % [crew_seen, spawned, GameSession.mission_index])
 				get_tree().quit(0)
 				return
 	print("SERVER_SELFTEST_FAIL crew=%d of %d after %.1fs" % [Net.crew_count(), needed, timeout_seconds])

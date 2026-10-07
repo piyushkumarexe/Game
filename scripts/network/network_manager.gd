@@ -32,6 +32,8 @@ const VOICE_CREDIT_MAX := 24.0
 ## Packets are coalesced while this timer is still running.
 const VOICE_MIN_SEND_INTERVAL := 0.045
 const JOIN_ANSWER_SECONDS := 8.0
+## Highest rpc channel this session uses (see `_make_peer`); ENet needs a count.
+const VOICE_CHANNEL := 2
 
 var transport: Transport = Transport.WEBSOCKET
 var peer: MultiplayerPeer
@@ -136,12 +138,15 @@ func join_game(address: String, player_name: String, role: int, requested_port :
 func _make_peer(as_host: bool, target := "") -> Error:
 	if transport == Transport.ENET:
 		var enet := ENetMultiplayerPeer.new()
+		# Three channels: 0 for driver input, 1 for RV and crew transforms, 2 for
+		# voice. ENet's default channel count is 0, which silently drops every
+		# rpc sent on a numbered channel, so it must be raised explicitly.
 		if as_host:
-			var bind_error := enet.create_server(port, MAX_PLAYERS)
+			var bind_error := enet.create_server(port, MAX_PLAYERS, VOICE_CHANNEL + 1)
 			if bind_error != OK:
 				return bind_error
 		else:
-			var connect_error := enet.create_client(target, port)
+			var connect_error := enet.create_client(target, port, VOICE_CHANNEL + 1)
 			if connect_error != OK:
 				return connect_error
 		peer = enet

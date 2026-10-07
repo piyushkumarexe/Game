@@ -103,7 +103,9 @@ func _physics_process(delta: float) -> void:
 	_update_cable(front_cable, front_winch, _front_hook_position())
 	_update_cable(rear_cable, rear_winch, _rear_hook_position())
 	_fill_engine_audio()
-	if Net.is_online:
+	# A server hosting an empty lobby would otherwise ask a closed socket to send
+	# sixty times a second; only pay for the broadcast once someone is connected.
+	if Net.is_online and Net.has_crew_to_send_to():
 		_sync_rv.rpc(global_transform, linear_velocity, angular_velocity, health, fuel, gear, engine_running, driver_peer_id,
 			front_winch, rear_winch)
 	# Text layout and signal fan-out at 60 Hz wastes mobile CPU. Ten updates per

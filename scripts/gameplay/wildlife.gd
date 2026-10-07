@@ -46,7 +46,8 @@ func _physics_process(delta: float) -> void:
 			target.damage(7.0, "RIDGE BOAR")
 		elif target is CharacterBody3D:
 			target.velocity += global_position.direction_to(target.global_position) * 5.0 + Vector3.UP * 2.0
-	if Net.is_online:
+	# Only worth a packet while somebody is actually connected to watch.
+	if Net.is_online and Net.has_crew_to_send_to():
 		_sync_wildlife.rpc(transform)
 
 func _choose_target() -> void:
