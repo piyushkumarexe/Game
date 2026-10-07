@@ -88,7 +88,7 @@ jobs:
     name: Playable render proof
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 22
+    timeout-minutes: 32
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -104,9 +104,11 @@ jobs:
         run: |
           mkdir -p build/validation
           set +e
-          # A bounded render run turns a stuck frame into a readable log tail on
-          # the summary instead of a silent 15-minute job cancellation.
-          timeout --preserve-status -k 20 660 xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
+          # Bounded so a stuck frame turns into a readable log tail on the step
+          # summary instead of a silent job cancellation. Generous, because the
+          # runner rasterises a 720x1600 forward-plus scene on llvmpipe: five
+          # full-resolution proofs take on the order of a quarter of an hour.
+          timeout --preserve-status -k 20 1500 xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
             test -s build/validation/expedition-render.png \
