@@ -27,7 +27,9 @@ jobs:
   validate:
     name: Validate 3D game project
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Software GL (llvmpipe) inside the runner renders the smoke frames at a few
+    # frames per second, so every bounded await costs real wall time.
+    timeout-minutes: 22
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -86,7 +88,9 @@ jobs:
         run: |
           mkdir -p build/validation
           set +e
-          xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
+          # A bounded render run turns a stuck frame into a readable log tail on
+          # the summary instead of a silent 15-minute job cancellation.
+          timeout --preserve-status -k 20 660 xvfb-run -a godot --path . -- --smoke-expedition 2>&1 | tee render-smoke.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
             test -s build/validation/expedition-render.png \
@@ -99,9 +103,10 @@ jobs:
           {
             echo '### Playable 3D render smoke log'
             echo '```text'
-            tail -120 render-smoke.log
+            tail -160 render-smoke.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          cp render-smoke.log build/validation/render-smoke.log
           crew_proof=$(grep 'CREW_ANIMATION_PROOF' render-smoke.log | tail -1 || true)
           if [ -n "$crew_proof" ]; then
             echo "::notice title=Authored crew animation::$crew_proof"
